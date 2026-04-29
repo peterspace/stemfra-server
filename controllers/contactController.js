@@ -79,15 +79,15 @@ const submitContact = async (req, res) => {
     console.log("updating contact")
 
     await Contact.findByIdAndUpdate(contact._id, { notificationSent: true });
+//========{temporarily suspended}================================================
 
     // 3. Confirmation email → client
-    const confirmation = buildConfirmationEmail({
-      firstName: contact.firstName,
-      subject: contact.subject,
-      message: contact.message,
-    });
-      console.log("Confirmation email successful")
-//========{temporarily suspended}================================================
+    // const confirmation = buildConfirmationEmail({
+    //   firstName: contact.firstName,
+    //   subject: contact.subject,
+    //   message: contact.message,
+    // });
+      // console.log("Confirmation email successful")
     // const toUser = await transporter.sendMail({
     //   from: `"STEMfra" <${process.env.GMAIL_USER}>`,
     //   to: contact.email,
