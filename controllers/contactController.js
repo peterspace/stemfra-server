@@ -87,18 +87,21 @@ const submitContact = async (req, res) => {
       message: contact.message,
     });
       console.log("Confirmation email successful")
+//========{temporarily suspended}================================================
+    // const toUser = await transporter.sendMail({
+    //   from: `"STEMfra" <${process.env.GMAIL_USER}>`,
+    //   to: contact.email,
+    //   subject: confirmation.subject,
+    //   html: confirmation.html,
+    //   text: confirmation.text,
+    // });
+    // console.log({ toUser });
 
-    const toUser = await transporter.sendMail({
-      from: `"STEMfra" <${process.env.GMAIL_USER}>`,
-      to: contact.email,
-      subject: confirmation.subject,
-      html: confirmation.html,
-      text: confirmation.text,
-    });
-    console.log({ toUser });
 
+    // await Contact.findByIdAndUpdate(contact._id, { confirmationSent: true });
 
-    await Contact.findByIdAndUpdate(contact._id, { confirmationSent: true });
+//========{temporarily suspended}================================================
+
       console.log("success")
 
     return res.status(201).json({
