@@ -2,16 +2,13 @@ require('dotenv').config();
 
 const express          = require('express');
 const cors             = require('cors');
-const connectDB        = require('./config/db');
+require('./config/supabase'); // initialise + validate env vars at boot
 const contactRoutes    = require('./routes/contact');
 const insightsRoutes   = require('./routes/insights');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app  = express();
 const PORT = process.env.PORT || 4000;
-
-// ─── Connect to MongoDB ───────────────────────────────────────────────────────
-connectDB();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
@@ -40,6 +37,11 @@ app.get('/health', (req, res) => {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/contact',  contactRoutes);
 app.use('/api/insights', insightsRoutes);
+
+// Dev-only: in-browser email template previews
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/dev/preview', require('./routes/devPreview'));
+}
 
 // ─── Error handling ───────────────────────────────────────────────────────────
 app.use(notFound);

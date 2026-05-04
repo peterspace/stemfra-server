@@ -1,23 +1,22 @@
 /**
- * seed.js — populates the Articles collection from the local articles data.
- * Run once with: node utils/seed.js
- * Safe to re-run — uses upsert so it won't duplicate.
+ * seed.js — populates the Supabase `articles` table from the seed data below.
+ * Run with: npm run seed   (from inside stemfra_server)
+ * Safe to re-run — uses upsert on slug so it won't duplicate.
+ *
+ * Requires SUPABASE_URL and SUPABASE_SECRET_KEY in stemfra_server/.env
  */
 
-require('dotenv').config({ path: '../.env' });
-const mongoose = require('mongoose');
-const Article  = require('../models/Article');
+require('dotenv').config();
+const supabase = require('../config/supabase');
 
-// ─── Paste your articles data here (copied from src/app/data/articles.js) ────
-// The only change: rename `id` → `slug` to match the Article schema.
 const articles = [
   {
-    slug:     'venture-studio-model',
-    title:    'The Venture Studio Model',
-    excerpt:  'Exploring how venture studios are transforming the startup landscape by combining talent, capital, and infrastructure to build multiple companies simultaneously.',
-    readTime: '5 min read',
-    category: 'Venture Building',
-    image:    'https://images.unsplash.com/photo-1758873272445-433c7a832584?w=1080&q=80',
+    slug:      'venture-studio-model',
+    title:     'The Venture Studio Model',
+    excerpt:   'Exploring how venture studios are transforming the startup landscape by combining talent, capital, and infrastructure to build multiple companies simultaneously.',
+    read_time: '5 min read',
+    category:  'Venture Building',
+    image:     'https://images.unsplash.com/photo-1758873272445-433c7a832584?w=1080&q=80',
     published: true,
     content: [
       { type: 'paragraph', text: 'The venture studio model represents a paradigm shift in how technology companies are built.' },
@@ -30,12 +29,12 @@ const articles = [
     ],
   },
   {
-    slug:     'building-fintech-infrastructure',
+    slug:      'building-fintech-infrastructure',
     title:    'Building Fintech Infrastructure',
-    excerpt:  'The essential components and considerations for creating robust financial technology platforms that scale globally and meet regulatory requirements.',
-    readTime: '7 min read',
-    category: 'Fintech',
-    image:    'https://images.unsplash.com/photo-1761850167081-473019536383?w=1080&q=80',
+    excerpt:   'The essential components and considerations for creating robust financial technology platforms that scale globally and meet regulatory requirements.',
+    read_time: '7 min read',
+    category:  'Fintech',
+    image:     'https://images.unsplash.com/photo-1761850167081-473019536383?w=1080&q=80',
     published: true,
     content: [
       { type: 'paragraph', text: 'Building financial technology infrastructure requires technical excellence, regulatory compliance, and user-centric design.' },
@@ -48,12 +47,12 @@ const articles = [
     ],
   },
   {
-    slug:     'designing-scalable-saas-platforms',
-    title:    'Designing Scalable SaaS Platforms',
-    excerpt:  'Key architectural decisions and design patterns for building software-as-a-service products that can grow from hundreds to millions of users.',
-    readTime: '6 min read',
-    category: 'Engineering',
-    image:    'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1080&q=80',
+    slug:      'designing-scalable-saas-platforms',
+    title:     'Designing Scalable SaaS Platforms',
+    excerpt:   'Key architectural decisions and design patterns for building software-as-a-service products that can grow from hundreds to millions of users.',
+    read_time: '6 min read',
+    category:  'Engineering',
+    image:     'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1080&q=80',
     published: true,
     content: [
       { type: 'paragraph', text: 'Designing a SaaS platform that scales requires making the right architectural decisions from day one.' },
@@ -64,12 +63,12 @@ const articles = [
     ],
   },
   {
-    slug:     'launching-technology-startups',
-    title:    'Launching Technology Startups',
-    excerpt:  'Practical frameworks and lessons learned from helping dozens of technology companies go from idea to market-ready product.',
-    readTime: '8 min read',
-    category: 'Startups',
-    image:    'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1080&q=80',
+    slug:      'launching-technology-startups',
+    title:     'Launching Technology Startups',
+    excerpt:   'Practical frameworks and lessons learned from helping dozens of technology companies go from idea to market-ready product.',
+    read_time: '8 min read',
+    category:  'Startups',
+    image:     'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1080&q=80',
     published: true,
     content: [
       { type: 'paragraph', text: 'Launching a technology startup is one of the most challenging and rewarding endeavours in business.' },
@@ -85,25 +84,15 @@ const articles = [
 
 async function seed() {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('✓ Connected to MongoDB');
+    const { data, error } = await supabase
+      .from('articles')
+      .upsert(articles, { onConflict: 'slug' })
+      .select('slug');
 
-    let created = 0, updated = 0;
+    if (error) throw error;
 
-    for (const article of articles) {
-      const result = await Article.findOneAndUpdate(
-        { slug: article.slug },
-        article,
-        { upsert: true, new: true, runValidators: true }
-      );
-      if (result.createdAt.getTime() === result.updatedAt.getTime()) {
-        created++;
-      } else {
-        updated++;
-      }
-    }
-
-    console.log(`✓ Seed complete — ${created} created, ${updated} updated`);
+    console.log(`✓ Seed complete — ${data.length} article(s) upserted`);
+    data.forEach((row) => console.log(`  • ${row.slug}`));
     process.exit(0);
   } catch (err) {
     console.error('✗ Seed failed:', err.message);
