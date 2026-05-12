@@ -39,9 +39,21 @@ jobs:
           virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
           project-name: stemfra-server
           docker-compose-path: docker-compose.yml
-          # Inject secrets into Hostinger's project env on each deploy.
-          # Without this, Hostinger reads empty values from .env.example and
-          # overwrites the real ones every time, crash-looping the container.
+          # Production env. This workflow is the SINGLE SOURCE OF TRUTH for what
+          # gets written to Hostinger's project Environment on each deploy —
+          # the action REPLACES (not merges), so any var omitted here gets
+          # wiped. .env.example is only used as a local-dev template now.
+          #
+          # Non-sensitive values are hardcoded (also visible in .env.example).
+          # Sensitive values come from GitHub Secrets.
           environment-variables: |
+            NODE_ENV=production
+            PORT=4000
+            API_HOST=stemfra-server.srv1555257.hstgr.cloud
+            CLIENT_URL=https://stemfra.com
+            SUPABASE_URL=https://acxepovfklgthxmteqxr.supabase.co
             SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }}
+            GMAIL_USER=support@stemfra.com
             GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
+            NOTIFY_EMAIL=support@stemfra.com
+            LOGO_URL=https://stemfra.com/stemfra_logo.png
