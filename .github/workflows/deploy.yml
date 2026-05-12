@@ -3,14 +3,18 @@
 # to redeploy the matching Docker Manager Compose project.
 #
 # Required GitHub repo settings (Settings → Secrets and variables → Actions):
-#   Secrets:
+#
+#   Secrets (sensitive — NEVER commit these to .env.example or anywhere else):
 #     - HOSTINGER_API_KEY        Generated at: hPanel → Account → API keys
+#     - SUPABASE_SECRET_KEY      sb_secret_... key from Supabase Dashboard → API
+#     - GMAIL_APP_PASSWORD       App Password from myaccount.google.com/apppasswords
+#
 #   Variables:
 #     - HOSTINGER_VM_ID          Numeric VPS ID (the "1555257" in your VPS URL)
 #
-# If you later make this repo private, also add:
+# If you later make this repo private and need git fetch for cloning, also add:
 #   Secret: PERSONAL_ACCESS_TOKEN  (a GitHub PAT with `repo` read access)
-# and uncomment the `personal-access-token` line below.
+# and add the `personal-access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}` line.
 
 name: Deploy to Hostinger
 
@@ -35,3 +39,9 @@ jobs:
           virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
           project-name: stemfra-server
           docker-compose-path: docker-compose.yml
+          # Inject secrets into Hostinger's project env on each deploy.
+          # Without this, Hostinger reads empty values from .env.example and
+          # overwrites the real ones every time, crash-looping the container.
+          environment-variables: |
+            SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }}
+            GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
