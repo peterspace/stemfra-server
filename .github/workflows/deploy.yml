@@ -1,0 +1,38 @@
+# Auto-deploy stemfra-server to Hostinger VPS on every push to main.
+# Uses Hostinger's official deploy action which calls their internal API
+# to redeploy the matching Docker Manager Compose project.
+#
+# Required GitHub repo settings (Settings → Secrets and variables → Actions):
+#   Secrets:
+#     - HOSTINGER_API_KEY        Generated at: hPanel → Account → API keys
+#   Variables:
+#     - HOSTINGER_VM_ID          Numeric VPS ID (the "1555257" in your VPS URL)
+#
+# If you later make this repo private, also add:
+#   Secret: PERSONAL_ACCESS_TOKEN  (a GitHub PAT with `repo` read access)
+# and uncomment the `personal-access-token` line below.
+
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # allows manual trigger from the Actions tab
+
+jobs:
+  deploy:
+    name: Redeploy stemfra-server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Hostinger
+        uses: hostinger/deploy-action@v1
+        with:
+          api-key: ${{ secrets.HOSTINGER_API_KEY }}
+          virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
+          project-name: stemfra-server
+          docker-compose-path: docker-compose.yml
+          # personal-access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
