@@ -11,12 +11,16 @@ const app  = express();
 const PORT = process.env.PORT || 4000;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
+const allowedOrigins = [
+  process.env.CLIENT_URL || 'http://localhost:5173',
+  // Production frontends
+  'https://stemfra.com',         // stemfra_client (apex)
+  'https://www.stemfra.com',     // stemfra_client (www)
+  'https://crm.stemfra.com',     // stemfra_ops (CRM)
+];
+
 app.use(cors({
-  origin: [
-    process.env.CLIENT_URL || 'http://localhost:5173',
-    'https://stemfra.com',
-    'https://www.stemfra.com',
-  ],
+  origin:         allowedOrigins,
   methods:        ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials:    true,
