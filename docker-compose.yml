@@ -1,5 +1,5 @@
 services:
-  stemfra-server:
+  api:
     build: .
     image: stemfra-server:latest
     init: true
