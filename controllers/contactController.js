@@ -13,6 +13,14 @@ const SUBJECT_TO_SERVICE = {
 };
 const ALLOWED_SUBJECTS = Object.keys(SUBJECT_TO_SERVICE);
 
+// Known website template slugs (mirror of stemfra_client/src/app/design/data/boxes.ts).
+// Validated server-side so an unknown slug never reaches Supabase as data.
+const KNOWN_TEMPLATE_SLUGS = new Set([
+  'home', 'table', 'atelier', 'fashion', 'heritage', 'stay',
+  'beauty', 'barber', 'learn', 'story', 'fitness', 'studio',
+  'suite', 'academic', 'plate',
+]);
+
 // ─── Reusable transporter ─────────────────────────────────────────────────────
 function createTransporter() {
   return nodemailer.createTransport({
@@ -26,7 +34,7 @@ function createTransporter() {
 
 // ─── POST /api/contact ────────────────────────────────────────────────────────
 const submitContact = async (req, res) => {
-  const { firstName, lastName, email, company, subject, message } = req.body;
+  const { firstName, lastName, email, company, subject, message, template } = req.body;
   console.log({ doc: req.body });
 
   if (!firstName || !lastName || !email || !subject || !message) {
@@ -57,6 +65,8 @@ const submitContact = async (req, res) => {
     const cleanCompany = company ? company.trim() : null;
     const cleanMessage = message.trim();
     const service     = SUBJECT_TO_SERVICE[subject];
+    // Validate template against the known set. Unknown / missing → null.
+    const cleanTemplate = template && KNOWN_TEMPLATE_SLUGS.has(template) ? template : null;
 
     const { data: lead, error: insertError } = await supabase
       .from('leads')
@@ -68,6 +78,7 @@ const submitContact = async (req, res) => {
         stage:              'new_lead',
         source:             'website',
         lead_source:        'website',
+        template_slug:      cleanTemplate,
         notes:              cleanMessage,
         last_activity_at:   new Date().toISOString(),
         notification_sent:  false,
