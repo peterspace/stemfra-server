@@ -13,7 +13,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "nodemailer": "^6.9.13"
+    "libphonenumber-js": "^1.13.2",
+    "nodemailer": "^6.9.13",
+    "twilio": "^6.0.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.3"

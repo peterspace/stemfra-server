@@ -8,6 +8,16 @@
 #     - HOSTINGER_API_KEY        Generated at: hPanel → Account → API keys
 #     - SUPABASE_SECRET_KEY      sb_secret_... key from Supabase Dashboard → API
 #     - GMAIL_APP_PASSWORD       App Password from myaccount.google.com/apppasswords
+#     - TWILIO_ACCOUNT_SID       Twilio Console → Account Info
+#     - TWILIO_AUTH_TOKEN        Twilio Console → Account Info
+#     - TWILIO_API_KEY_SID       Twilio Console → Account → API keys & tokens
+#     - TWILIO_API_KEY_SECRET    Twilio Console → Account → API keys & tokens
+#     - TWILIO_PHONE_NUMBER      E.164 number from Twilio Console → Phone Numbers
+#
+#   Phase 2 (NOT YET SET — server starts with warning, /token returns 503):
+#     - TWILIO_TWIML_APP_SID     Created later in Phase 2 (Console → Voice → TwiML Apps).
+#       Intentionally omitted below until then; injecting an empty string
+#       creates ambiguity vs. truly missing.
 #
 #   Variables:
 #     - HOSTINGER_VM_ID          Numeric VPS ID (the "1555257" in your VPS URL)
@@ -57,3 +67,9 @@ jobs:
             GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
             NOTIFY_EMAIL=support@stemfra.com
             LOGO_URL=https://stemfra.com/stemfra_logo.png
+            TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
+            TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
+            TWILIO_API_KEY_SID=${{ secrets.TWILIO_API_KEY_SID }}
+            TWILIO_API_KEY_SECRET=${{ secrets.TWILIO_API_KEY_SECRET }}
+            TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
+            PUBLIC_BASE_URL=https://api.stemfra.com
