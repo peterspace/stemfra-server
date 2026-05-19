@@ -5,9 +5,10 @@
 //   POST /api/twilio/sms/send          — send SMS (auth required)
 //   POST /api/twilio/sms-status        — Twilio webhook: SMS delivery status
 //   POST /api/twilio/sms-inbound       — Twilio webhook: inbound SMS
-//   POST /api/twilio/voice             — Twilio webhook: voice TwiML (browser → PSTN)
-//   POST /api/twilio/voice-status      — Twilio webhook: call status updates
-//   POST /api/twilio/recording-status  — Twilio webhook: recording ready
+//   POST /api/twilio/voice                — Twilio webhook: voice TwiML (browser → PSTN)
+//   POST /api/twilio/voice-status         — Twilio webhook: call status updates
+//   POST /api/twilio/recording-status     — Twilio webhook: recording ready
+//   POST /api/twilio/recording-disclosure — Twilio whisper: played to callee on pickup
 //
 // Webhooks validate Twilio's X-Twilio-Signature header before processing.
 // /token and /sms/send validate the caller's Supabase JWT.
@@ -370,12 +371,16 @@ router.post('/voice', async (req, res) => {
     return res.send(twiml.toString());
   }
 
-  if (shouldRecord) {
-    twiml.say({ voice: 'Polly.Joanna' }, 'This call is being recorded.');
-  }
-
-  const statusUrl = `${publicBaseUrl}/api/twilio/voice-status${callRowId ? `?callRowId=${callRowId}` : ''}`;
+  // NB: the disclosure is delivered to the CALLED party via the <Number url=…>
+  // whisper hook (see /recording-disclosure below), NOT via a top-level <Say>
+  // here. A top-level <Say> only plays to the calling leg (the browser) before
+  // the dial begins — meaning the recipient never hears it, which defeats the
+  // entire point. The whisper plays to the recipient between their pickup and
+  // the bridge. The caller's confirmation is the red Recording pill in the
+  // CallWidget UI.
+  const statusUrl    = `${publicBaseUrl}/api/twilio/voice-status${callRowId ? `?callRowId=${callRowId}` : ''}`;
   const recordingUrl = `${publicBaseUrl}/api/twilio/recording-status${callRowId ? `?callRowId=${callRowId}` : ''}`;
+  const whisperUrl   = `${publicBaseUrl}/api/twilio/recording-disclosure`;
 
   const dialOpts = {
     callerId: twilioFrom,
@@ -386,8 +391,30 @@ router.post('/voice', async (req, res) => {
     dialOpts.recordingStatusCallback = recordingUrl;
   }
   const dial = twiml.dial(dialOpts);
-  dial.number({ statusCallbackEvent: 'initiated ringing answered completed', statusCallback: statusUrl }, To);
 
+  const numberAttrs = {
+    statusCallbackEvent: 'initiated ringing answered completed',
+    statusCallback:      statusUrl,
+  };
+  if (shouldRecord) {
+    numberAttrs.url = whisperUrl;
+  }
+  dial.number(numberAttrs, To);
+
+  res.set('Content-Type', 'text/xml');
+  res.send(twiml.toString());
+});
+
+// ─── POST /api/twilio/recording-disclosure — whisper played to callee ───────
+//
+// Hit by Twilio when the called party answers, BEFORE bridging to the caller
+// (per <Number url="…">). Plays a single Polly.Joanna line and returns;
+// Twilio then bridges the two legs. There is no DB side-effect here; the
+// recording start is handled by <Dial record=…> back on /voice.
+router.post('/recording-disclosure', (req, res) => {
+  if (!validateTwilioSignature(req)) return res.status(403).send('Invalid signature');
+  const twiml = new twilio.twiml.VoiceResponse();
+  twiml.say({ voice: 'Polly.Joanna' }, 'This call is being recorded.');
   res.set('Content-Type', 'text/xml');
   res.send(twiml.toString());
 });
