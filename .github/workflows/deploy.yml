@@ -13,11 +13,7 @@
 #     - TWILIO_API_KEY_SID       Twilio Console → Account → API keys & tokens
 #     - TWILIO_API_KEY_SECRET    Twilio Console → Account → API keys & tokens
 #     - TWILIO_PHONE_NUMBER      E.164 number from Twilio Console → Phone Numbers
-#
-#   Phase 2 (NOT YET SET — server starts with warning, /token returns 503):
-#     - TWILIO_TWIML_APP_SID     Created later in Phase 2 (Console → Voice → TwiML Apps).
-#       Intentionally omitted below until then; injecting an empty string
-#       creates ambiguity vs. truly missing.
+#     - TWILIO_TWIML_APP_SID     Twilio Console → Voice → TwiML Apps → Stemfra Ops Calling
 #
 #   Variables:
 #     - HOSTINGER_VM_ID          Numeric VPS ID (the "1555257" in your VPS URL)
@@ -72,4 +68,5 @@ jobs:
             TWILIO_API_KEY_SID=${{ secrets.TWILIO_API_KEY_SID }}
             TWILIO_API_KEY_SECRET=${{ secrets.TWILIO_API_KEY_SECRET }}
             TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
+            TWILIO_TWIML_APP_SID=${{ secrets.TWILIO_TWIML_APP_SID }}
             PUBLIC_BASE_URL=https://api.stemfra.com
