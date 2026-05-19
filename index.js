@@ -6,6 +6,7 @@ require('./config/supabase'); // initialise + validate env vars at boot
 const contactRoutes    = require('./routes/contact');
 const insightsRoutes   = require('./routes/insights');
 const twilioRoutes     = require('./routes/twilio');
+const userSettingsRoutes = require('./routes/userSettings');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app  = express();
@@ -43,6 +44,7 @@ app.get('/health', (req, res) => {
 app.use('/api/contact',  contactRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/twilio',   twilioRoutes);
+app.use('/api/user-settings', userSettingsRoutes);
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {

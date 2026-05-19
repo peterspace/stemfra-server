@@ -1,12 +1,13 @@
-// ─── Twilio routes — SMS send, webhooks, Voice SDK token (Phase 1) ───────────
+// ─── Twilio routes — SMS + Voice (Phase 1 + Phase 2) ─────────────────────────
 //
 // Endpoints:
-//   POST /api/twilio/token         — short-lived Voice SDK token (auth required)
-//   POST /api/twilio/sms/send      — send SMS (auth required)
-//   POST /api/twilio/sms-status    — Twilio webhook: SMS delivery status
-//   POST /api/twilio/sms-inbound   — Twilio webhook: inbound SMS
-//   POST /api/twilio/voice         — Twilio webhook: voice TwiML (Phase 2 stub)
-//   POST /api/twilio/voice-status  — Twilio webhook: voice status (Phase 2 stub)
+//   POST /api/twilio/token             — short-lived Voice SDK token (auth required)
+//   POST /api/twilio/sms/send          — send SMS (auth required)
+//   POST /api/twilio/sms-status        — Twilio webhook: SMS delivery status
+//   POST /api/twilio/sms-inbound       — Twilio webhook: inbound SMS
+//   POST /api/twilio/voice             — Twilio webhook: voice TwiML (browser → PSTN)
+//   POST /api/twilio/voice-status      — Twilio webhook: call status updates
+//   POST /api/twilio/recording-status  — Twilio webhook: recording ready
 //
 // Webhooks validate Twilio's X-Twilio-Signature header before processing.
 // /token and /sms/send validate the caller's Supabase JWT.
@@ -276,34 +277,211 @@ router.post('/sms-inbound', async (req, res) => {
   res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
 });
 
-// ─── POST /api/twilio/voice — TwiML for browser-initiated calls (Phase 2) ───
+// ─── POST /api/twilio/voice — TwiML for browser-initiated calls ─────────────
 //
-// Twilio hits this when a browser client uses Device.connect({ To: <number> }).
-// We bridge to the To number, recording dual-channel. Status callbacks
-// post to /voice-status. The Phase 2 work will polish recording handling.
-router.post('/voice', (req, res) => {
-  const { To } = req.body || {};
-  const twiml  = new twilio.twiml.VoiceResponse();
+// Lifecycle:
+//   1. User clicks Call in the ops UI; useVoiceCall calls Device.connect({ params: { To, contactId, leadId, recordOverride } })
+//   2. Twilio POSTs here with CallSid, From=client:user_<uuid>, plus our custom params
+//   3. We look up the calling user's record_calls preference, decide if this
+//      specific call should be recorded (settings ON && !recordOverride),
+//      INSERT a row into `calls` so the status callback has something to update,
+//      then return TwiML that <Dial>s the To number — optionally with a
+//      "This call is being recorded." disclosure spoken by Polly.Joanna.
+//
+// The action + recordingStatusCallback URLs both embed ?callRowId=<uuid> so
+// subsequent webhooks update the right row even if Twilio re-uses or delays
+// the CallSid (it shouldn't, but we don't want to rely on that).
+router.post('/voice', async (req, res) => {
+  if (!validateTwilioSignature(req)) return res.status(403).send('Invalid signature');
 
-  if (To && twilioFrom) {
-    const dial = twiml.dial({
-      callerId: twilioFrom,
-      record: 'record-from-answer-dual',
-      recordingStatusCallback: `${publicBaseUrl}/api/twilio/recording-status`,
-    });
-    dial.number(To);
-  } else {
-    twiml.say('No destination provided.');
+  const { To, From, CallSid, contactId, leadId, recordOverride } = req.body || {};
+
+  // Extract the Supabase user id from the Voice SDK identity. Identity comes
+  // from /token as "user_<uuid>" but the Voice SDK wraps it as "client:user_<uuid>"
+  // when speaking to Twilio. Be liberal about both forms.
+  let userId = null;
+  if (typeof From === 'string') {
+    const m = From.match(/(?:^|:)user_([0-9a-fA-F-]{36})$/);
+    if (m) userId = m[1];
   }
+
+  // Decide whether this call is recorded.
+  // settings.record_calls is the user's persisted preference (default false);
+  // recordOverride === 'true' means "off for this call only".
+  let recordCalls = false;
+  if (userId) {
+    try {
+      const { data } = await supabase
+        .from('user_settings')
+        .select('record_calls')
+        .eq('user_id', userId)
+        .maybeSingle();
+      recordCalls = Boolean(data?.record_calls);
+    } catch (err) {
+      console.warn('[twilio] could not load user_settings, defaulting record=false:', err.message);
+    }
+  }
+  const shouldRecord = recordCalls && recordOverride !== 'true';
+
+  // Try to attach this call to a CRM record. Explicit IDs (from the UI) win;
+  // otherwise fall back to a phone lookup so inbound-style threading works too.
+  let link = { entity_type: null, entity_id: null, contact_id: null, lead_id: null, name: To || null };
+  if (contactId) {
+    link = { entity_type: 'contact', entity_id: contactId, contact_id: contactId, lead_id: null, name: null };
+  } else if (leadId) {
+    link = { entity_type: 'lead', entity_id: leadId, contact_id: null, lead_id: leadId, name: null };
+  } else if (To) {
+    link = await findEntityByPhone(To);
+  }
+
+  // Insert the calls row up-front so /voice-status has something to update.
+  let callRowId = null;
+  try {
+    const { data: row, error } = await supabase
+      .from('calls')
+      .insert([{
+        twilio_sid:  CallSid || null,
+        direction:   'outbound',
+        from_number: twilioFrom,
+        to_number:   To || '',
+        status:      'initiated',
+        contact_id:  link.contact_id,
+        lead_id:     link.lead_id,
+        handled_by:  userId,
+        recorded:    shouldRecord,
+        disclosed:   shouldRecord,
+        started_at:  new Date().toISOString(),
+      }])
+      .select('id')
+      .single();
+    if (error) throw error;
+    callRowId = row.id;
+  } catch (err) {
+    console.error('[twilio] /voice failed to create calls row:', err);
+    // Fall through — still return TwiML so the user hears something instead of
+    // a dead silence + Twilio 11200 error. We just lose the row linkage.
+  }
+
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  if (!To || !twilioFrom) {
+    twiml.say('No destination provided.');
+    res.set('Content-Type', 'text/xml');
+    return res.send(twiml.toString());
+  }
+
+  if (shouldRecord) {
+    twiml.say({ voice: 'Polly.Joanna' }, 'This call is being recorded.');
+  }
+
+  const statusUrl = `${publicBaseUrl}/api/twilio/voice-status${callRowId ? `?callRowId=${callRowId}` : ''}`;
+  const recordingUrl = `${publicBaseUrl}/api/twilio/recording-status${callRowId ? `?callRowId=${callRowId}` : ''}`;
+
+  const dialOpts = {
+    callerId: twilioFrom,
+    action:   statusUrl,
+  };
+  if (shouldRecord) {
+    dialOpts.record = 'record-from-answer-dual';
+    dialOpts.recordingStatusCallback = recordingUrl;
+  }
+  const dial = twiml.dial(dialOpts);
+  dial.number({ statusCallbackEvent: 'initiated ringing answered completed', statusCallback: statusUrl }, To);
 
   res.set('Content-Type', 'text/xml');
   res.send(twiml.toString());
 });
 
-// ─── POST /api/twilio/voice-status — call status webhook (Phase 2 stub) ─────
+// ─── POST /api/twilio/voice-status — call status webhook ────────────────────
+//
+// Twilio fires this for every status transition AND when the <Dial> verb
+// completes (because we set action=). On completion we also log to the
+// activity feed and bump status to 'completed'.
 router.post('/voice-status', async (req, res) => {
   if (!validateTwilioSignature(req)) return res.status(403).send('Invalid signature');
-  // Phase 2 will persist call state + duration here.
+
+  const { CallSid, CallStatus, CallDuration, DialCallStatus, DialCallDuration } = req.body || {};
+  const callRowId = req.query.callRowId || null;
+
+  // <Dial> action posts use DialCall* names; status callbacks use Call* names.
+  const status     = CallStatus     || DialCallStatus     || null;
+  const durationS  = CallDuration   || DialCallDuration   || null;
+
+  const updates = {};
+  if (CallSid) updates.twilio_sid = CallSid;
+  if (status)  updates.status     = status;
+
+  if (status === 'in-progress' || status === 'answered') {
+    updates.answered_at = new Date().toISOString();
+  }
+  if (['completed', 'failed', 'busy', 'no-answer', 'canceled'].includes(status)) {
+    updates.ended_at = new Date().toISOString();
+    if (durationS) updates.duration_seconds = parseInt(durationS, 10);
+  }
+
+  try {
+    if (callRowId) {
+      await supabase.from('calls').update(updates).eq('id', callRowId);
+    } else if (CallSid) {
+      await supabase.from('calls').update(updates).eq('twilio_sid', CallSid);
+    }
+  } catch (err) {
+    console.error('[twilio] /voice-status update error:', err);
+  }
+
+  // Activity feed entry once the call has truly ended (not on transient events).
+  if (status === 'completed' && callRowId) {
+    try {
+      const { data: call } = await supabase
+        .from('calls')
+        .select('id, handled_by, contact_id, lead_id, duration_seconds, recorded')
+        .eq('id', callRowId)
+        .maybeSingle();
+      if (call && (call.contact_id || call.lead_id)) {
+        await logActivity({
+          action:     'call_completed',
+          entityType: call.contact_id ? 'contact' : 'lead',
+          entityId:   call.contact_id || call.lead_id,
+          actorId:    call.handled_by,
+          details:    {
+            duration_seconds: call.duration_seconds || 0,
+            recorded:         !!call.recorded,
+            twilio_sid:       CallSid,
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('[twilio] activity log on call_completed failed:', err.message);
+    }
+  }
+
+  res.status(200).send('OK');
+});
+
+// ─── POST /api/twilio/recording-status — recording ready webhook ────────────
+//
+// Fired separately from voice-status when Twilio finishes processing the
+// recording. Only act on RecordingStatus='completed'.
+router.post('/recording-status', async (req, res) => {
+  if (!validateTwilioSignature(req)) return res.status(403).send('Invalid signature');
+
+  const { RecordingSid, RecordingUrl, RecordingDuration, RecordingStatus } = req.body || {};
+  const callRowId = req.query.callRowId || null;
+
+  if (RecordingStatus !== 'completed' || !callRowId) {
+    return res.status(200).send('OK');
+  }
+
+  try {
+    await supabase.from('calls').update({
+      recording_sid:              RecordingSid,
+      recording_url:              RecordingUrl,
+      recording_duration_seconds: parseInt(RecordingDuration || '0', 10),
+    }).eq('id', callRowId);
+  } catch (err) {
+    console.error('[twilio] /recording-status update error:', err);
+  }
+
   res.status(200).send('OK');
 });
 
