@@ -19,6 +19,9 @@ const allowedOrigins = [
   'https://stemfra.com',         // stemfra_client (apex)
   'https://www.stemfra.com',     // stemfra_client (www)
   'https://crm.stemfra.com',     // stemfra_ops (CRM)
+  // Local dev (kept in prod too so devs can hit api.stemfra.com from
+  // localhost:5173 — only ever exploitable from the dev's own machine).
+  'http://localhost:5173',
 ];
 
 app.use(cors({
