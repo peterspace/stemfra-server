@@ -9,6 +9,9 @@
 //   POST /api/twilio/voice-status         — Twilio webhook: call status updates
 //   POST /api/twilio/recording-status     — Twilio webhook: recording ready
 //   POST /api/twilio/recording-disclosure — Twilio whisper: played to callee on pickup
+//   POST /api/twilio/inbound-voice        — Twilio webhook: inbound calls → ring user(s)
+//   POST /api/twilio/inbound-dial-result  — Twilio webhook: post-Dial branch (answered vs voicemail)
+//   POST /api/twilio/voicemail-complete   — Twilio webhook: voicemail recording finished
 //
 // Webhooks validate Twilio's X-Twilio-Signature header before processing.
 // /token and /sms/send validate the caller's Supabase JWT.
@@ -510,6 +513,303 @@ router.post('/recording-status', async (req, res) => {
   }
 
   res.status(200).send('OK');
+});
+
+// ─── Inbound calling (Phase 3a) ──────────────────────────────────────────────
+//
+// Lifecycle:
+//   1. External caller dials our Twilio number → Twilio POSTs /inbound-voice
+//   2. We look up the caller, decide who to ring, decide whether to record,
+//      insert a calls row up-front, and return TwiML that <Dial>s one or
+//      more <Client>s (Stemfra users' browsers via Voice SDK).
+//   3. <Dial action=/inbound-dial-result> fires after the dial finishes —
+//      either bridged-and-completed, or no-answer/busy → fall through to
+//      voicemail.
+//   4. <Record action=/voicemail-complete> fires once the voicemail audio
+//      is captured (action fires even on empty/silent recordings).
+//
+// Recording disclosure (legal):
+//   For inbound, the CALLER (PSTN leg) needs to hear the disclosure. Since
+//   /inbound-voice TwiML runs on the caller's leg, a top-level <Say> at the
+//   start of the response plays to them, before the <Dial> bridges anyone.
+//   This is DIFFERENT from outbound (where we use <Number url=…> whisper
+//   because the TwiML there runs on the browser leg). The provided spec
+//   suggested a <Client url=…> whisper for inbound, but that whispers to
+//   the Stemfra user — wrong direction. Documented for future reference.
+
+function isFreshOnline(p, maxAgeMs = 60_000) {
+  if (!p || !p.is_online || !p.last_heartbeat) return false;
+  return Date.now() - new Date(p.last_heartbeat).getTime() < maxAgeMs;
+}
+
+async function getAssignedUser(contactId, leadId) {
+  if (leadId) {
+    const { data } = await supabase.from('leads').select('assigned_to').eq('id', leadId).maybeSingle();
+    return data?.assigned_to || null;
+  }
+  if (contactId) {
+    // Walk up to the most recent active lead for this contact.
+    const { data } = await supabase
+      .from('leads')
+      .select('assigned_to')
+      .eq('contact_id', contactId)
+      .not('stage', 'in', '(lost,won)')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data?.assigned_to || null;
+  }
+  return null;
+}
+
+async function isContactOptedOut(contactId, leadId) {
+  if (contactId) {
+    const { data } = await supabase.from('contacts').select('never_record').eq('id', contactId).maybeSingle();
+    if (data?.never_record) return true;
+  }
+  if (leadId) {
+    const { data } = await supabase.from('leads').select('never_record').eq('id', leadId).maybeSingle();
+    if (data?.never_record) return true;
+  }
+  return false;
+}
+
+function appendVoicemailTwiml(twiml, callRowId) {
+  twiml.say(
+    { voice: 'Polly.Joanna' },
+    "Hi, you've reached STEMfra. We can't take your call right now. " +
+    "Please leave a message after the tone, or text us instead. " +
+    "We'll get back to you soon."
+  );
+  twiml.record({
+    action: `${publicBaseUrl}/api/twilio/voicemail-complete${callRowId ? `?callRowId=${callRowId}` : ''}`,
+    maxLength: 120, // 2 min
+    timeout: 5,     // hang up after 5s of silence
+    recordingStatusCallback: `${publicBaseUrl}/api/twilio/recording-status${callRowId ? `?callRowId=${callRowId}` : ''}`,
+  });
+  // Failsafe — if Record times out without recording or action handler is
+  // skipped, this final say + hangup runs.
+  twiml.say({ voice: 'Polly.Joanna' }, 'Thank you. Goodbye.');
+  twiml.hangup();
+}
+
+// ─── POST /api/twilio/inbound-voice ─────────────────────────────────────────
+router.post('/inbound-voice', async (req, res) => {
+  if (!validateTwilioSignature(req)) return res.status(403).send('Invalid signature');
+
+  const { From, To, CallSid } = req.body || {};
+  const link = await findEntityByPhone(From);
+
+  // Decide who to ring: assigned user (if online) → all online users.
+  let userIdsToRing = [];
+  const assignedUserId = await getAssignedUser(link.contact_id, link.lead_id);
+  if (assignedUserId) {
+    const { data } = await supabase
+      .from('user_presence')
+      .select('is_online, last_heartbeat')
+      .eq('user_id', assignedUserId)
+      .maybeSingle();
+    if (isFreshOnline(data)) userIdsToRing = [assignedUserId];
+  }
+  if (userIdsToRing.length === 0) {
+    const { data: allOnline } = await supabase
+      .from('user_presence')
+      .select('user_id, is_online, last_heartbeat')
+      .eq('is_online', true);
+    userIdsToRing = (allOnline || []).filter(isFreshOnline).map(p => p.user_id);
+  }
+
+  // Decide whether to record this call: any ringing user has the inbound
+  // recording toggle on, AND the contact/lead hasn't opted out.
+  let shouldRecord = false;
+  if (userIdsToRing.length > 0) {
+    const optedOut = await isContactOptedOut(link.contact_id, link.lead_id);
+    if (!optedOut) {
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('record_inbound_calls')
+        .in('user_id', userIdsToRing);
+      shouldRecord = (settings || []).some(s => s.record_inbound_calls);
+    }
+  }
+
+  // Persist the calls row up-front so action callbacks have something to update.
+  let callRowId = null;
+  try {
+    const { data: row, error } = await supabase
+      .from('calls')
+      .insert([{
+        twilio_sid:          CallSid || null,
+        direction:           'inbound',
+        from_number:         From || '',
+        to_number:           To   || twilioFrom,
+        status:              'ringing',
+        recorded:            shouldRecord,
+        disclosed:           shouldRecord,
+        contact_id:          link.contact_id,
+        lead_id:             link.lead_id,
+        handled_by:          assignedUserId || null,
+        routed_to_user_ids:  userIdsToRing,
+        started_at:          new Date().toISOString(),
+      }])
+      .select('id')
+      .single();
+    if (error) throw error;
+    callRowId = row.id;
+  } catch (err) {
+    console.error('[twilio] /inbound-voice insert error:', err);
+  }
+
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  // No one online → straight to voicemail.
+  if (userIdsToRing.length === 0) {
+    appendVoicemailTwiml(twiml, callRowId);
+    res.set('Content-Type', 'text/xml');
+    return res.send(twiml.toString());
+  }
+
+  // Caller-side disclosure (inbound: TwiML runs on the caller's leg).
+  if (shouldRecord) {
+    twiml.say({ voice: 'Polly.Joanna' }, 'This call is being recorded.');
+  }
+
+  const actionUrl = `${publicBaseUrl}/api/twilio/inbound-dial-result${callRowId ? `?callRowId=${callRowId}` : ''}`;
+  const dialOpts = {
+    timeout: 25,
+    action:  actionUrl,
+    answerOnBridge: true, // keep ringback for caller until a user picks up
+  };
+  if (shouldRecord) {
+    dialOpts.record = 'record-from-answer-dual';
+    dialOpts.recordingStatusCallback = `${publicBaseUrl}/api/twilio/recording-status${callRowId ? `?callRowId=${callRowId}` : ''}`;
+  }
+  const dial = twiml.dial(dialOpts);
+
+  for (const userId of userIdsToRing) {
+    dial.client({}, `user_${userId}`);
+  }
+
+  res.set('Content-Type', 'text/xml');
+  res.send(twiml.toString());
+});
+
+// ─── POST /api/twilio/inbound-dial-result ───────────────────────────────────
+router.post('/inbound-dial-result', async (req, res) => {
+  if (!validateTwilioSignature(req)) return res.status(403).send('Invalid signature');
+
+  const { DialCallStatus, DialCallDuration } = req.body || {};
+  const callRowId = req.query.callRowId || null;
+
+  if (DialCallStatus === 'completed' || DialCallStatus === 'answered') {
+    // User answered + call ended normally.
+    if (callRowId) {
+      try {
+        await supabase.from('calls').update({
+          status:           'completed',
+          duration_seconds: parseInt(DialCallDuration || '0', 10),
+          ended_at:         new Date().toISOString(),
+        }).eq('id', callRowId);
+
+        const { data: call } = await supabase
+          .from('calls')
+          .select('id, contact_id, lead_id, handled_by, duration_seconds, recorded, from_number')
+          .eq('id', callRowId)
+          .maybeSingle();
+        if (call && (call.contact_id || call.lead_id)) {
+          await logActivity({
+            action:     'call_received',
+            entityType: call.contact_id ? 'contact' : 'lead',
+            entityId:   call.contact_id || call.lead_id,
+            actorId:    call.handled_by,
+            details:    {
+              duration_seconds: call.duration_seconds || 0,
+              recorded:         !!call.recorded,
+              from:             call.from_number,
+            },
+          });
+        }
+      } catch (err) {
+        console.error('[twilio] /inbound-dial-result complete-update error:', err);
+      }
+    }
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.hangup();
+    res.set('Content-Type', 'text/xml');
+    return res.send(twiml.toString());
+  }
+
+  // no-answer / busy / failed / canceled → fall through to voicemail.
+  if (callRowId) {
+    try {
+      await supabase.from('calls').update({
+        missed: true,
+        status: 'no-answer',
+      }).eq('id', callRowId);
+    } catch (err) {
+      console.error('[twilio] /inbound-dial-result no-answer-update error:', err);
+    }
+  }
+
+  const twiml = new twilio.twiml.VoiceResponse();
+  appendVoicemailTwiml(twiml, callRowId);
+  res.set('Content-Type', 'text/xml');
+  res.send(twiml.toString());
+});
+
+// ─── POST /api/twilio/voicemail-complete ────────────────────────────────────
+//
+// Fires as the <Record> action after the recording attempt finishes. We get
+// the action callback even if the caller hung up before saying anything —
+// in that case RecordingUrl/RecordingDuration will be missing or zero. We
+// distinguish missed-call-without-voicemail from voicemail-left by checking
+// for a real recording.
+router.post('/voicemail-complete', async (req, res) => {
+  if (!validateTwilioSignature(req)) return res.status(403).send('Invalid signature');
+
+  const callRowId = req.query.callRowId || null;
+  const { RecordingUrl, RecordingDuration, RecordingSid } = req.body || {};
+  const durationSec = parseInt(RecordingDuration || '0', 10);
+  const hasVoicemail = !!RecordingUrl && durationSec > 0;
+
+  if (callRowId) {
+    try {
+      await supabase.from('calls').update({
+        is_voicemail:                hasVoicemail,
+        missed:                      true,
+        status:                      'completed',
+        recording_url:               RecordingUrl || null,
+        recording_sid:               RecordingSid || null,
+        recording_duration_seconds:  durationSec || null,
+        ended_at:                    new Date().toISOString(),
+      }).eq('id', callRowId);
+
+      const { data: call } = await supabase
+        .from('calls')
+        .select('id, contact_id, lead_id, handled_by, from_number')
+        .eq('id', callRowId)
+        .maybeSingle();
+
+      if (call && (call.contact_id || call.lead_id)) {
+        await logActivity({
+          action:     hasVoicemail ? 'voicemail_received' : 'call_missed',
+          entityType: call.contact_id ? 'contact' : 'lead',
+          entityId:   call.contact_id || call.lead_id,
+          actorId:    call.handled_by,
+          details:    hasVoicemail
+            ? { duration_seconds: durationSec, from: call.from_number, recording_url: RecordingUrl }
+            : { from: call.from_number },
+        });
+      }
+    } catch (err) {
+      console.error('[twilio] /voicemail-complete update error:', err);
+    }
+  }
+
+  const twiml = new twilio.twiml.VoiceResponse();
+  twiml.hangup();
+  res.set('Content-Type', 'text/xml');
+  res.send(twiml.toString());
 });
 
 module.exports = router;

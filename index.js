@@ -7,6 +7,8 @@ const contactRoutes    = require('./routes/contact');
 const insightsRoutes   = require('./routes/insights');
 const twilioRoutes     = require('./routes/twilio');
 const userSettingsRoutes = require('./routes/userSettings');
+const presenceRoutes   = require('./routes/presence');
+const { startStalePresenceSweeper } = require('./routes/presence');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app  = express();
@@ -46,8 +48,9 @@ app.get('/health', (req, res) => {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/contact',  contactRoutes);
 app.use('/api/insights', insightsRoutes);
-app.use('/api/twilio',   twilioRoutes);
+app.use('/api/twilio',        twilioRoutes);
 app.use('/api/user-settings', userSettingsRoutes);
+app.use('/api/presence',      presenceRoutes);
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {
@@ -61,4 +64,7 @@ app.use(errorHandler);
 // ─── Start server ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✓ STEMfra server running on http://localhost:${PORT}`);
+  // Flip stale user_presence rows to offline once a minute. Browsers don't
+  // reliably fire the offline beacon on tab close, so this is the fallback.
+  startStalePresenceSweeper();
 });
