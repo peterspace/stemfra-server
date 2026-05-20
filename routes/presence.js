@@ -65,12 +65,15 @@ router.post('/offline', async (req, res) => {
 
 /**
  * Periodic sweeper — flips presence to offline for users whose last heartbeat
- * is older than the threshold (default 90s; UI pings every 30s, so a real
- * online user should always have a recent heartbeat).
+ * is older than the threshold. The UI heartbeats every 30s and (post Phase 3a
+ * fix) keeps doing so even when the tab is backgrounded. Browsers throttle
+ * setInterval in hidden tabs, so we leave generous slack: 150s = 5 missed
+ * beats before we flag someone offline. That's enough to ride out a brief
+ * network blip or aggressive throttling without dropping calls.
  *
  * Exported so index.js can start it at boot.
  */
-function startStalePresenceSweeper({ intervalMs = 60_000, staleMs = 90_000 } = {}) {
+function startStalePresenceSweeper({ intervalMs = 60_000, staleMs = 150_000 } = {}) {
   const tick = async () => {
     try {
       const cutoff = new Date(Date.now() - staleMs).toISOString();

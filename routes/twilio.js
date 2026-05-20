@@ -12,6 +12,7 @@
 //   POST /api/twilio/inbound-voice        — Twilio webhook: inbound calls → ring user(s)
 //   POST /api/twilio/inbound-dial-result  — Twilio webhook: post-Dial branch (answered vs voicemail)
 //   POST /api/twilio/voicemail-complete   — Twilio webhook: voicemail recording finished
+//   GET  /api/twilio/recording/:callId    — proxied audio stream (auth required)
 //
 // Webhooks validate Twilio's X-Twilio-Signature header before processing.
 // /token and /sms/send validate the caller's Supabase JWT.
@@ -797,7 +798,7 @@ router.post('/voicemail-complete', async (req, res) => {
           entityId:   call.contact_id || call.lead_id,
           actorId:    call.handled_by,
           details:    hasVoicemail
-            ? { duration_seconds: durationSec, from: call.from_number, recording_url: RecordingUrl }
+            ? { duration_seconds: durationSec, from: call.from_number, recording_url: RecordingUrl, call_id: call.id }
             : { from: call.from_number },
         });
       }
@@ -810,6 +811,119 @@ router.post('/voicemail-complete', async (req, res) => {
   twiml.hangup();
   res.set('Content-Type', 'text/xml');
   res.send(twiml.toString());
+});
+
+// ─── GET /api/twilio/recording/:callId — proxied recording audio ────────────
+//
+// Twilio recording URLs require HTTP Basic Auth with our Account SID and
+// Auth Token. We obviously can't ship those to the browser, so the ops UI
+// points <audio src=…> at this proxy instead. The endpoint:
+//
+//   1. Auths the requester by Supabase JWT (in ?token=… because <audio> can't
+//      set Authorization headers reliably).
+//   2. Looks up the calls row by id, reads recording_url.
+//   3. Fetches the .mp3 from Twilio with our Basic Auth.
+//   4. Forwards the response — including Range headers so the audio player
+//      can seek — back to the browser.
+//
+// Note: query-string token is acceptable here because it travels over HTTPS
+// only and is short-lived (Supabase access tokens expire in ~1 hour). A
+// signed pre-authorized URL would be the next iteration if we expose
+// recordings outside the authenticated app.
+router.get('/recording/:callId', async (req, res) => {
+  // 1. Auth — accept JWT from either ?token=… or Authorization header.
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : null;
+  const headerAuth = req.headers.authorization;
+  const headerToken = headerAuth && headerAuth.startsWith('Bearer ')
+    ? headerAuth.slice(7)
+    : null;
+  const token = queryToken || headerToken;
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  let user;
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return res.status(401).json({ error: 'Unauthorized' });
+    user = data.user;
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // 2. Look up recording URL on the calls row. Service-role client bypasses RLS,
+  //    so we don't need a per-row policy — the JWT check above is the gate.
+  const callId = req.params.callId;
+  if (!callId) return res.status(400).json({ error: 'Missing callId' });
+
+  const { data: call, error: callErr } = await supabase
+    .from('calls')
+    .select('id, recording_url, recording_sid, contact_id, lead_id, handled_by')
+    .eq('id', callId)
+    .maybeSingle();
+  if (callErr) return res.status(500).json({ error: callErr.message });
+  if (!call) return res.status(404).json({ error: 'Call not found' });
+  if (!call.recording_url && !call.recording_sid) {
+    return res.status(404).json({ error: 'No recording on file for this call' });
+  }
+
+  // 3. Build the Twilio recording URL. The webhook stores recording_url as
+  //    the bare resource URL (no extension). Appending .mp3 forces Twilio to
+  //    serve a playable, seekable audio file.
+  const baseUrl = call.recording_url
+    ? call.recording_url
+    : `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Recordings/${call.recording_sid}`;
+  const audioUrl = baseUrl.endsWith('.mp3') ? baseUrl : `${baseUrl}.mp3`;
+
+  // 4. Fetch from Twilio with Basic Auth. Forward Range so seeking works.
+  const basic = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+  const upstreamHeaders = { Authorization: `Basic ${basic}` };
+  if (req.headers.range) upstreamHeaders.Range = req.headers.range;
+
+  let upstream;
+  try {
+    upstream = await fetch(audioUrl, { headers: upstreamHeaders });
+  } catch (err) {
+    console.error('[twilio] recording proxy fetch error:', err);
+    return res.status(502).json({ error: 'Upstream fetch failed' });
+  }
+
+  if (!upstream.ok && upstream.status !== 206) {
+    return res.status(upstream.status).end();
+  }
+
+  // 5. Forward status + headers the audio element cares about.
+  res.status(upstream.status);
+  const fwd = ['content-type', 'content-length', 'accept-ranges', 'content-range', 'cache-control'];
+  for (const h of fwd) {
+    const v = upstream.headers.get(h);
+    if (v) res.setHeader(h, v);
+  }
+  if (!res.getHeader('content-type')) res.setHeader('content-type', 'audio/mpeg');
+  if (!res.getHeader('accept-ranges')) res.setHeader('accept-ranges', 'bytes');
+  // No-store keeps stale recordings from being cached by intermediates with
+  // a different JWT in the URL.
+  res.setHeader('cache-control', 'private, no-store');
+
+  // 6. Stream the body. Node 22's fetch returns a Web ReadableStream.
+  if (!upstream.body) return res.end();
+
+  const reader = upstream.body.getReader();
+  const pump = async () => {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!res.write(Buffer.from(value))) {
+          await new Promise(resolve => res.once('drain', resolve));
+        }
+      }
+      res.end();
+    } catch (err) {
+      console.warn('[twilio] recording proxy stream interrupted:', err.message);
+      try { res.end(); } catch {}
+    }
+  };
+  req.on('close', () => { try { reader.cancel(); } catch {} });
+  pump();
 });
 
 module.exports = router;
