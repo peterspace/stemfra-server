@@ -44,18 +44,35 @@ async function validateUserSession(req) {
 }
 
 // POST /api/leadgen/trigger
-// Body: { system?: 'cold'|'warm', vertical, city, max_results?, min_score?, search_query? }
+// Body: {
+//   system?: 'cold'|'warm', vertical, city,
+//   country?:      string (ISO-2, e.g. 'US')
+//   country_name?: string (e.g. 'United States')
+//   state_code?:   string (e.g. 'NY')          — disambiguates same-named cities
+//   state_name?:   string (e.g. 'New York')    — preferred over state_code in the
+//                                                search_query when present
+//   max_results?, min_score?, search_query?
+// }
+//
+// Why both country/state names AND codes: the human-readable strings are
+// what Google Maps actually wants in the query ("Brooklyn, New York, United
+// States" disambiguates cleanly). The ISO codes are kept on the payload so
+// the n8n workflow can branch / filter on them deterministically if needed.
 router.post('/trigger', async (req, res) => {
   const user = await validateUserSession(req);
   if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
   const {
-    system      = 'cold',
-    vertical    = 'barbershop',
-    city        = '',
+    system       = 'cold',
+    vertical     = 'barbershop',
+    city         = '',
+    country      = null,
+    country_name = null,
+    state_code   = null,
+    state_name   = null,
     search_query,
-    max_results = 30,
-    min_score   = 5,
+    max_results  = 30,
+    min_score    = 5,
   } = req.body || {};
 
   // ── Validate inputs (fail fast, before spending an Apify/Claude run) ──
@@ -86,11 +103,31 @@ router.post('/trigger', async (req, res) => {
     });
   }
 
+  // Build the search_query Google Maps will see. If the caller passed an
+  // explicit search_query, respect it. Otherwise compose one with as much
+  // disambiguating context as we have. Examples:
+  //   "barbershop in Brooklyn, New York, United States"   ← best
+  //   "barbershop in Brooklyn, NY, United States"         ← fallback (no state name)
+  //   "barbershop in Lagos, Nigeria"                      ← country with no states
+  //   "barbershop in Brooklyn"                            ← legacy / no geo enrichment
+  //
+  // Preference order: full state name > state ISO code > nothing. The
+  // country gets the same treatment.
+  const verticalText = vertical.replace('_', ' ');
+  const stateSegment   = state_name   || state_code   || null;
+  const countrySegment = country_name || country      || null;
+  const segments       = [city, stateSegment, countrySegment].filter(Boolean);
+  const defaultQuery   = `${verticalText} in ${segments.join(', ')}`;
+
   const payload = {
     system,
     vertical,
     city,
-    search_query: search_query || `${vertical.replace('_', ' ')} in ${city}`,
+    country,
+    country_name,
+    state_code,
+    state_name,
+    search_query: search_query || defaultQuery,
     max_results: maxResults,
     min_score:   minScore,
     triggered_by: user.id,
@@ -133,7 +170,12 @@ router.post('/trigger', async (req, res) => {
     await supabase.from('activity_feed').insert([{
       entity_type: 'leadgen_run',
       action: 'triggered',
-      details: { system, vertical, city, max_results: maxResults, min_score: minScore },
+      details: {
+        system, vertical, city,
+        country, country_name, state_code, state_name,
+        search_query: payload.search_query,
+        max_results: maxResults, min_score: minScore,
+      },
       created_by: user.id,
     }]).catch(() => {});
 
