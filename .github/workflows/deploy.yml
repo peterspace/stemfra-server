@@ -75,5 +75,6 @@ jobs:
             TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
             TWILIO_TWIML_APP_SID=${{ secrets.TWILIO_TWIML_APP_SID }}
             PUBLIC_BASE_URL=https://api.stemfra.com
-            N8N_LEADGEN_COLD_URL=http://127.0.0.1:5678/webhook/leadgen-cold
+            N8N_LEADGEN_COLD_URL=https://n8n.srv1555257.hstgr.cloud/webhook/leadgen-cold
+            N8N_LEADGEN_WARM_URL=https://n8n.srv1555257.hstgr.cloud/webhook/leadgen-warm
             N8N_WEBHOOK_SECRET=${{ secrets.N8N_WEBHOOK_SECRET }}
