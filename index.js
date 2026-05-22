@@ -9,6 +9,7 @@ const twilioRoutes     = require('./routes/twilio');
 const userSettingsRoutes = require('./routes/userSettings');
 const presenceRoutes   = require('./routes/presence');
 const { startStalePresenceSweeper } = require('./routes/presence');
+const leadgenRoutes    = require('./routes/leadgen');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app  = express();
@@ -51,6 +52,7 @@ app.use('/api/insights', insightsRoutes);
 app.use('/api/twilio',        twilioRoutes);
 app.use('/api/user-settings', userSettingsRoutes);
 app.use('/api/presence',      presenceRoutes);
+app.use('/api/leadgen',       leadgenRoutes);
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {

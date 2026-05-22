@@ -14,6 +14,11 @@
 #     - TWILIO_API_KEY_SECRET    Twilio Console → Account → API keys & tokens
 #     - TWILIO_PHONE_NUMBER      E.164 number from Twilio Console → Phone Numbers
 #     - TWILIO_TWIML_APP_SID     Twilio Console → Voice → TwiML Apps → Stemfra Ops Calling
+#     - N8N_WEBHOOK_SECRET       Shared secret sent as x-leadgen-secret header to
+#                                the localhost n8n lead-gen webhook. Generate one
+#                                random string and use it consistently in both
+#                                GitHub Secrets and (later) the n8n workflow's
+#                                signature check node.
 #
 #   Variables:
 #     - HOSTINGER_VM_ID          Numeric VPS ID (the "1555257" in your VPS URL)
@@ -70,3 +75,5 @@ jobs:
             TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
             TWILIO_TWIML_APP_SID=${{ secrets.TWILIO_TWIML_APP_SID }}
             PUBLIC_BASE_URL=https://api.stemfra.com
+            N8N_LEADGEN_COLD_URL=http://127.0.0.1:5678/webhook/leadgen-cold
+            N8N_WEBHOOK_SECRET=${{ secrets.N8N_WEBHOOK_SECRET }}
