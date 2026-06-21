@@ -24,6 +24,7 @@ const cmsActivityRouter = require('./routes/cms/activity');
 const cmsCustomersRouter = require('./routes/cms/customers');
 const cmsSiteUploadsRouter = require('./routes/cms/siteUploads');
 const cmsPaymentsRouter = require('./routes/cms/payments');
+const cmsPublishRouter = require('./routes/cms/publish');
 const busboy = require('connect-busboy');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
@@ -120,6 +121,7 @@ app.use('/api/cms/activity', cmsActivityRouter);
 app.use('/api/cms/customers', cmsCustomersRouter);
 app.use('/api/cms/site-uploads', cmsSiteUploadsRouter);
 app.use('/api/cms/payments', cmsPaymentsRouter);
+app.use('/api/cms/site-publish', cmsPublishRouter);
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {
