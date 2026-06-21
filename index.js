@@ -69,7 +69,10 @@ function corsOrigin(origin, callback) {
   if (!origin) return callback(null, true);
   if (allowedOrigins.includes(origin)) return callback(null, true);
   if (allowedOriginPatterns.some((re) => re.test(origin))) return callback(null, true);
-  return callback(new Error(`Not allowed by CORS: ${origin}`));
+  // Disallowed: reject without an Error so the preflight returns a clean
+  // response (no Access-Control-Allow-Origin → the browser blocks it) instead
+  // of a 500 that floods the error log on every bot/scanner probe.
+  return callback(null, false);
 }
 
 app.use(cors({
