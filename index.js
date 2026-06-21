@@ -102,6 +102,7 @@ app.get('/health', (req, res) => {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/contact',  contactRoutes);
+app.use('/api/onboarding', require('./routes/onboarding'));
 app.use('/api/insights', insightsRoutes);
 app.use('/api/twilio',        twilioRoutes);
 app.use('/api/user-settings', userSettingsRoutes);
