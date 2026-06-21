@@ -19,6 +19,15 @@
 #                                random string and use it consistently in both
 #                                GitHub Secrets and (later) the n8n workflow's
 #                                signature check node.
+#     - CLOUDINARY_CLOUD_NAME    Cloudinary Dashboard → Product Environment
+#     - CLOUDINARY_API_KEY       Cloudinary Dashboard → API Keys
+#     - CLOUDINARY_API_SECRET    Cloudinary Dashboard → API Keys
+#     - STRIPE_SECRET_KEY        Stripe Dashboard → Developers → API keys
+#     - STRIPE_PUBLISHABLE_KEY   Stripe Dashboard → Developers → API keys
+#     - STRIPE_WEBHOOK_SECRET    Stripe Dashboard → Webhooks → signing secret
+#                                (the production endpoint, not the local CLI one)
+#   (STEMFRA_ADMIN_SECRET is intentionally NOT set — the staff-only
+#    /api/platform-billing/* endpoints fail closed in prod until staff auth ships.)
 #
 #   Variables:
 #     - HOSTINGER_VM_ID          Numeric VPS ID (the "1555257" in your VPS URL)
@@ -77,4 +86,17 @@ jobs:
             PUBLIC_BASE_URL=https://api.stemfra.com
             N8N_LEADGEN_COLD_URL=https://n8n.srv1555257.hstgr.cloud/webhook/leadgen-cold
             N8N_LEADGEN_WARM_URL=https://n8n.srv1555257.hstgr.cloud/webhook/leadgen-warm
+            N8N_SPEED_TO_LEAD_URL=${{ secrets.N8N_SPEED_TO_LEAD_URL }}
             N8N_WEBHOOK_SECRET=${{ secrets.N8N_WEBHOOK_SECRET }}
+            CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
+            CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
+            CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
+            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+            STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+            STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+            STRIPE_APPLICATION_FEE_BPS=150
+            STRIPE_PROCESSING_PCT_BPS=290
+            STRIPE_PROCESSING_FIXED_CENTS=30
+            STRIPE_SUBSCRIPTION_APP_FEE_PCT=4.5
+            CMS_URL=https://cms.stemfra.com
+            PLATFORM_BILLING_RETURN_URL=https://cms.stemfra.com

@@ -2,6 +2,7 @@ const supabase = require('../config/supabase');
 const nodemailer = require('nodemailer');
 const buildNotificationEmail = require('../templates/notificationEmail');
 const buildConfirmationEmail = require('../templates/confirmationEmail');
+const { fireSpeedToLead } = require('../routes/speedToLead');
 
 // Form subject (label) → leads.service (snake_case) mapping
 const SUBJECT_TO_SERVICE = {
@@ -88,6 +89,12 @@ const submitContact = async (req, res) => {
       .single();
 
     if (insertError) throw insertError;
+
+    // Kick off speed-to-lead engagement (fire-and-forget — never block or break
+    // the contact-form response). n8n does the SMS/email first-touch + rep notify.
+    fireSpeedToLead(lead.id, { source: 'website' })
+      .then((r) => { if (!r.ok) console.warn('[contactController] speed-to-lead not started:', r.reason); })
+      .catch((e) => console.error('[contactController] speed-to-lead error:', e.message));
 
     const transporter = createTransporter();
 
