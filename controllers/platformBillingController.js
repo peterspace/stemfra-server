@@ -9,6 +9,7 @@
 // system entirely — see docs and the two-systems note.
 const supabase = require('../config/supabase');
 const { stripe } = require('../config/stripe');
+const { createPlatformCheckout } = require('../lib/platformBilling');
 
 const RETURN_URL = process.env.PLATFORM_BILLING_RETURN_URL || process.env.CMS_URL || 'http://localhost:5180';
 
@@ -44,94 +45,15 @@ async function createCheckout(req, res) {
   if (!staffGuard(req, res)) return;
   try {
     const { siteId, monthlyAmountCents, buildAmountCents = 0, currency = 'usd' } = req.body || {};
-    if (!siteId || !monthlyAmountCents || monthlyAmountCents <= 0) {
-      return res.status(400).json({ success: false, message: 'Missing siteId or monthlyAmountCents.' });
-    }
-
-    const { data: site } = await supabase
-      .from('sites').select('id, company_id, owner_contact_id, subdomain').eq('id', siteId).single();
-    if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
-
-    const [{ data: company }, { data: contact }] = await Promise.all([
-      site.company_id
-        ? supabase.from('companies').select('name').eq('id', site.company_id).single()
-        : Promise.resolve({ data: null }),
-      site.owner_contact_id
-        ? supabase.from('contacts').select('email, full_name').eq('id', site.owner_contact_id).single()
-        : Promise.resolve({ data: null }),
-    ]);
-    const email = contact?.email;
-    if (!email) return res.status(400).json({ success: false, message: 'No billing email on the owner contact.' });
-    const businessName = company?.name || contact?.full_name || site.subdomain;
-    const cur = currency.toLowerCase();
-
-    // Reuse the customer from any existing subscription row for this site.
-    const { data: existing } = await supabase
-      .from('subscriptions').select('id, stripe_customer_id, deal_id').eq('site_id', siteId).maybeSingle();
-
-    let customerId = existing?.stripe_customer_id;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email,
-        name: businessName,
-        metadata: { site_id: siteId, kind: 'platform_billing' },
-      });
-      customerId = customer.id;
-    }
-
-    const lineItems = [
-      {
-        price_data: {
-          currency: cur,
-          product_data: { name: `${businessName} — Stemfra hosting & maintenance` },
-          unit_amount: monthlyAmountCents,
-          recurring: { interval: 'month' },
-        },
-        quantity: 1,
-      },
-    ];
-    if (buildAmountCents > 0) {
-      // One-time build fee — in subscription mode this lands on the first invoice.
-      lineItems.push({
-        price_data: {
-          currency: cur,
-          product_data: { name: 'Stemfra website build (one-time)' },
-          unit_amount: buildAmountCents,
-        },
-        quantity: 1,
-      });
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: customerId,
-      line_items: lineItems,
-      success_url: `${RETURN_URL}?billing=success`,
-      cancel_url: `${RETURN_URL}?billing=cancelled`,
-      // metadata.kind is how the shared webhook tells System A from System B.
-      metadata: { site_id: siteId, kind: 'platform_billing' },
-      subscription_data: { metadata: { site_id: siteId, kind: 'platform_billing' } },
+    const result = await createPlatformCheckout({
+      siteId, monthlyAmountCents, buildAmountCents, currency,
+      successUrl: `${RETURN_URL}?billing=success`,
+      cancelUrl: `${RETURN_URL}?billing=cancelled`,
     });
-
-    // Upsert the subscriptions row (one per site). stripe_subscription_id is set
-    // by the webhook once checkout completes.
-    const row = {
-      site_id: siteId,
-      deal_id: existing?.deal_id ?? null,
-      build_amount_cents: buildAmountCents,
-      monthly_amount_cents: monthlyAmountCents,
-      currency: cur,
-      stripe_customer_id: customerId,
-      status: 'pending',
-    };
-    if (existing?.id) {
-      await supabase.from('subscriptions').update(row).eq('id', existing.id);
-    } else {
-      await supabase.from('subscriptions').insert(row);
-    }
-
-    res.json({ success: true, url: session.url, sessionId: session.id, customerId });
+    res.json({ success: true, ...result });
   } catch (err) {
+    if (err.code === 'bad_input' || err.code === 'no_email') return res.status(400).json({ success: false, message: err.message });
+    if (err.code === 'not_found') return res.status(404).json({ success: false, message: err.message });
     console.error('[platformBilling.createCheckout]', err.message);
     res.status(500).json({ success: false, message: 'Could not start checkout.' });
   }
