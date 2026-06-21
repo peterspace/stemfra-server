@@ -47,8 +47,33 @@ const allowedOrigins = [
   'http://localhost:5180',   // stemfra_cms (dev)
 ];
 
+// Pattern-matched origins for the multi-tenant Cloudflare Pages deployments.
+// The deployed template/CMS sites live on hosts that can't be listed
+// statically, so we match them by shape:
+//   - stemfra-<app>.pages.dev and <hash>.stemfra-<app>.pages.dev  (our Pages
+//     projects + their preview deployments — scoped to OUR project names so a
+//     random *.pages.dev site can't use the API)
+//   - any *.stemfra.com subdomain (apex/www/crm/cms + customer sites, Phase 2)
+// Customer CUSTOM domains (their own TLDs) are a Phase-2 addition: they'll be
+// loaded from the live `sites` table into a cached allowlist and checked here.
+// Until then a custom-domain site can still READ (Supabase anon is permissive),
+// but its server-backed forms/bookings need its origin added below.
+const allowedOriginPatterns = [
+  /^https:\/\/([a-z0-9-]+\.)?stemfra-(barbers|salons|crossfit|yoga|cms)\.pages\.dev$/i,
+  /^https:\/\/([a-z0-9-]+\.)*stemfra\.com$/i,
+];
+
+function corsOrigin(origin, callback) {
+  // No Origin header → non-browser caller (curl, server-to-server, Twilio
+  // webhooks, health probes). CORS doesn't apply; allow.
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes(origin)) return callback(null, true);
+  if (allowedOriginPatterns.some((re) => re.test(origin))) return callback(null, true);
+  return callback(new Error(`Not allowed by CORS: ${origin}`));
+}
+
 app.use(cors({
-  origin:         allowedOrigins,
+  origin:         corsOrigin,
   methods:        ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials:    true,
