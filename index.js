@@ -126,6 +126,8 @@ app.use('/api/cms/site-publish', cmsPublishRouter);
 app.use('/api/admin/sites', require('./routes/admin/sites'));
 app.use('/api/admin/templates', require('./routes/admin/templates'));
 app.use('/api/admin/subscriptions', require('./routes/admin/subscriptions'));
+app.use('/api/admin/bookings', require('./routes/admin/bookings'));
+app.use('/api/admin/memberships', require('./routes/admin/memberships'));
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {
