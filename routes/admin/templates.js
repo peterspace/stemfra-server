@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { requireStaffAuth } = require('../../middleware/staffAuth');
+const { requireStaffRole, PLATFORM_ADMIN } = require('../../middleware/staffAuth');
 const { listTemplates, updateTemplate, setDefault } = require('../../controllers/admin/templatesController');
 
-router.get('/', requireStaffAuth, listTemplates);
-router.patch('/:id', requireStaffAuth, updateTemplate);
-router.post('/:id/set-default', requireStaffAuth, setDefault);
+const gate = requireStaffRole(...PLATFORM_ADMIN);
+
+router.get('/', gate, listTemplates);
+router.patch('/:id', gate, updateTemplate);
+router.post('/:id/set-default', gate, setDefault);
 
 module.exports = router;
