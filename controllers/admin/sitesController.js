@@ -6,7 +6,8 @@
 const crypto = require('crypto');
 const supabase = require('../../config/supabase');
 const { onboardCustomer } = require('../../lib/onboardSite');
-const { attachSiteDomain, detachSiteDomain } = require('../../lib/attachSiteDomain');
+const { attachSiteDomain, detachSiteDomain, projectFor } = require('../../lib/attachSiteDomain');
+const cf = require('../../lib/cloudflarePages');
 const { publishSite, unpublishSite, getBillingStatus } = require('../../lib/sitePublish');
 const { evaluateCompleteness } = require('../../lib/siteCompleteness');
 
@@ -107,4 +108,53 @@ async function readiness(req, res) {
   }
 }
 
-module.exports = { listSites, provision, attach, detach, publish, unpublish, readiness };
+// POST /api/admin/sites/:siteId/custom-domain { domain } — assign a client's
+// own brand domain (e.g. salon.com). Registers it on the vertical project; the
+// client points their DNS at the returned target (we can't create DNS in their
+// zone). For a domain that lives in OUR stemfra.com zone we also add the CNAME.
+async function setCustomDomain(req, res) {
+  try {
+    const { siteId } = req.params;
+    const clean = String(req.body?.domain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/.test(clean)) {
+      return res.status(400).json({ error: 'Enter a valid domain, e.g. salon.com or www.salon.com' });
+    }
+    const { data: site } = await supabase.from('sites').select('id, vertical:verticals(slug)').eq('id', siteId).single();
+    if (!site) return res.status(404).json({ error: 'Site not found.' });
+    const project = projectFor(site.vertical?.slug);
+    const target = `${project}.pages.dev`;
+
+    await cf.attachCustomDomain(project, clean);
+    // If it's a *.stemfra.com host we can wire DNS ourselves; otherwise the
+    // client adds a CNAME at their registrar (returned below).
+    if (clean.endsWith('.stemfra.com')) {
+      const existing = await cf.findDnsRecord(clean);
+      if (!existing) await cf.addCnameRecord(clean.replace('.stemfra.com', ''), target);
+    }
+    await supabase.from('sites').update({ custom_domain: clean }).eq('id', siteId);
+    const status = await cf.getCustomDomain(project, clean);
+    res.json({ ok: true, domain: clean, project, cnameTarget: target, status: status?.status || 'pending' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// DELETE /api/admin/sites/:siteId/custom-domain — remove the brand domain.
+async function removeCustomDomain(req, res) {
+  try {
+    const { siteId } = req.params;
+    const { data: site } = await supabase.from('sites').select('custom_domain, vertical:verticals(slug)').eq('id', siteId).single();
+    if (!site) return res.status(404).json({ error: 'Site not found.' });
+    if (site.custom_domain) {
+      const project = projectFor(site.vertical?.slug);
+      await cf.removeCustomDomain(project, site.custom_domain);
+      await cf.deleteCnameRecord(site.custom_domain); // no-op if not in our zone
+    }
+    await supabase.from('sites').update({ custom_domain: null }).eq('id', siteId);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { listSites, provision, attach, detach, publish, unpublish, readiness, setCustomDomain, removeCustomDomain };
