@@ -5,7 +5,9 @@
 // admin endpoints. Single-var supabase require per convention.
 const supabase = require('../config/supabase');
 
-const STAFF_ROLES = ['admin', 'support', 'staff'];
+// Must match is_stemfra_staff() in the DB. 'manager' is full staff; 'member'
+// is limited (assigned projects/leads only) and is NOT staff.
+const STAFF_ROLES = ['admin', 'manager', 'support', 'staff'];
 
 async function requireStaffAuth(req, res, next) {
   try {
