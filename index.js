@@ -124,6 +124,7 @@ app.use('/api/cms/site-uploads', cmsSiteUploadsRouter);
 app.use('/api/cms/payments', cmsPaymentsRouter);
 app.use('/api/cms/site-publish', cmsPublishRouter);
 app.use('/api/admin/sites', require('./routes/admin/sites'));
+app.use('/api/admin/templates', require('./routes/admin/templates'));
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {
