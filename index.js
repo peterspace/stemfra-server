@@ -25,6 +25,9 @@ const cmsCustomersRouter = require('./routes/cms/customers');
 const cmsSiteUploadsRouter = require('./routes/cms/siteUploads');
 const cmsPaymentsRouter = require('./routes/cms/payments');
 const cmsPublishRouter = require('./routes/cms/publish');
+const cmsSiteDomainRouter = require('./routes/cms/siteDomain');
+const cmsSitesRouter = require('./routes/cms/sites');
+const cmsAssistantRouter = require('./routes/cms/assistant');
 const busboy = require('connect-busboy');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
@@ -110,6 +113,9 @@ app.use('/api/presence',      presenceRoutes);
 app.use('/api/leadgen',       leadgenRoutes);
 app.use('/api/speed-to-lead', speedToLeadRoutes);
 app.use('/api/site-forms',    siteFormsRoutes);
+app.use('/api/site-chat',     require('./routes/siteChat'));
+app.use('/api/concierge',     require('./routes/concierge'));
+app.use('/api/voice',         require('./routes/voice'));
 app.use('/api/site-bookings', siteBookingsRoutes);
 app.use('/api/site-payments', sitePaymentsRoutes);
 app.use('/api/platform-billing', platformBillingRoutes);
@@ -123,6 +129,9 @@ app.use('/api/cms/customers', cmsCustomersRouter);
 app.use('/api/cms/site-uploads', cmsSiteUploadsRouter);
 app.use('/api/cms/payments', cmsPaymentsRouter);
 app.use('/api/cms/site-publish', cmsPublishRouter);
+app.use('/api/cms/site-domain', cmsSiteDomainRouter);
+app.use('/api/cms/sites', cmsSitesRouter);
+app.use('/api/cms/assistant', cmsAssistantRouter);
 app.use('/api/admin/sites', require('./routes/admin/sites'));
 app.use('/api/admin/templates', require('./routes/admin/templates'));
 app.use('/api/admin/subscriptions', require('./routes/admin/subscriptions'));
@@ -139,7 +148,13 @@ app.use(notFound);
 app.use(errorHandler);
 
 // ─── Start server ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+// HTTP + WebSocket (the WS server carries Twilio ConversationRelay live audio for
+// Stemfra Voice — attached to the same port so it shares the public host/TLS).
+const http = require('http');
+const { attachVoiceRelay } = require('./controllers/voiceController');
+const server = http.createServer(app);
+attachVoiceRelay(server);
+server.listen(PORT, () => {
   console.log(`✓ STEMfra server running on http://localhost:${PORT}`);
   // Flip stale user_presence rows to offline once a minute. Browsers don't
   // reliably fire the offline beacon on tab close, so this is the fallback.

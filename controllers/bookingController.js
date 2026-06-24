@@ -10,243 +10,270 @@ function createTransporter() {
   });
 }
 
+const en = (v) => (v && typeof v === 'object' ? (v.en ?? '') : (v || ''));
+
 const SLOT_GRID_MINUTES = 15;
 
-// ─── GET /api/site-bookings/availability?siteId=&teamMemberId=&serviceId=&date=YYYY-MM-DD ───
-// Returns available start times (HH:mm strings in the site's timezone) for that barber+service+date.
-const getAvailability = async (req, res) => {
-  const { siteId, teamMemberId, serviceId, date } = req.query;
+// ─── Core: compute available start times (no HTTP) ───────────────────────────
+// Returns { ok, code?, message?, slots, duration, reason?, zone }. Shared by the
+// public GET handler (allowedStatuses=['live']) and the Front Desk chat booking
+// tool (allowedStatuses=['live','previewing'] so it's testable on preview sites).
+const computeAvailability = async ({ siteId, teamMemberId, serviceId, date, allowedStatuses = ['live'] }) => {
   if (!siteId || !teamMemberId || !serviceId || !date) {
-    return res.status(400).json({ success: false, message: 'Missing required parameters.' });
+    return { ok: false, code: 400, message: 'Missing required parameters.' };
   }
 
-  try {
-    // Site (for timezone + live check)
-    const { data: site, error: siteErr } = await supabase
-      .from('sites').select('id, status, time_zone').eq('id', siteId).single();
-    if (siteErr || !site) return res.status(404).json({ success: false, message: 'Site not found.' });
-    if (site.status !== 'live') return res.status(403).json({ success: false, message: 'Site not live.' });
+  // Site (for timezone + status check)
+  const { data: site, error: siteErr } = await supabase
+    .from('sites').select('id, status, time_zone').eq('id', siteId).single();
+  if (siteErr || !site) return { ok: false, code: 404, message: 'Site not found.' };
+  if (!allowedStatuses.includes(site.status)) return { ok: false, code: 403, message: 'Site not live.' };
 
-    const zone = site.time_zone || 'America/New_York';
+  const zone = site.time_zone || 'America/New_York';
 
-    // Service duration
-    const { data: service, error: svcErr } = await supabase
-      .from('site_services').select('id, duration_minutes').eq('id', serviceId).eq('site_id', siteId).single();
-    if (svcErr || !service) return res.status(404).json({ success: false, message: 'Service not found.' });
-    const duration = service.duration_minutes || 30;
+  // Service duration
+  const { data: service, error: svcErr } = await supabase
+    .from('site_services').select('id, duration_minutes').eq('id', serviceId).eq('site_id', siteId).single();
+  if (svcErr || !service) return { ok: false, code: 404, message: 'Service not found.' };
+  const duration = service.duration_minutes || 30;
 
-    // The target date in the site's zone
-    const day = DateTime.fromISO(date, { zone });
-    if (!day.isValid) return res.status(400).json({ success: false, message: 'Invalid date.' });
-    // Luxon weekday: 1=Mon..7=Sun. Stored day_of_week: 0=Sun..6=Sat. Conversion: weekday % 7.
-    const dow = day.weekday % 7;
-    const startOfDay = day.startOf('day');
-    const endOfDayNext = startOfDay.plus({ days: 1 });
+  // The target date in the site's zone
+  const day = DateTime.fromISO(date, { zone });
+  if (!day.isValid) return { ok: false, code: 400, message: 'Invalid date.' };
+  // Luxon weekday: 1=Mon..7=Sun. Stored day_of_week: 0=Sun..6=Sat. Conversion: weekday % 7.
+  const dow = day.weekday % 7;
+  const startOfDay = day.startOf('day');
+  const endOfDayNext = startOfDay.plus({ days: 1 });
 
-    // Availability rules for this barber
-    const { data: rules } = await supabase
-      .from('site_availability_rules').select('*')
-      .eq('team_member_id', teamMemberId).eq('site_id', siteId).eq('is_active', true);
+  // Availability rules for this barber
+  const { data: rules } = await supabase
+    .from('site_availability_rules').select('*')
+    .eq('team_member_id', teamMemberId).eq('site_id', siteId).eq('is_active', true);
 
-    // Is the barber off this whole day? (time_off / date_override covering the date)
-    const isOff = (rules || []).some(r => {
-      if (r.rule_type !== 'time_off' && r.rule_type !== 'date_override') return false;
-      if (!r.start_date) return false;
-      const s = DateTime.fromISO(r.start_date, { zone });
-      const e = r.end_date ? DateTime.fromISO(r.end_date, { zone }) : s;
-      return day >= s.startOf('day') && day <= e.endOf('day');
-    });
-    if (isOff) return res.json({ success: true, slots: [], reason: 'off' });
+  // Is the barber off this whole day? (time_off / date_override covering the date)
+  const isOff = (rules || []).some(r => {
+    if (r.rule_type !== 'time_off' && r.rule_type !== 'date_override') return false;
+    if (!r.start_date) return false;
+    const s = DateTime.fromISO(r.start_date, { zone });
+    const e = r.end_date ? DateTime.fromISO(r.end_date, { zone }) : s;
+    return day >= s.startOf('day') && day <= e.endOf('day');
+  });
+  if (isOff) return { ok: true, slots: [], reason: 'off', duration, zone };
 
-    // Working windows for this weekday (weekly_recurring rules matching dow)
-    const windows = (rules || [])
-      .filter(r => r.rule_type === 'weekly_recurring' && r.day_of_week === dow && r.start_time && r.end_time)
-      .map(r => ({
-        start: DateTime.fromISO(`${date}T${r.start_time}`, { zone }),
-        end:   DateTime.fromISO(`${date}T${r.end_time}`, { zone }),
-      }));
-    if (windows.length === 0) return res.json({ success: true, slots: [], reason: 'closed' });
-
-    // Existing bookings for this barber on this day (overlap check)
-    const { data: bookings } = await supabase
-      .from('site_bookings').select('starts_at, ends_at, status')
-      .eq('team_member_id', teamMemberId).eq('site_id', siteId)
-      .neq('status', 'cancelled')
-      .gte('starts_at', startOfDay.toUTC().toISO())
-      .lt('starts_at', endOfDayNext.toUTC().toISO());
-
-    const busy = (bookings || []).map(b => ({
-      start: DateTime.fromISO(b.starts_at, { zone }),
-      end:   DateTime.fromISO(b.ends_at, { zone }),
+  // Working windows for this weekday (weekly_recurring rules matching dow)
+  const windows = (rules || [])
+    .filter(r => r.rule_type === 'weekly_recurring' && r.day_of_week === dow && r.start_time && r.end_time)
+    .map(r => ({
+      start: DateTime.fromISO(`${date}T${r.start_time}`, { zone }),
+      end:   DateTime.fromISO(`${date}T${r.end_time}`, { zone }),
     }));
+  if (windows.length === 0) return { ok: true, slots: [], reason: 'closed', duration, zone };
 
-    // Generate candidate start times on the 15-min grid within each window,
-    // keep those where the full service duration fits inside the window and doesn't overlap a booking.
-    const now = DateTime.now().setZone(zone);
-    const slots = [];
-    for (const w of windows) {
-      let cursor = w.start;
-      while (cursor.plus({ minutes: duration }) <= w.end) {
-        const slotStart = cursor;
-        const slotEnd = cursor.plus({ minutes: duration });
-        const inPast = slotStart < now;
-        const overlaps = busy.some(b => slotStart < b.end && slotEnd > b.start);
-        if (!inPast && !overlaps) {
-          slots.push(slotStart.toFormat('HH:mm'));
-        }
-        cursor = cursor.plus({ minutes: SLOT_GRID_MINUTES });
+  // Existing bookings for this barber on this day (overlap check)
+  const { data: bookings } = await supabase
+    .from('site_bookings').select('starts_at, ends_at, status')
+    .eq('team_member_id', teamMemberId).eq('site_id', siteId)
+    .neq('status', 'cancelled')
+    .gte('starts_at', startOfDay.toUTC().toISO())
+    .lt('starts_at', endOfDayNext.toUTC().toISO());
+
+  const busy = (bookings || []).map(b => ({
+    start: DateTime.fromISO(b.starts_at, { zone }),
+    end:   DateTime.fromISO(b.ends_at, { zone }),
+  }));
+
+  // Generate candidate start times on the 15-min grid within each window,
+  // keep those where the full service duration fits inside the window and doesn't overlap a booking.
+  const now = DateTime.now().setZone(zone);
+  const slots = [];
+  for (const w of windows) {
+    let cursor = w.start;
+    while (cursor.plus({ minutes: duration }) <= w.end) {
+      const slotStart = cursor;
+      const slotEnd = cursor.plus({ minutes: duration });
+      const inPast = slotStart < now;
+      const overlaps = busy.some(b => slotStart < b.end && slotEnd > b.start);
+      if (!inPast && !overlaps) {
+        slots.push(slotStart.toFormat('HH:mm'));
       }
+      cursor = cursor.plus({ minutes: SLOT_GRID_MINUTES });
     }
+  }
 
-    // Dedupe + sort (in case of overlapping windows)
-    const unique = [...new Set(slots)].sort();
-    return res.json({ success: true, slots: unique, duration });
+  // Dedupe + sort (in case of overlapping windows)
+  const unique = [...new Set(slots)].sort();
+  return { ok: true, slots: unique, duration, zone };
+};
+
+// ─── GET /api/site-bookings/availability?siteId=&teamMemberId=&serviceId=&date=YYYY-MM-DD ───
+// Public (booking page) — live sites only. Thin wrapper over computeAvailability.
+const getAvailability = async (req, res) => {
+  try {
+    const r = await computeAvailability({ ...req.query, allowedStatuses: ['live'] });
+    if (!r.ok) return res.status(r.code).json({ success: false, message: r.message });
+    return res.json({ success: true, slots: r.slots, duration: r.duration, ...(r.reason ? { reason: r.reason } : {}) });
   } catch (err) {
     console.error('getAvailability error:', err);
     return res.status(500).json({ success: false, message: 'Could not load availability.' });
   }
 };
 
+// ─── Core: place a single booking (no HTTP) ──────────────────────────────────
+// Returns { ok, code?, message?, idempotent?, booking }. Shared by the public
+// POST handler (allowedStatuses=['live']) and the Front Desk chat booking tool
+// (allowedStatuses=['live','previewing']). The chat tool only ever books FREE
+// services (paid ones hand off to the booking page for card payment), so it
+// passes no paymentIntentId; the Stripe path here stays for the public handler.
+const placeBooking = async ({
+  siteId, teamMemberId, serviceId, date, time, customer, notes, paymentIntentId,
+  allowedStatuses = ['live'], emailFromName = 'Argyle & Sons',
+}) => {
+  if (!siteId || !teamMemberId || !serviceId || !date || !time || !customer) {
+    return { ok: false, code: 400, message: 'Missing required fields.' };
+  }
+  if (!customer.email && !customer.phone) {
+    return { ok: false, code: 400, message: 'Please provide an email or phone.' };
+  }
+
+  const { data: site, error: siteErr } = await supabase
+    .from('sites').select('id, status, time_zone, owner_contact_id').eq('id', siteId).single();
+  if (siteErr || !site) return { ok: false, code: 404, message: 'Site not found.' };
+  if (!allowedStatuses.includes(site.status)) return { ok: false, code: 403, message: 'Site not live.' };
+
+  const zone = site.time_zone || 'America/New_York';
+
+  const { data: service, error: svcErr } = await supabase
+    .from('site_services').select('id, name, duration_minutes').eq('id', serviceId).eq('site_id', siteId).single();
+  if (svcErr || !service) return { ok: false, code: 404, message: 'Service not found.' };
+  const duration = service.duration_minutes || 30;
+
+  const startsAt = DateTime.fromISO(`${date}T${time}`, { zone });
+  if (!startsAt.isValid) return { ok: false, code: 400, message: 'Invalid date/time.' };
+  const endsAt = startsAt.plus({ minutes: duration });
+
+  // Re-check the slot is still free (guard against double-booking between availability load and submit)
+  const { data: clashes } = await supabase
+    .from('site_bookings').select('id, starts_at, ends_at')
+    .eq('team_member_id', teamMemberId).eq('site_id', siteId).neq('status', 'cancelled')
+    .gte('starts_at', startsAt.startOf('day').toUTC().toISO())
+    .lt('starts_at', startsAt.startOf('day').plus({ days: 1 }).toUTC().toISO());
+  const conflict = (clashes || []).some(b => {
+    const bs = DateTime.fromISO(b.starts_at, { zone });
+    const be = DateTime.fromISO(b.ends_at, { zone });
+    return startsAt < be && endsAt > bs;
+  });
+  if (conflict) return { ok: false, code: 409, message: 'That time was just taken. Please pick another.' };
+
+  // Payment verification — when the client paid (PaymentIntent), confirm with
+  // Stripe that it actually succeeded before writing a paid booking. Idempotent
+  // on the PI id, so a client retry (or a future webhook) never double-creates.
+  let paymentFields = { payment_status: 'none', stripe_payment_intent_id: null, amount_cents: null, application_fee_cents: null };
+  if (paymentIntentId) {
+    if (!stripe) return { ok: false, code: 503, message: 'Payments are not configured.' };
+    const { data: dupe } = await supabase
+      .from('site_bookings').select('id, starts_at').eq('stripe_payment_intent_id', paymentIntentId).maybeSingle();
+    if (dupe) {
+      const ds = DateTime.fromISO(dupe.starts_at, { zone });
+      return { ok: true, code: 200, idempotent: true, booking: { id: dupe.id, date: ds.toFormat('cccc, LLLL d'), time: ds.toFormat('h:mm a') } };
+    }
+    let pi;
+    try {
+      // Destination-charge PaymentIntents live on the PLATFORM account, so a
+      // plain retrieve (no stripeAccount context) is correct.
+      pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+    } catch { return { ok: false, code: 400, message: 'Payment could not be verified.' }; }
+    if (!pi || pi.status !== 'succeeded') return { ok: false, code: 402, message: 'Payment not completed.' };
+    if (pi.metadata?.site_id !== siteId || pi.metadata?.service_id !== serviceId) {
+      return { ok: false, code: 400, message: 'Payment does not match this booking.' };
+    }
+    paymentFields = {
+      payment_status: 'paid',
+      stripe_payment_intent_id: paymentIntentId,
+      amount_cents: pi.amount,
+      application_fee_cents: pi.application_fee_amount ?? null,
+    };
+  }
+
+  // Upsert customer (match by email within the site if provided)
+  let customerId = null;
+  if (customer.email) {
+    const { data: existing } = await supabase
+      .from('site_customers').select('id, metadata').eq('site_id', siteId).eq('email', customer.email.trim().toLowerCase()).maybeSingle();
+    if (existing) {
+      // Suspended members can't book (hard account block).
+      if (existing.metadata?.suspended) {
+        return { ok: false, code: 403, message: 'This account is suspended. Please contact us.' };
+      }
+      customerId = existing.id;
+    }
+  }
+  if (!customerId) {
+    const { data: newCust, error: custErr } = await supabase
+      .from('site_customers').insert([{
+        site_id: siteId,
+        first_name: customer.firstName?.trim() || null,
+        last_name:  customer.lastName?.trim() || null,
+        email:      customer.email?.trim().toLowerCase() || null,
+        phone:      customer.phone?.trim() || null,
+      }]).select().single();
+    if (custErr) return { ok: false, code: 500, message: custErr.message };
+    customerId = newCust.id;
+  }
+
+  // Create booking
+  const { data: booking, error: bookErr } = await supabase
+    .from('site_bookings').insert([{
+      site_id: siteId,
+      customer_id: customerId,
+      team_member_id: teamMemberId,
+      service_id: serviceId,
+      service_name_snapshot: service.name,
+      starts_at: startsAt.toUTC().toISO(),
+      ends_at: endsAt.toUTC().toISO(),
+      duration_minutes: duration,
+      status: 'confirmed',
+      customer_notes: notes?.trim() || null,
+      confirmation_sent_at: null,
+      ...paymentFields,
+    }]).select().single();
+  if (bookErr) return { ok: false, code: 500, message: bookErr.message };
+
+  // Best-effort confirmation email to the customer
+  try {
+    if (customer.email) {
+      const transporter = createTransporter();
+      await transporter.sendMail({
+        from: `"${emailFromName}" <${process.env.GMAIL_USER}>`,
+        to: customer.email,
+        subject: 'Your appointment is confirmed',
+        text: `Your appointment is confirmed for ${startsAt.toFormat('cccc, LLLL d')} at ${startsAt.toFormat('h:mm a')}.\n\nWe look forward to seeing you.`,
+      });
+      await supabase.from('site_bookings').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', booking.id);
+    }
+  } catch (emailErr) {
+    console.error('booking confirmation email failed:', emailErr.message);
+  }
+
+  return {
+    ok: true,
+    code: 201,
+    booking: {
+      id: booking.id,
+      date: startsAt.toFormat('cccc, LLLL d'),
+      time: startsAt.toFormat('h:mm a'),
+    },
+  };
+};
+
 // ─── POST /api/site-bookings ───
+// Public (booking page) — live sites only. Thin wrapper over placeBooking.
 // Body: { siteId, teamMemberId, serviceId, date (YYYY-MM-DD), time (HH:mm),
 //         customer: { firstName, lastName, email, phone }, notes }
 const createBooking = async (req, res) => {
-  const { siteId, teamMemberId, serviceId, date, time, customer, notes, paymentIntentId } = req.body;
-  if (!siteId || !teamMemberId || !serviceId || !date || !time || !customer) {
-    return res.status(400).json({ success: false, message: 'Missing required fields.' });
-  }
-  if (!customer.email && !customer.phone) {
-    return res.status(400).json({ success: false, message: 'Please provide an email or phone.' });
-  }
-
   try {
-    const { data: site, error: siteErr } = await supabase
-      .from('sites').select('id, status, time_zone, owner_contact_id').eq('id', siteId).single();
-    if (siteErr || !site) return res.status(404).json({ success: false, message: 'Site not found.' });
-    if (site.status !== 'live') return res.status(403).json({ success: false, message: 'Site not live.' });
-
-    const zone = site.time_zone || 'America/New_York';
-
-    const { data: service, error: svcErr } = await supabase
-      .from('site_services').select('id, name, duration_minutes').eq('id', serviceId).eq('site_id', siteId).single();
-    if (svcErr || !service) return res.status(404).json({ success: false, message: 'Service not found.' });
-    const duration = service.duration_minutes || 30;
-
-    const startsAt = DateTime.fromISO(`${date}T${time}`, { zone });
-    if (!startsAt.isValid) return res.status(400).json({ success: false, message: 'Invalid date/time.' });
-    const endsAt = startsAt.plus({ minutes: duration });
-
-    // Re-check the slot is still free (guard against double-booking between availability load and submit)
-    const { data: clashes } = await supabase
-      .from('site_bookings').select('id, starts_at, ends_at')
-      .eq('team_member_id', teamMemberId).eq('site_id', siteId).neq('status', 'cancelled')
-      .gte('starts_at', startsAt.startOf('day').toUTC().toISO())
-      .lt('starts_at', startsAt.startOf('day').plus({ days: 1 }).toUTC().toISO());
-    const conflict = (clashes || []).some(b => {
-      const bs = DateTime.fromISO(b.starts_at, { zone });
-      const be = DateTime.fromISO(b.ends_at, { zone });
-      return startsAt < be && endsAt > bs;
-    });
-    if (conflict) return res.status(409).json({ success: false, message: 'That time was just taken. Please pick another.' });
-
-    // Payment verification — when the client paid (PaymentIntent), confirm with
-    // Stripe that it actually succeeded before writing a paid booking. Idempotent
-    // on the PI id, so a client retry (or a future webhook) never double-creates.
-    let paymentFields = { payment_status: 'none', stripe_payment_intent_id: null, amount_cents: null, application_fee_cents: null };
-    if (paymentIntentId) {
-      if (!stripe) return res.status(503).json({ success: false, message: 'Payments are not configured.' });
-      const { data: dupe } = await supabase
-        .from('site_bookings').select('id, starts_at').eq('stripe_payment_intent_id', paymentIntentId).maybeSingle();
-      if (dupe) {
-        const ds = DateTime.fromISO(dupe.starts_at, { zone });
-        return res.status(200).json({ success: true, idempotent: true, booking: { id: dupe.id, date: ds.toFormat('cccc, LLLL d'), time: ds.toFormat('h:mm a') } });
-      }
-      let pi;
-      try {
-        // Destination-charge PaymentIntents live on the PLATFORM account, so a
-        // plain retrieve (no stripeAccount context) is correct.
-        pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-      } catch { return res.status(400).json({ success: false, message: 'Payment could not be verified.' }); }
-      if (!pi || pi.status !== 'succeeded') return res.status(402).json({ success: false, message: 'Payment not completed.' });
-      if (pi.metadata?.site_id !== siteId || pi.metadata?.service_id !== serviceId) {
-        return res.status(400).json({ success: false, message: 'Payment does not match this booking.' });
-      }
-      paymentFields = {
-        payment_status: 'paid',
-        stripe_payment_intent_id: paymentIntentId,
-        amount_cents: pi.amount,
-        application_fee_cents: pi.application_fee_amount ?? null,
-      };
-    }
-
-    // Upsert customer (match by email within the site if provided)
-    let customerId = null;
-    if (customer.email) {
-      const { data: existing } = await supabase
-        .from('site_customers').select('id, metadata').eq('site_id', siteId).eq('email', customer.email.trim().toLowerCase()).maybeSingle();
-      if (existing) {
-        // Suspended members can't book (hard account block).
-        if (existing.metadata?.suspended) {
-          return res.status(403).json({ success: false, message: 'This account is suspended. Please contact us.' });
-        }
-        customerId = existing.id;
-      }
-    }
-    if (!customerId) {
-      const { data: newCust, error: custErr } = await supabase
-        .from('site_customers').insert([{
-          site_id: siteId,
-          first_name: customer.firstName?.trim() || null,
-          last_name:  customer.lastName?.trim() || null,
-          email:      customer.email?.trim().toLowerCase() || null,
-          phone:      customer.phone?.trim() || null,
-        }]).select().single();
-      if (custErr) throw custErr;
-      customerId = newCust.id;
-    }
-
-    // Create booking
-    const { data: booking, error: bookErr } = await supabase
-      .from('site_bookings').insert([{
-        site_id: siteId,
-        customer_id: customerId,
-        team_member_id: teamMemberId,
-        service_id: serviceId,
-        service_name_snapshot: service.name,
-        starts_at: startsAt.toUTC().toISO(),
-        ends_at: endsAt.toUTC().toISO(),
-        duration_minutes: duration,
-        status: 'confirmed',
-        customer_notes: notes?.trim() || null,
-        confirmation_sent_at: null,
-        ...paymentFields,
-      }]).select().single();
-    if (bookErr) throw bookErr;
-
-    // Best-effort confirmation email to the customer
-    try {
-      if (customer.email) {
-        const transporter = createTransporter();
-        await transporter.sendMail({
-          from: `"Argyle & Sons" <${process.env.GMAIL_USER}>`,
-          to: customer.email,
-          subject: 'Your appointment is confirmed',
-          text: `Your appointment is confirmed for ${startsAt.toFormat('cccc, LLLL d')} at ${startsAt.toFormat('h:mm a')}.\n\nWe look forward to seeing you.`,
-        });
-        await supabase.from('site_bookings').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', booking.id);
-      }
-    } catch (emailErr) {
-      console.error('booking confirmation email failed:', emailErr.message);
-    }
-
-    return res.status(201).json({
-      success: true,
-      booking: {
-        id: booking.id,
-        date: startsAt.toFormat('cccc, LLLL d'),
-        time: startsAt.toFormat('h:mm a'),
-      },
-    });
+    const r = await placeBooking({ ...req.body, allowedStatuses: ['live'] });
+    if (!r.ok) return res.status(r.code).json({ success: false, message: r.message });
+    return res.status(r.idempotent ? 200 : 201).json({ success: true, ...(r.idempotent ? { idempotent: true } : {}), booking: r.booking });
   } catch (err) {
     console.error('createBooking error:', err);
     return res.status(500).json({ success: false, message: 'Could not create booking.' });
@@ -631,4 +658,182 @@ const createBookingGroup = async (req, res) => {
   }
 };
 
-module.exports = { getAvailability, createBooking, getMonthAvailability, createBookingGroup };
+// ─── Class-based booking (Phase 2) ───────────────────────────────────────────
+// Classes are site_services with kind='class'. A scheduled occurrence is a
+// site_class_sessions row; a class booking is a site_bookings row pointing at the
+// session. Spots left = session.capacity − non-cancelled bookings for the session.
+
+// Core: list upcoming open class sessions (no HTTP). Returns { ok, code?, message?,
+// zone, sessions:[{id, serviceId, serviceName, instructor, teamMemberId, startsAt,
+// date, time, label, capacity, spotsLeft, location}] }.
+const listClassSessions = async ({ siteId, serviceId, days = 21, allowedStatuses = ['live'] }) => {
+  if (!siteId) return { ok: false, code: 400, message: 'Missing siteId.' };
+  const { data: site } = await supabase.from('sites').select('id, status, time_zone').eq('id', siteId).single();
+  if (!site) return { ok: false, code: 404, message: 'Site not found.' };
+  if (!allowedStatuses.includes(site.status)) return { ok: false, code: 403, message: 'Site not live.' };
+  const zone = site.time_zone || 'America/New_York';
+  const now = DateTime.now().setZone(zone);
+  const until = now.plus({ days });
+
+  let q = supabase.from('site_class_sessions')
+    .select('id, service_id, team_member_id, starts_at, ends_at, capacity, status, location, service:site_services(name, kind), instructor:site_team_members(name)')
+    .eq('site_id', siteId).eq('status', 'scheduled')
+    .gte('starts_at', now.toUTC().toISO()).lt('starts_at', until.toUTC().toISO())
+    .order('starts_at');
+  if (serviceId) q = q.eq('service_id', serviceId);
+  const { data: sessions } = await q;
+
+  const ids = (sessions || []).map((s) => s.id);
+  const counts = {};
+  if (ids.length) {
+    const { data: bks } = await supabase.from('site_bookings')
+      .select('class_session_id').in('class_session_id', ids).neq('status', 'cancelled');
+    for (const b of (bks || [])) counts[b.class_session_id] = (counts[b.class_session_id] || 0) + 1;
+  }
+
+  const out = (sessions || []).map((s) => {
+    const start = DateTime.fromISO(s.starts_at, { zone });
+    return {
+      id: s.id, serviceId: s.service_id, serviceName: en(s.service?.name),
+      instructor: s.instructor?.name || null, teamMemberId: s.team_member_id,
+      startsAt: s.starts_at, endsAt: s.ends_at,
+      date: start.toFormat('yyyy-MM-dd'), time: start.toFormat('HH:mm'),
+      label: start.toFormat('ccc, LLL d · h:mm a'),
+      capacity: s.capacity, spotsLeft: Math.max(0, (s.capacity || 0) - (counts[s.id] || 0)),
+      location: s.location || null,
+    };
+  });
+  return { ok: true, zone, sessions: out };
+};
+
+// Core: reserve a spot in a class session. Returns { ok, code?, message?, idempotent?, booking }.
+const bookClassSession = async ({ siteId, sessionId, customer, notes, paymentIntentId, allowedStatuses = ['live'], emailFromName = 'Bookings' }) => {
+  if (!siteId || !sessionId || !customer) return { ok: false, code: 400, message: 'Missing required fields.' };
+  if (!customer.email && !customer.phone) return { ok: false, code: 400, message: 'Please provide an email or phone.' };
+
+  const { data: site } = await supabase.from('sites').select('id, status, time_zone').eq('id', siteId).single();
+  if (!site) return { ok: false, code: 404, message: 'Site not found.' };
+  if (!allowedStatuses.includes(site.status)) return { ok: false, code: 403, message: 'Site not live.' };
+  const zone = site.time_zone || 'America/New_York';
+
+  const { data: s } = await supabase.from('site_class_sessions')
+    .select('id, service_id, team_member_id, starts_at, ends_at, capacity, status, service:site_services(name)')
+    .eq('id', sessionId).eq('site_id', siteId).single();
+  if (!s) return { ok: false, code: 404, message: 'Class not found.' };
+  if (s.status !== 'scheduled') return { ok: false, code: 409, message: 'That class is no longer available.' };
+
+  const { count } = await supabase.from('site_bookings')
+    .select('id', { count: 'exact', head: true }).eq('class_session_id', sessionId).neq('status', 'cancelled');
+  if ((count || 0) >= s.capacity) return { ok: false, code: 409, message: 'That class is full.' };
+
+  // Payment verification (parity with placeBooking) — confirm the PI succeeded +
+  // matches this site/service before writing a paid booking. Idempotent on the PI.
+  let paymentFields = { payment_status: 'none', stripe_payment_intent_id: null, amount_cents: null, application_fee_cents: null };
+  if (paymentIntentId) {
+    if (!stripe) return { ok: false, code: 503, message: 'Payments are not configured.' };
+    const { data: dupePI } = await supabase
+      .from('site_bookings').select('id, starts_at').eq('stripe_payment_intent_id', paymentIntentId).maybeSingle();
+    if (dupePI) {
+      const ds = DateTime.fromISO(dupePI.starts_at, { zone });
+      return { ok: true, code: 200, idempotent: true, booking: { id: dupePI.id, date: ds.toFormat('cccc, LLLL d'), time: ds.toFormat('h:mm a') } };
+    }
+    let pi;
+    try { pi = await stripe.paymentIntents.retrieve(paymentIntentId); }
+    catch { return { ok: false, code: 400, message: 'Payment could not be verified.' }; }
+    if (!pi || pi.status !== 'succeeded') return { ok: false, code: 402, message: 'Payment not completed.' };
+    if (pi.metadata?.site_id !== siteId || pi.metadata?.service_id !== s.service_id) {
+      return { ok: false, code: 400, message: 'Payment does not match this class.' };
+    }
+    paymentFields = {
+      payment_status: 'paid', stripe_payment_intent_id: paymentIntentId,
+      amount_cents: pi.amount, application_fee_cents: pi.application_fee_amount ?? null,
+    };
+  }
+
+  // Upsert customer (match by email within the site).
+  let customerId = null;
+  if (customer.email) {
+    const { data: existing } = await supabase.from('site_customers')
+      .select('id, metadata').eq('site_id', siteId).eq('email', customer.email.trim().toLowerCase()).maybeSingle();
+    if (existing) {
+      if (existing.metadata?.suspended) return { ok: false, code: 403, message: 'This account is suspended. Please contact us.' };
+      customerId = existing.id;
+    }
+  }
+  if (!customerId) {
+    const { data: nc, error } = await supabase.from('site_customers').insert([{
+      site_id: siteId,
+      first_name: customer.firstName?.trim() || null, last_name: customer.lastName?.trim() || null,
+      email: customer.email?.trim().toLowerCase() || null, phone: customer.phone?.trim() || null,
+    }]).select().single();
+    if (error) return { ok: false, code: 500, message: error.message };
+    customerId = nc.id;
+  }
+
+  const start = DateTime.fromISO(s.starts_at, { zone });
+  const end = DateTime.fromISO(s.ends_at, { zone });
+
+  // Already booked into this session → idempotent.
+  const { data: dupe } = await supabase.from('site_bookings')
+    .select('id').eq('class_session_id', sessionId).eq('customer_id', customerId).neq('status', 'cancelled').maybeSingle();
+  if (dupe) return { ok: true, idempotent: true, booking: { id: dupe.id, date: start.toFormat('cccc, LLLL d'), time: start.toFormat('h:mm a') } };
+
+  const { data: booking, error: bErr } = await supabase.from('site_bookings').insert([{
+    site_id: siteId, customer_id: customerId, team_member_id: s.team_member_id, service_id: s.service_id,
+    class_session_id: sessionId, service_name_snapshot: s.service?.name,
+    starts_at: s.starts_at, ends_at: s.ends_at,
+    duration_minutes: Math.max(1, Math.round(end.diff(start, 'minutes').minutes)),
+    status: 'confirmed', customer_notes: notes?.trim() || null,
+    ...paymentFields,
+  }]).select().single();
+  if (bErr) return { ok: false, code: 500, message: bErr.message };
+
+  try {
+    if (customer.email) {
+      const transporter = createTransporter();
+      await transporter.sendMail({
+        from: `"${emailFromName}" <${process.env.GMAIL_USER}>`,
+        to: customer.email,
+        subject: 'Your class is booked',
+        text: `You're booked for ${en(s.service?.name)} on ${start.toFormat('cccc, LLLL d')} at ${start.toFormat('h:mm a')}.\n\nSee you there!`,
+      });
+      await supabase.from('site_bookings').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', booking.id);
+    }
+  } catch (emailErr) {
+    console.error('class confirmation email failed:', emailErr.message);
+  }
+
+  return { ok: true, code: 201, booking: { id: booking.id, date: start.toFormat('cccc, LLLL d'), time: start.toFormat('h:mm a') } };
+};
+
+// ─── GET /api/site-bookings/class-sessions?siteId=&serviceId= ── public (live only)
+const getClassSessions = async (req, res) => {
+  try {
+    const r = await listClassSessions({ ...req.query, allowedStatuses: ['live'] });
+    if (!r.ok) return res.status(r.code).json({ success: false, message: r.message });
+    return res.json({ success: true, sessions: r.sessions });
+  } catch (err) {
+    console.error('getClassSessions error:', err);
+    return res.status(500).json({ success: false, message: 'Could not load classes.' });
+  }
+};
+
+// ─── POST /api/site-bookings/class ── public (live only)
+// Body: { siteId, sessionId, customer: { firstName, lastName, email, phone }, notes }
+const createClassBooking = async (req, res) => {
+  try {
+    const r = await bookClassSession({ ...req.body, allowedStatuses: ['live'] });
+    if (!r.ok) return res.status(r.code).json({ success: false, message: r.message });
+    return res.status(r.idempotent ? 200 : 201).json({ success: true, ...(r.idempotent ? { idempotent: true } : {}), booking: r.booking });
+  } catch (err) {
+    console.error('createClassBooking error:', err);
+    return res.status(500).json({ success: false, message: 'Could not book the class.' });
+  }
+};
+
+module.exports = {
+  getAvailability, createBooking, getMonthAvailability, createBookingGroup,
+  getClassSessions, createClassBooking,
+  // Cores reused by the Front Desk chat booking tool (lib/frontdeskBooking.js).
+  computeAvailability, placeBooking, listClassSessions, bookClassSession,
+};

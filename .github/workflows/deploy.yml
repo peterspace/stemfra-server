@@ -26,6 +26,11 @@
 #     - STRIPE_PUBLISHABLE_KEY   Stripe Dashboard → Developers → API keys
 #     - STRIPE_WEBHOOK_SECRET    Stripe Dashboard → Webhooks → signing secret
 #                                (the production endpoint, not the local CLI one)
+#     - OPENAI_API_KEY           sk-... — the Stemfra Voice brain (runs the LLM in
+#                                the server). Reuse the key from the n8n OpenAI
+#                                credential. The ONLY new secret for the AI agents;
+#                                all n8n webhook URLs + model names are non-secret
+#                                literals below (n8n auth is N8N_WEBHOOK_SECRET).
 #   (STEMFRA_ADMIN_SECRET is intentionally NOT set — the staff-only
 #    /api/platform-billing/* endpoints fail closed in prod until staff auth ships.)
 #
@@ -88,6 +93,15 @@ jobs:
             N8N_LEADGEN_WARM_URL=https://n8n.srv1555257.hstgr.cloud/webhook/leadgen-warm
             N8N_SPEED_TO_LEAD_URL=${{ secrets.N8N_SPEED_TO_LEAD_URL }}
             N8N_WEBHOOK_SECRET=${{ secrets.N8N_WEBHOOK_SECRET }}
+            STACY_N8N_URL=https://n8n.srv1555257.hstgr.cloud/webhook/stacy
+            STACY_MODEL=gpt-4o
+            FRONTDESK_N8N_URL=https://n8n.srv1555257.hstgr.cloud/webhook/frontdesk
+            FRONTDESK_MODEL=gpt-4o
+            CONCIERGE_N8N_URL=https://n8n.srv1555257.hstgr.cloud/webhook/concierge
+            CONCIERGE_MODEL=gpt-4o
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            VOICE_MODEL=gpt-4o-mini
+            VOICE_PHONE_NUMBER=+16672205540
             CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
             CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
             CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}

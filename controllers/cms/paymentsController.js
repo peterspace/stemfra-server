@@ -97,11 +97,39 @@ async function status(req, res) {
     };
     await supabase.from('site_payment_accounts').update(patch).eq('site_id', siteId);
 
-    res.json({ connected: true, ...patch });
+    // `livemode` isn't a DB column — surface it from the live Stripe object so
+    // the CMS can show a "Test mode" badge when the platform runs test keys.
+    res.json({ connected: true, ...patch, livemode: account.livemode });
   } catch (err) {
     console.error('[payments.status]', err.message);
     res.status(500).json({ error: 'Could not fetch payment status.' });
   }
 }
 
-module.exports = { healthcheck, connectLink, status };
+/**
+ * POST /api/cms/payments/dashboard-link  { siteId }
+ * Express login link → the owner's Stripe Express dashboard (payouts, receipts,
+ * account details). Only valid once onboarding is complete.
+ */
+async function dashboardLink(req, res) {
+  if (!stripe) return noStripe(res);
+  try {
+    const { siteId } = req.body || {};
+    if (!siteId) return res.status(400).json({ error: 'siteId required' });
+
+    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
+    if (!site) return res.status(403).json({ error: 'Not authorized for this site' });
+
+    const { data: acct } = await supabase
+      .from('site_payment_accounts').select('stripe_account_id').eq('site_id', siteId).single();
+    if (!acct?.stripe_account_id) return res.status(409).json({ error: 'No connected Stripe account yet.' });
+
+    const link = await stripe.accounts.createLoginLink(acct.stripe_account_id);
+    res.json({ url: link.url });
+  } catch (err) {
+    console.error('[payments.dashboardLink]', err.message);
+    res.status(500).json({ error: 'Could not open the Stripe dashboard.' });
+  }
+}
+
+module.exports = { healthcheck, connectLink, status, dashboardLink };
