@@ -31,6 +31,12 @@
 #                                credential. The ONLY new secret for the AI agents;
 #                                all n8n webhook URLs + model names are non-secret
 #                                literals below (n8n auth is N8N_WEBHOOK_SECRET).
+#     - CLOUDFLARE_ACCOUNT_ID    Cloudflare dashboard → Account ID — site/domain
+#     - CLOUDFLARE_ZONE_ID       Cloudflare → your domain → Zone ID — provisioning
+#     - CLOUDFLARE_API_TOKEN     Cloudflare → My Profile → API Tokens (Pages + DNS).
+#                                Paste RAW values (no surrounding quotes). The GitHub
+#                                repo identifiers (GITHUB_REPO_OWNER / *_ID_CLOUDFLARE
+#                                / GITHUB_BRANCH) are non-secret literals below.
 #   (STEMFRA_ADMIN_SECRET is intentionally NOT set — the staff-only
 #    /api/platform-billing/* endpoints fail closed in prod until staff auth ships.)
 #
@@ -105,6 +111,12 @@ jobs:
             CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
             CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
             CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
+            CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            CLOUDFLARE_ZONE_ID=${{ secrets.CLOUDFLARE_ZONE_ID }}
+            CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
+            GITHUB_REPO_OWNER=peterspace
+            GITHUB_REPO_OWNER_ID_CLOUDFLARE=98526111
+            GITHUB_BRANCH=main
             STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
             STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
             STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
