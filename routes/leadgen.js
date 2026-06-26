@@ -25,7 +25,7 @@
 
 const express  = require('express');
 const supabase = require('../config/supabase');
-const { refineDraft, isConfigured: leadgenAiConfigured } = require('../lib/leadgenDraft');
+const { refineDraft, refineTemplate, isConfigured: leadgenAiConfigured } = require('../lib/leadgenDraft');
 const gmailOutreach = require('../lib/gmailOutreach');
 const leadgenCall = require('../lib/leadgenCall');
 
@@ -332,6 +332,33 @@ router.post('/call-with-ai', async (req, res) => {
   } catch (err) {
     console.error('[leadgen] call-with-ai error:', err.message);
     return res.status(502).json({ success: false, message: err.message || 'Could not place the call.' });
+  }
+});
+
+// ─── POST /api/leadgen/refine-template ───────────────────────────────────────
+// AI-assist editing an email TEMPLATE in the CRM Template Manager (keeps merge
+// fields intact, self-serve CTA). Body: { subject?, body, instruction }.
+router.post('/refine-template', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  if (!leadgenAiConfigured()) {
+    return res.status(503).json({ success: false, message: 'AI is not configured (OPENAI_API_KEY missing).' });
+  }
+  const { subject, body, instruction } = req.body || {};
+  if (!instruction || !String(instruction).trim()) {
+    return res.status(400).json({ success: false, message: 'An instruction is required.' });
+  }
+  if (!body && !subject) return res.status(400).json({ success: false, message: 'Nothing to refine.' });
+  try {
+    const result = await refineTemplate({
+      subject: subject ? String(subject) : '',
+      body: body ? String(body) : '',
+      instruction: String(instruction).slice(0, 500),
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[leadgen] refine-template error:', err.message);
+    return res.status(502).json({ success: false, message: 'Could not refine the template right now.' });
   }
 });
 
