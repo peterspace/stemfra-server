@@ -25,6 +25,9 @@
 
 const express  = require('express');
 const supabase = require('../config/supabase');
+const { refineDraft, isConfigured: leadgenAiConfigured } = require('../lib/leadgenDraft');
+const gmailOutreach = require('../lib/gmailOutreach');
+const leadgenCall = require('../lib/leadgenCall');
 
 const router = express.Router();
 
@@ -195,6 +198,140 @@ router.post('/trigger', async (req, res) => {
     }
     console.error('[leadgen] trigger error:', err);
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── POST /api/leadgen/refine-draft ──────────────────────────────────────────
+// AI-assist the reviewer's outreach draft in the CRM Review Queue. Synchronous
+// GPT call (no n8n) so the refine feels instant. Body:
+//   { channel, subject?, message, instruction, lead: { company_name, contact_name,
+//     vertical, region, pain_point_bucket, qualification } }
+// Returns { success, subject?, message }.
+router.post('/refine-draft', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  if (!leadgenAiConfigured()) {
+    return res.status(503).json({ success: false, message: 'AI drafting is not configured on the server (OPENAI_API_KEY missing).' });
+  }
+
+  const { channel, subject, message, instruction, lead, senderName } = req.body || {};
+  if (!instruction || !String(instruction).trim()) {
+    return res.status(400).json({ success: false, message: 'An instruction is required.' });
+  }
+  if (!message && !subject) {
+    return res.status(400).json({ success: false, message: 'Nothing to refine.' });
+  }
+
+  try {
+    const result = await refineDraft({
+      channel,
+      subject: subject ? String(subject) : '',
+      message: message ? String(message) : '',
+      instruction: String(instruction).slice(0, 500),
+      lead: lead && typeof lead === 'object' ? lead : {},
+      senderName: senderName ? String(senderName).slice(0, 80) : '',
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[leadgen] refine-draft error:', err.message);
+    return res.status(502).json({ success: false, message: 'Could not refine the draft right now.' });
+  }
+});
+
+// ─── POST /api/leadgen/send-outreach ─────────────────────────────────────────
+// Send a lead's approved draft AS the logged-in rep (Gmail, domain-wide
+// delegation). Marks the lead sent + stores the Gmail message/thread id so a
+// reply can later flip it warm (Phase 2). Body: { leadId }.
+router.post('/send-outreach', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  if (!gmailOutreach.isConfigured()) {
+    return res.status(503).json({ success: false, message: 'Outreach email is not configured on the server (Google service account missing).' });
+  }
+
+  // subject/message overrides carry the reviewer's latest (possibly unsaved) edits.
+  const { leadId, subject: subjectOverride, message: messageOverride } = req.body || {};
+  if (!leadId) return res.status(400).json({ success: false, message: 'leadId is required.' });
+
+  const { data: lead, error } = await supabase
+    .from('leads')
+    .select('id, email, contact_name, company_name, ai_draft_subject, ai_draft_message, outreach_status')
+    .eq('id', leadId)
+    .single();
+  if (error || !lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
+  if (!lead.email) return res.status(400).json({ success: false, message: 'This lead has no email address.' });
+  if (lead.outreach_status === 'sent' || lead.outreach_status === 'replied') {
+    return res.status(409).json({ success: false, message: 'Outreach has already been sent for this lead.' });
+  }
+  const text = String(messageOverride != null ? messageOverride : (lead.ai_draft_message || '')).trim();
+  if (!text) return res.status(400).json({ success: false, message: 'This lead has no draft message to send.' });
+
+  // Sender = the authenticated staff user (their @stemfra.com inbox).
+  const repEmail = user.email;
+  let repName = null;
+  try {
+    const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+    repName = prof?.full_name || null;
+  } catch { /* name is best-effort */ }
+
+  const subject = String(subjectOverride != null ? subjectOverride : (lead.ai_draft_subject || '')).trim()
+    || `A quick note for ${lead.company_name || 'your business'}`;
+
+  try {
+    const { messageId, threadId } = await gmailOutreach.sendAsRep({ repEmail, repName, to: lead.email, subject, text });
+    await supabase.from('leads').update({
+      outreach_status:     'sent',
+      outreach_sent_at:    new Date().toISOString(),
+      outreach_sent_by:    user.id,
+      outreach_message_id: messageId,
+      outreach_thread_id:  threadId,
+      ai_draft_subject:    subject,               // persist exactly what was sent
+      ai_draft_message:    text,
+      review_status:       'approved',            // sending implies approval
+      last_activity_at:    new Date().toISOString(),
+    }).eq('id', leadId);
+    return res.json({ success: true, messageId, threadId, sentFrom: repEmail });
+  } catch (err) {
+    console.error('[leadgen] send-outreach error:', err.message);
+    await supabase.from('leads').update({ outreach_status: 'failed' }).eq('id', leadId);
+    return res.status(502).json({ success: false, message: 'Could not send the email right now.' });
+  }
+});
+
+// ─── POST /api/leadgen/call-with-ai ──────────────────────────────────────────
+// Phase 3 (escalate) — place an outbound AI voice follow-up to a warm lead.
+// Staff-initiated; reuses the Stemfra Voice engine. Body: { leadId }.
+router.post('/call-with-ai', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  if (!leadgenCall.isConfigured()) {
+    return res.status(503).json({ success: false, message: 'Outbound voice is not configured on the server.' });
+  }
+  const { leadId } = req.body || {};
+  if (!leadId) return res.status(400).json({ success: false, message: 'leadId is required.' });
+
+  const { data: lead, error } = await supabase
+    .from('leads')
+    .select('id, phone, phone_country, contact_name, company_name, pain_point_bucket, qualification, outreach_status')
+    .eq('id', leadId)
+    .single();
+  if (error || !lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
+  if (!leadgenCall.toE164(lead.phone, lead.phone_country)) {
+    return res.status(400).json({ success: false, message: 'This lead has no usable phone number.' });
+  }
+
+  try {
+    const { callSid, to } = await leadgenCall.placeAiCall(lead);
+    await supabase.from('activity_feed').insert([{
+      entity_type: 'lead', entity_id: lead.id, action: 'lead_call_initiated',
+      details: { call_sid: callSid, to, company_name: lead.company_name || null, trigger: 'manual' },
+      created_by: user.id,
+    }]).then(() => {}, () => {});
+    await supabase.from('leads').update({ last_activity_at: new Date().toISOString() }).eq('id', leadId);
+    return res.json({ success: true, callSid, to });
+  } catch (err) {
+    console.error('[leadgen] call-with-ai error:', err.message);
+    return res.status(502).json({ success: false, message: err.message || 'Could not place the call.' });
   }
 });
 

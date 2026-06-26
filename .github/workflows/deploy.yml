@@ -108,6 +108,9 @@ jobs:
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
             VOICE_MODEL=gpt-4o-mini
             VOICE_PHONE_NUMBER=+16672205540
+            LEADGEN_MODEL=gpt-4o
+            GOOGLE_SA_CLIENT_EMAIL=${{ secrets.GOOGLE_SA_CLIENT_EMAIL }}
+            GOOGLE_SA_PRIVATE_KEY=${{ secrets.GOOGLE_SA_PRIVATE_KEY }}
             CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
             CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
             CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}

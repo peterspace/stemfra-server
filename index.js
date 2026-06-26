@@ -9,6 +9,7 @@ const twilioRoutes     = require('./routes/twilio');
 const userSettingsRoutes = require('./routes/userSettings');
 const presenceRoutes   = require('./routes/presence');
 const { startStalePresenceSweeper } = require('./routes/presence');
+const { startOutreachReplySweeper } = require('./lib/outreachReplySweeper');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
 const siteFormsRoutes   = require('./routes/siteForms');
@@ -159,4 +160,7 @@ server.listen(PORT, () => {
   // Flip stale user_presence rows to offline once a minute. Browsers don't
   // reliably fire the offline beacon on tab close, so this is the fallback.
   startStalePresenceSweeper();
+  // Lead-gen Phase 2: poll sent-outreach Gmail threads for replies → flip leads
+  // warm. Idle (no-op) until the Google service account is configured.
+  startOutreachReplySweeper();
 });
