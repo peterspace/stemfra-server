@@ -24,6 +24,7 @@
 //                           reject anything that didn't come from this server.
 
 const express  = require('express');
+const crypto   = require('crypto');
 const supabase = require('../config/supabase');
 const { refineDraft, refineTemplate, isConfigured: leadgenAiConfigured } = require('../lib/leadgenDraft');
 const gmailOutreach = require('../lib/gmailOutreach');
@@ -266,36 +267,94 @@ router.post('/send-outreach', async (req, res) => {
   const text = String(messageOverride != null ? messageOverride : (lead.ai_draft_message || '')).trim();
   if (!text) return res.status(400).json({ success: false, message: 'This lead has no draft message to send.' });
 
-  // Sender = the authenticated staff user (their @stemfra.com inbox).
-  const repEmail = user.email;
-  let repName = null;
-  try {
-    const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-    repName = prof?.full_name || null;
-  } catch { /* name is best-effort */ }
+  // Sender = "Mark" — the one consistent outreach identity (email + voice), sent
+  // server-side via the service account impersonating mark@stemfra.com.
+  const MARK_EMAIL = process.env.MARK_EMAIL || 'mark@stemfra.com';
+  const markPhone = process.env.VOICE_PHONE_NUMBER || '';
+  const contactLine = [markPhone, MARK_EMAIL].filter(Boolean).join(' · ');
+  const signature = `\n\nMark\nStemfra\n${contactLine}`;
+  const finalText = text.includes(MARK_EMAIL) ? text : text + signature;
 
   const subject = String(subjectOverride != null ? subjectOverride : (lead.ai_draft_subject || '')).trim()
     || `A quick note for ${lead.company_name || 'your business'}`;
 
+  // Open-tracking pixel: a per-lead token → an HTML pixel that hits /o/:token when
+  // the recipient's client loads images. Only enabled when PUBLIC_BASE_URL is set
+  // (so the pixel URL is publicly reachable); otherwise we send plain text.
+  const base = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  const trackToken = base ? crypto.randomBytes(16).toString('hex') : null;
+  const pixelUrl = trackToken ? `${base}/api/leadgen/o/${trackToken}.gif` : null;
+
   try {
-    const { messageId, threadId } = await gmailOutreach.sendAsRep({ repEmail, repName, to: lead.email, subject, text });
+    const { messageId, threadId } = await gmailOutreach.sendAsRep({ repEmail: MARK_EMAIL, repName: 'Mark', to: lead.email, subject, text: finalText, pixelUrl });
     await supabase.from('leads').update({
       outreach_status:     'sent',
       outreach_sent_at:    new Date().toISOString(),
       outreach_sent_by:    user.id,
       outreach_message_id: messageId,
       outreach_thread_id:  threadId,
+      outreach_track_token: trackToken,           // null when tracking is disabled
       ai_draft_subject:    subject,               // persist exactly what was sent
-      ai_draft_message:    text,
+      ai_draft_message:    finalText,
       review_status:       'approved',            // sending implies approval
       last_activity_at:    new Date().toISOString(),
     }).eq('id', leadId);
-    return res.json({ success: true, messageId, threadId, sentFrom: repEmail });
+    return res.json({ success: true, messageId, threadId, sentFrom: MARK_EMAIL });
   } catch (err) {
     console.error('[leadgen] send-outreach error:', err.message);
     await supabase.from('leads').update({ outreach_status: 'failed' }).eq('id', leadId);
     return res.status(502).json({ success: false, message: 'Could not send the email right now.' });
   }
+});
+
+// ─── GET /api/leadgen/o/:token(.gif) ─────────────────────────────────────────
+// PUBLIC open-tracking pixel. The recipient's mail client loads this 1x1 image
+// when it renders our outreach email → we record the open on the matching lead.
+// Always returns the transparent GIF (never blocks on the DB write). First open
+// stamps outreach_opened_at + logs an activity row; every open bumps the count.
+//
+// Caveats (directional, not exact): Gmail proxies/caches images (an open may
+// register once via Google's proxy), and Apple Mail Privacy Protection pre-fetches
+// images — which can inflate opens. Good for aggregate trends, not per-recipient
+// certainty. We treat opens within 8s of send as likely prefetch and don't stamp
+// the "first open" from them (still counted, so the trend line stays honest).
+const TRANSPARENT_GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+router.get('/o/:token', (req, res) => {
+  const token = String(req.params.token || '').replace(/\.(gif|png|jpg)$/i, '');
+  // Fire-and-forget the DB write; the pixel must return instantly regardless.
+  if (token) {
+    (async () => {
+      try {
+        const { data: lead } = await supabase
+          .from('leads')
+          .select('id, outreach_open_count, outreach_opened_at, outreach_sent_at, company_name, outreach_sent_by')
+          .eq('outreach_track_token', token)
+          .maybeSingle();
+        if (!lead) return;
+        const now = Date.now();
+        const sentAt = lead.outreach_sent_at ? new Date(lead.outreach_sent_at).getTime() : 0;
+        const isPrefetch = sentAt && (now - sentAt) < 8000;           // likely Apple/Gmail prefetch
+        const firstRealOpen = !lead.outreach_opened_at && !isPrefetch;
+        const nowIso = new Date(now).toISOString();
+        await supabase.from('leads').update({
+          outreach_open_count:     (lead.outreach_open_count || 0) + 1,
+          outreach_last_opened_at: nowIso,
+          ...(firstRealOpen ? { outreach_opened_at: nowIso } : {}),
+        }).eq('id', lead.id);
+        if (firstRealOpen) {
+          await supabase.from('activity_feed').insert([{
+            entity_type: 'lead', entity_id: lead.id, action: 'email_opened',
+            details: { company_name: lead.company_name || null }, created_by: lead.outreach_sent_by || null,
+          }]).then(() => {}, () => {});
+        }
+      } catch { /* never let tracking break the pixel */ }
+    })();
+  }
+  res.set('Content-Type', 'image/gif');
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  return res.end(TRANSPARENT_GIF);
 });
 
 // ─── POST /api/leadgen/call-with-ai ──────────────────────────────────────────
