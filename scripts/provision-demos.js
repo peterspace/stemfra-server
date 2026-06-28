@@ -13,8 +13,9 @@ const supabase = require('../config/supabase');
 const { provisionSite } = require('../lib/provisionSite');
 const { attachSiteDomain } = require('../lib/attachSiteDomain');
 
-// Owner contact "Mark — Stemfra" (Stemfra Demos). See docs/DEMOS.md.
-const MARK_CONTACT = '2cdcfe53-0117-45da-a447-7d60ee0a6236';
+// Owner contact "Marcus Argyle" (peechizzy@gmail.com, "Stemfra Demos"). A
+// non-@stemfra.com email on purpose, so it doesn't become CRM staff. See docs/DEMOS.md.
+const DEMO_OWNER_CONTACT = '8b3e5a87-62cd-4e01-beda-0562722ef04a';
 
 // Seed brand strings to replace in each clone. full = always safe; short = a
 // distinctive standalone token (else null); slug = the email-domain form
@@ -89,7 +90,7 @@ async function provisionOne(spec) {
   if (s) { siteId = s.id; subdomain = s.subdomain; }
   else {
     const r = await provisionSite({
-      vertical: spec.vertical, companyId, ownerContactId: MARK_CONTACT,
+      vertical: spec.vertical, companyId, ownerContactId: DEMO_OWNER_CONTACT,
       displayName: spec.name, city: spec.city, templateSlug: spec.templateSlug,
     });
     siteId = r.siteId; subdomain = r.subdomain;

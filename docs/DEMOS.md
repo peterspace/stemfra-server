@@ -7,24 +7,25 @@ that Mark's lead-gen outreach links to so a prospect can see a real site for
 *their own kind of business* before they reply. All owned by a single
 **"Stemfra Demos"** account so they're managed in one place.
 
-## The owner — `mark@stemfra.com` ("Stemfra Demos")
+## The owner — `peechizzy@gmail.com` ("Marcus Argyle" / Stemfra Demos)
 
 One owner contact owns every demo site (the multi-site model: owner contact →
 N companies → N sites).
 
 | Thing | Value |
 | --- | --- |
-| Auth user (CMS login) | `17cb2c0b-1635-4a66-a3cb-b374eb5b8eaa` (`mark@stemfra.com`) |
-| Owner contact | `2cdcfe53-0117-45da-a447-7d60ee0a6236` (`Mark — Stemfra`, type `client`) |
+| Auth user (CMS login) | `8367d004-5145-4aa4-b081-fda9951cb60e` (`peechizzy@gmail.com`) |
+| Owner contact | `8b3e5a87-62cd-4e01-beda-0562722ef04a` (`Marcus Argyle`, type `client`) |
 | Umbrella company | `5ed15d6f-6916-4071-9212-9a676e3ebdb6` (`Stemfra Demos`) |
-| CMS login | `https://cms.stemfra.com` — password in `stemfra_email_service_key/mark-cms-login.txt` (local, gitignored). Change after first login. |
+| CMS login | `https://cms.stemfra.com` — password in `stemfra_email_service_key/demos-cms-login.txt` (local, gitignored). Change after first login. |
 
-**CRM note:** `mark@stemfra.com` is `@stemfra.com`, so the `handle_new_user`
-trigger auto-created a staff `profiles` row. It's an outreach/demo identity, NOT
-a CRM staffer, so that profile is set `is_active = false` (blocks CRM entry; CMS
-login is unaffected — the CMS authenticates owners via `contacts.auth_user_id`,
-not `profiles`). `mark@` is also the identity the lead-gen engine sends/reads
-outreach as (see the Mark service-account setup).
+**Why `peechizzy@` and not `mark@`:** a non-`@stemfra.com` email is deliberate.
+`handle_new_user` only creates a staff `profiles` row for `@stemfra.com`, so this
+owner never becomes CRM staff — and it keeps **Mark** purely the outreach
+identity (the lead-gen engine still sends/reads outreach as `mark@stemfra.com`
+via the Google service account; that's unrelated to who owns the demo sites). The
+owner uses a test-client name ("Marcus Argyle"). Note the `contacts` table derives
+`full_name` from `first_name`/`last_name` via a trigger — set those, not `full_name`.
 
 ## The 9 demo sites
 
