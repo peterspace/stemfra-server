@@ -29,6 +29,7 @@ const supabase = require('../config/supabase');
 const { refineDraft, refineTemplate, isConfigured: leadgenAiConfigured } = require('../lib/leadgenDraft');
 const gmailOutreach = require('../lib/gmailOutreach');
 const leadgenCall = require('../lib/leadgenCall');
+const { fillOutreachLinks } = require('../lib/demoLinks');
 
 const router = express.Router();
 
@@ -256,7 +257,7 @@ router.post('/send-outreach', async (req, res) => {
 
   const { data: lead, error } = await supabase
     .from('leads')
-    .select('id, email, contact_name, company_name, ai_draft_subject, ai_draft_message, outreach_status')
+    .select('id, email, contact_name, company_name, template_slug, ai_draft_subject, ai_draft_message, outreach_status')
     .eq('id', leadId)
     .single();
   if (error || !lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
@@ -264,8 +265,10 @@ router.post('/send-outreach', async (req, res) => {
   if (lead.outreach_status === 'sent' || lead.outreach_status === 'replied') {
     return res.status(409).json({ success: false, message: 'Outreach has already been sent for this lead.' });
   }
-  const text = String(messageOverride != null ? messageOverride : (lead.ai_draft_message || '')).trim();
+  let text = String(messageOverride != null ? messageOverride : (lead.ai_draft_message || '')).trim();
   if (!text) return res.status(400).json({ success: false, message: 'This lead has no draft message to send.' });
+  // Resolve {{demo_link}} / {{start_free_link}} to the vertical's live demo + pricing.
+  text = fillOutreachLinks(text, { templateSlug: lead.template_slug });
 
   // Sender = "Mark" — the one consistent outreach identity (email + voice), sent
   // server-side via the service account impersonating mark@stemfra.com.
