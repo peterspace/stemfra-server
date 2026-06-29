@@ -25,10 +25,17 @@ async function signup(req, res) {
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
     if (rateLimited(ip)) return res.status(429).json({ error: 'Too many signups from here — please try again later.' });
 
-    const { name, email, password, company, vertical, city, template } = req.body || {};
+    const {
+      name, email, password, company, vertical, city, template,
+      firstName, lastName, country, state, bookingProvider, bookingUrl, paymentMethods, tier,
+    } = req.body || {};
     const result = await onboardCustomer({
       name, email, password, company, vertical,
       city: city || null, templateSlug: template || null,
+      firstName: firstName || null, lastName: lastName || null,
+      country: country || null, state: state || null,
+      bookingProvider: bookingProvider || null, bookingUrl: bookingUrl || null,
+      paymentMethods: paymentMethods || null, tier: tier || null,
     });
 
     res.json({
