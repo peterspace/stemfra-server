@@ -164,7 +164,7 @@ async function send(req, res) {
 
     // Tenant: the site must exist and be live (or previewing, for testing).
     const { data: site } = await supabase.from('sites')
-      .select('id, status, owner_contact_id, company:companies(name)')
+      .select('id, status, owner_contact_id, booking_mode, booking_config, payments_enabled, company:companies(name)')
       .eq('id', siteId).maybeSingle();
     if (!site || !['live', 'previewing'].includes(site.status)) return res.status(404).json({ error: 'Site not found.' });
 
