@@ -86,8 +86,13 @@ Products + Templates pages; display ALL themes per vertical on pricing/templates
    build + verify on deploy. (No `functions/` scaffold existed despite the SEO doc.)
 10. ✅ **#8 Marketing contact form email dedup** — re-submit updates the open lead.
 
-## P3 — Maintainability before scaling verticals (kill sync risk)
-11. **#4 `verticalConfig` consolidation** — `VERTICAL_PROJECT` (3 copies),
+## P3 — Maintainability before scaling verticals  ✅ main items DONE (2026-06-29)
+_`lib/verticalConfig.js` is the single source (aliases/project/seed/leadgen) — all
+consumers refactored, behavior verified. `boutique_gym` out of lead-gen (#6).
+Pricing single-source: `/api/plans` (DB catalog) → marketing pricing page.
+Remaining (lower, item 14): demo_sites table + SUBJECT_TO_SERVICE/KNOWN_TEMPLATE_SLUGS → DB._
+
+11. ✅ **#4 `verticalConfig` consolidation** — `VERTICAL_PROJECT` (3 copies),
     `SEED_SOURCE_BY_VERTICAL`, `VERTICAL_ALIASES` (2 copies), `KNOWN_VERTICALS`
     vs `LEADGEN_VERTICALS` → one source imported everywhere.
 12. **#5 Pricing single-source** — DB `verticals` → client (stop `verticals.js`
