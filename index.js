@@ -136,6 +136,7 @@ app.use('/api/cms/assistant', cmsAssistantRouter);
 app.use('/api/admin/sites', require('./routes/admin/sites'));
 app.use('/api/admin/templates', require('./routes/admin/templates'));
 app.use('/api/admin/subscriptions', require('./routes/admin/subscriptions'));
+app.use('/api/admin/billing', require('./routes/admin/billing'));
 app.use('/api/admin/bookings', require('./routes/admin/bookings'));
 app.use('/api/admin/memberships', require('./routes/admin/memberships'));
 
