@@ -33,11 +33,9 @@ const { fillOutreachLinks } = require('../lib/demoLinks');
 
 const router = express.Router();
 
-// Mirror of the CRM-known verticals → template slugs. Server-side validation so
-// a bad vertical never reaches n8n / Apify as a wasted run.
-const KNOWN_VERTICALS = new Set([
-  'barbershop', 'beauty_salon', 'boutique_gym', 'crossfit', 'yoga_pilates',
-]);
+// Server-side vertical allow-list (lead-gen slugs of non-deferred verticals) —
+// sourced from the single vertical config so it never drifts.
+const { KNOWN_VERTICALS } = require('../lib/verticalConfig');
 
 async function validateUserSession(req) {
   const authHeader = req.headers.authorization;
