@@ -11,6 +11,7 @@ const presenceRoutes   = require('./routes/presence');
 const { startStalePresenceSweeper } = require('./routes/presence');
 const { startOutreachReplySweeper } = require('./lib/outreachReplySweeper');
 const { startBillingCycleSweeper } = require('./lib/billingCycleSweeper');
+const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
 const siteFormsRoutes   = require('./routes/siteForms');
@@ -170,4 +171,7 @@ server.listen(PORT, () => {
   // System A billing: open one recurring charge per active manual-provider
   // subscription per calendar month (Payoneer etc.; Stripe self-bills).
   startBillingCycleSweeper();
+  // Lead-gen follow-up sequencer (A2 → read-gated call → A8 → A20). Inert until
+  // crm_settings.leadgen_sequencer.enabled = true.
+  startOutreachSequencer();
 });

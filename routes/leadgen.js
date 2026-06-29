@@ -290,6 +290,8 @@ router.post('/send-outreach', async (req, res) => {
     const { messageId, threadId } = await gmailOutreach.sendAsRep({ repEmail: MARK_EMAIL, repName: 'Mark', to: lead.email, subject, text: finalText, pixelUrl });
     await supabase.from('leads').update({
       outreach_status:     'sent',
+      outreach_step:       1,                      // A1 = step 1 of the sequence
+      outreach_last_step_at: new Date().toISOString(),
       outreach_sent_at:    new Date().toISOString(),
       outreach_sent_by:    user.id,
       outreach_message_id: messageId,
