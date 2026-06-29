@@ -76,12 +76,15 @@ payment answer; deferred as low priority._
 **Deferred (post-roadmap, per Peter 2026-06-29):** demo-site preview links on the
 Products + Templates pages; display ALL themes per vertical on pricing/templates.
 
-## P2 — Polish what we sell (first impressions, incl. emailed demo links)
-8. **#2 Favicon** default in each template `index.html` (+ optional per-demo).
-9. **#3 Link-unfurl OG** — extend the existing Cloudflare Pages Functions
-   (`functions/`) with a per-host OG injector (browser case already done by
-   SiteHead). Cheap stopgap: neutral static `<title>`.
-10. **#8 Marketing contact form email dedup** — stop duplicate `leads` on re-submit.
+## P2 — Polish what we sell  ✅ mostly DONE (2026-06-29)
+8. ✅ **#2 Favicon** — neutral theme-tinted data-URI default in all 4 template
+   `index.html` (SiteHead still overrides with a site's own).
+9. ⚠️ **#3 Link-unfurl OG** — stopgap DONE (neutral static `<title>` so no-JS
+   unfurls never show a wrong brand). **REMAINING (deploy-gated):** per-host OG
+   injection needs a NEW Cloudflare Pages Function (`functions/_middleware.ts` +
+   HTMLRewriter) per template project + Supabase anon key in each project's env —
+   build + verify on deploy. (No `functions/` scaffold existed despite the SEO doc.)
+10. ✅ **#8 Marketing contact form email dedup** — re-submit updates the open lead.
 
 ## P3 — Maintainability before scaling verticals (kill sync risk)
 11. **#4 `verticalConfig` consolidation** — `VERTICAL_PROJECT` (3 copies),
