@@ -19,9 +19,14 @@ async function listSites(req, res) {
   try {
     const { data, error } = await supabase
       .from('sites')
-      .select('id, subdomain, custom_domain, status, went_live_at, created_at, company:companies(name), vertical:verticals(slug, display_name), owner:contacts!owner_contact_id(full_name, email), subscriptions(status)')
+      .select('id, subdomain, custom_domain, status, went_live_at, created_at, booking_mode, booking_config, payments_enabled, company:companies(name), vertical:verticals(slug, display_name), owner:contacts!owner_contact_id(full_name, email), subscriptions(status)')
       .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
+    const bookingLabel = (mode, cfg) => {
+      if (mode === 'link_out') return (cfg && cfg.provider_name) ? `External · ${cfg.provider_name}` : 'External';
+      if (mode === 'consultation_form') return 'No online booking';
+      return 'Stemfra';
+    };
     const sites = (data || []).map((s) => ({
       id: s.id,
       business: s.company?.name || s.subdomain,
@@ -29,6 +34,9 @@ async function listSites(req, res) {
       subdomain: s.subdomain,
       customDomain: s.custom_domain || null,
       status: s.status,
+      booking: bookingLabel(s.booking_mode, s.booking_config),
+      bookingUrl: s.booking_config?.booking_url || null,
+      paymentsEnabled: !!s.payments_enabled,
       billing: s.subscriptions?.[0]?.status || null,
       ownerName: s.owner?.full_name || null,
       ownerEmail: s.owner?.email || null,
