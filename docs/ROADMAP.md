@@ -44,10 +44,14 @@ Plan catalog is DB-driven (`crm_settings.billing_plans`). Full write-up: a memor
      pricing single-source (down-payment on #5).
 
 ## P1 — Scale the motion: onboarding + client-facing billing
-6. **Onboarding redesign** (Squarespace-referenced — see SQUARESPACE_REFERENCE.md):
-   KYC fields + **"How do you currently receive payments?"** (Stripe/PayPal/Square/
-   cash/other/none) → informs Connect type (Standard vs Express) + which System-B
-   integrations to add; feeds payer data into P0.
+6. **Onboarding redesign** (Squarespace-referenced — see SQUARESPACE_REFERENCE.md).
+   **Entry point (decided 2026-06-29): onboarding lives in the CMS, not
+   stemfra_client.** Marketing pricing "Start for free" on a plan → redirect to the
+   CMS carrying plan + vertical → CMS signup → guided onboarding (Squarespace/
+   Mindbody pattern). Reuse onboardCustomer/provisionSite + Stacy checklist.
+   Capture KYC fields + **"How do you currently receive payments?"** (Stripe/PayPal/
+   Square/cash/other/none) → informs Connect type (Standard vs Express) + which
+   System-B integrations to add; feeds payer data (incl. `contacts.state`) into P0.
 7. **CMS client Billing section** (System A, client-facing): their subscription
    (tier, $1,199 → $199), charge history, editable billing contact. Distinct from
    Settings → Payments (System B Stripe Connect).
