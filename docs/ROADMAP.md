@@ -79,11 +79,11 @@ Products + Templates pages; display ALL themes per vertical on pricing/templates
 ## P2 — Polish what we sell  ✅ mostly DONE (2026-06-29)
 8. ✅ **#2 Favicon** — neutral theme-tinted data-URI default in all 4 template
    `index.html` (SiteHead still overrides with a site's own).
-9. ⚠️ **#3 Link-unfurl OG** — stopgap DONE (neutral static `<title>` so no-JS
-   unfurls never show a wrong brand). **REMAINING (deploy-gated):** per-host OG
-   injection needs a NEW Cloudflare Pages Function (`functions/_middleware.ts` +
-   HTMLRewriter) per template project + Supabase anon key in each project's env —
-   build + verify on deploy. (No `functions/` scaffold existed despite the SEO doc.)
+9. ✅ **#3 Link-unfurl OG** — stopgap (neutral static `<title>`) DONE + per-host OG
+   edge function BUILT (`functions/_middleware.ts` in all 4 templates: host→site→
+   HTMLRewriter title+OG). **Deploy step (Peter):** add `SUPABASE_URL` +
+   `SUPABASE_ANON_KEY` to each template Pages project's env; verify on deploy
+   (edge-only runtime — couldn't be locally verified).
 10. ✅ **#8 Marketing contact form email dedup** — re-submit updates the open lead.
 
 ## P3 — Maintainability before scaling verticals  ✅ main items DONE (2026-06-29)
@@ -101,10 +101,13 @@ Remaining (lower, item 14): demo_sites table + SUBJECT_TO_SERVICE/KNOWN_TEMPLATE
 14. Demo links → `demo_sites` table; `SUBJECT_TO_SERVICE` / `KNOWN_TEMPLATE_SLUGS` → DB. _(lower)_
 
 ## P4 — Growth levers (lead-gen)
+17. ✅ **Outbound auto-call guardrails** — DONE: `lib/callGuardrails.js` (DNC flag +
+    pan-US safe window + daily cap), wired into the reply sweeper; manual Call-with-AI
+    also DNC-gated. _(Window is conservative 12–18 ET; refine to per-lead tz later.)_
 15. **#7 demo_link full template-fill merge** — `{{first_name}}`/`{{business_name}}`/
     `{{demo_link}}` across the drafter + n8n (only `{{demo_link}}` in send-outreach today).
 16. Follow-up sequencer (A1 → A2 no-reply → A20 breakup) + reply-classification.
-17. Outbound voice guardrails (per-lead timezone windows, daily cap, DNC) before broad auto-call.
+    _(Needs a brief design pass: cadence, which templates, stop-on-reply; partly n8n work.)_
 
 ## P5 — Hardening + platform roadmap
 18. Voice hardening — Twilio signature validation + WS auth.
