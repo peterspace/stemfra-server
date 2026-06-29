@@ -69,28 +69,36 @@ const submitContact = async (req, res) => {
     // Validate template against the known set. Unknown / missing → null.
     const cleanTemplate = template && KNOWN_TEMPLATE_SLUGS.has(template) ? template : null;
 
-    const { data: lead, error: insertError } = await supabase
-      .from('leads')
-      .insert([{
-        contact_name:       contactName,
-        first_name:         firstName.trim(),   // KYC/KYB: store granular, not just combined
-        last_name:          lastName.trim(),
-        company_name:       cleanCompany,
-        email:              cleanEmail,
-        service,
-        stage:              'new_lead',
-        source:             'website',
-        lead_source:        'website',
-        template_slug:      cleanTemplate,
-        notes:              cleanMessage,
-        last_activity_at:   new Date().toISOString(),
-        notification_sent:  false,
-        confirmation_sent:  false,
-      }])
-      .select()
-      .single();
+    // Shared fields for insert/update. KYC/KYB: store first/last granular.
+    const baseRow = {
+      contact_name: contactName, first_name: firstName.trim(), last_name: lastName.trim(),
+      email: cleanEmail, service, template_slug: cleanTemplate, last_activity_at: new Date().toISOString(),
+    };
+    if (cleanCompany) baseRow.company_name = cleanCompany;  // don't null an existing company on re-submit
 
-    if (insertError) throw insertError;
+    // Dedup: reuse a recent, still-open lead with the same email instead of
+    // creating a duplicate on re-submit; append the new message to its notes.
+    const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    const { data: existing } = await supabase
+      .from('leads').select('id, notes').eq('email', cleanEmail)
+      .not('stage', 'in', '("won","lost")').gte('created_at', since)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+    let lead;
+    if (existing) {
+      const notes = [existing.notes, `— Re-submitted ${new Date().toISOString().slice(0, 10)}:\n${cleanMessage}`].filter(Boolean).join('\n\n');
+      const { data: upd, error: upErr } = await supabase
+        .from('leads').update({ ...baseRow, notes }).eq('id', existing.id).select().single();
+      if (upErr) throw upErr;
+      lead = upd;
+    } else {
+      const { data: ins, error: insertError } = await supabase
+        .from('leads')
+        .insert([{ ...baseRow, stage: 'new_lead', source: 'website', lead_source: 'website', notes: cleanMessage, notification_sent: false, confirmation_sent: false }])
+        .select().single();
+      if (insertError) throw insertError;
+      lead = ins;
+    }
 
     // Kick off speed-to-lead engagement (fire-and-forget — never block or break
     // the contact-form response). n8n does the SMS/email first-touch + rep notify.
