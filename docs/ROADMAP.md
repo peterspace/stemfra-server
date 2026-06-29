@@ -19,8 +19,12 @@ recommended build sequence. Per-feature detail lives in the linked docs; this is
 
 ---
 
-## P0 — Revenue: collect from the first clients  ⭐ START HERE
-_Unblocks money in. Interim = Payoneer Request-a-Payment ($1,199 first, then $199)._
+## P0 — Revenue: collect from the first clients  ✅ DONE (2026-06-29, deployed)
+_Interim = Payoneer Request-a-Payment ($1,199 first, then $199). All 5 verified + shipped:
+schema + `billing_charges` ledger · server provider layer + Payoneer + `/api/admin/billing/*` ·
+CRM `/billing` (selector + Due-this-cycle + Copy-request + Mark Paid + Start billing) ·
+monthly cycle opener (idempotent) · KYC `leads.first_name/last_name` + `contacts.state`.
+Plan catalog is DB-driven (`crm_settings.billing_plans`). Full write-up: a memory + this file._
 
 1. **Billing schema** (batch 1, additive): `subscriptions.provider` +
    **`billing_charges`** ledger (`line_items` jsonb, `kind` initial|recurring,
