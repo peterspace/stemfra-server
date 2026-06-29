@@ -372,10 +372,13 @@ router.post('/call-with-ai', async (req, res) => {
 
   const { data: lead, error } = await supabase
     .from('leads')
-    .select('id, phone, phone_country, contact_name, company_name, pain_point_bucket, qualification, outreach_status, ai_draft_subject, ai_draft_message, outreach_reply_text')
+    .select('id, phone, phone_country, do_not_call, contact_name, company_name, pain_point_bucket, qualification, outreach_status, ai_draft_subject, ai_draft_message, outreach_reply_text')
     .eq('id', leadId)
     .single();
   if (error || !lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
+  if (lead.do_not_call) {
+    return res.status(403).json({ success: false, message: 'This lead is on the Do Not Call list.' });
+  }
   if (!leadgenCall.toE164(lead.phone, lead.phone_country)) {
     return res.status(400).json({ success: false, message: 'This lead has no usable phone number.' });
   }
