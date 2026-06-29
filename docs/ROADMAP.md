@@ -100,14 +100,16 @@ Remaining (lower, item 14): demo_sites table + SUBJECT_TO_SERVICE/KNOWN_TEMPLATE
 13. **#6 boutique_gym** out of `KNOWN_VERTICALS` + `LEADGEN_VERTICALS` (vertical already inactive).
 14. Demo links → `demo_sites` table; `SUBJECT_TO_SERVICE` / `KNOWN_TEMPLATE_SLUGS` → DB. _(lower)_
 
-## P4 — Growth levers (lead-gen)
-17. ✅ **Outbound auto-call guardrails** — DONE: `lib/callGuardrails.js` (DNC flag +
-    pan-US safe window + daily cap), wired into the reply sweeper; manual Call-with-AI
-    also DNC-gated. _(Window is conservative 12–18 ET; refine to per-lead tz later.)_
-15. **#7 demo_link full template-fill merge** — `{{first_name}}`/`{{business_name}}`/
-    `{{demo_link}}` across the drafter + n8n (only `{{demo_link}}` in send-outreach today).
-16. Follow-up sequencer (A1 → A2 no-reply → A20 breakup) + reply-classification.
-    _(Needs a brief design pass: cadence, which templates, stop-on-reply; partly n8n work.)_
+## P4 — Growth levers (lead-gen)  ✅ DONE (2026-06-29)
+17. ✅ **Outbound auto-call guardrails** — `lib/callGuardrails.js` (DNC + pan-US safe
+    window + daily cap), reply sweeper + manual Call-with-AI gated.
+16. ✅ **Follow-up sequencer + reply-classification** — `lib/outreachSequencer.js`:
+    A1→A2(+7d)→**read-gated call**(+8d)→A8(+14d)→A20(+21d), DB-driven cadence, stops on
+    reply/opt-out/signup; CRM "Auto follow-up" toggle. Reply classifier (unsubscribe→
+    DNC+do_not_email / declined / interested). Off by default.
+15. ✅ **#7 template-fill merge** — `outreachSequencer.renderMergeFields` fills
+    first_name/business_name/demo_link/start_free_link/sender_* (+strips unknowns);
+    send-outreach already fills the links. _(n8n-side drafting still inlines values.)_
 
 ## P5 — Hardening + platform roadmap
 18. Voice hardening — Twilio signature validation + WS auth.
