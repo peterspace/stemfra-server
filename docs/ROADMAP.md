@@ -43,8 +43,14 @@ Plan catalog is DB-driven (`crm_settings.billing_plans`). Full write-up: a memor
    - Billing reads tier/setup amounts from DB `verticals` → first consumer of the
      pricing single-source (down-payment on #5).
 
-## P1 — Scale the motion: onboarding + client-facing billing
-6. **Onboarding redesign** (Squarespace-referenced — see SQUARESPACE_REFERENCE.md).
+## P1 — Scale the motion: onboarding + client-facing billing  ✅ DONE (2026-06-29)
+_CMS client Billing · self-serve CMS `/signup` (KYC + 2 questions, prefilled from
+pricing) · onboarding backend (+ created_by FK fix) · Booking & Payments setting +
+agent/template gating + CRM visibility. Remaining sub-item: an optional Q2
+payment-LINK URL field (PayPal.me/Square) — onboarding already captures the
+payment answer; deferred as low priority._
+
+6. ✅ **Onboarding redesign** (Squarespace-referenced — see SQUARESPACE_REFERENCE.md).
    **Entry point (decided 2026-06-29): onboarding lives in the CMS, not
    stemfra_client.** Marketing pricing "Start for free" on a plan → redirect to the
    CMS carrying plan + vertical → CMS signup → guided onboarding (Squarespace/
@@ -52,9 +58,23 @@ Plan catalog is DB-driven (`crm_settings.billing_plans`). Full write-up: a memor
    Capture KYC fields + **"How do you currently receive payments?"** (Stripe/PayPal/
    Square/cash/other/none) → informs Connect type (Standard vs Express) + which
    System-B integrations to add; feeds payer data (incl. `contacts.state`) into P0.
-7. **CMS client Billing section** (System A, client-facing): their subscription
-   (tier, $1,199 → $199), charge history, editable billing contact. Distinct from
-   Settings → Payments (System B Stripe Connect).
+7. ✅ **CMS client Billing section** (DONE 2026-06-29) — Account → Billing: subscription
+   + charge history + editable billing contact. `/api/cms/billing`.
+8. ✅ **Payment/booking-provider setting (#3)** — DONE: CMS "Booking & payments"
+   (provider + URL), Front Desk agent gate, all 4 template Book CTAs, CRM
+   visibility. (Optional Q2 payment-link URL field still pending — see note above.)
+   _Original spec:_ Where the client picks how THEY take
+   payment/bookings + the redirect URL their site links to (e.g. a Mindbody URL).
+   Today's `PaymentsSection` only has in-person `payment_methods` + `payment_message`
+   (wired) + Stripe Connect; there's NO curated provider + redirect-URL field. Build:
+   a **curated dropdown** (Stemfra native · Mindbody · Wodify · Vagaro · Booksy ·
+   Fresha · GlossGenius · Acuity · Square Appts · Calendly · Schedulicity · PayPal ·
+   Stripe link · **Other**+custom) + a **redirect/booking URL** field, stored on the
+   site, used by the template Book/Pay CTA, and **visible to both client (CMS) +
+   staff (CRM)**. Onboarding's "how do you receive payments?" seeds the initial value.
+
+**Deferred (post-roadmap, per Peter 2026-06-29):** demo-site preview links on the
+Products + Templates pages; display ALL themes per vertical on pricing/templates.
 
 ## P2 — Polish what we sell (first impressions, incl. emailed demo links)
 8. **#2 Favicon** default in each template `index.html` (+ optional per-demo).
