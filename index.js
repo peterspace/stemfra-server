@@ -109,6 +109,7 @@ app.get('/health', (req, res) => {
 app.use('/api/contact',  contactRoutes);
 app.use('/api/onboarding', require('./routes/onboarding'));
 app.use('/api/insights', insightsRoutes);
+app.use('/api/plans',    require('./routes/plans'));   // public pricing catalog (single source)
 app.use('/api/twilio',        twilioRoutes);
 app.use('/api/user-settings', userSettingsRoutes);
 app.use('/api/presence',      presenceRoutes);
