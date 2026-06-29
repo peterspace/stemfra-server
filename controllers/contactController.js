@@ -73,6 +73,8 @@ const submitContact = async (req, res) => {
       .from('leads')
       .insert([{
         contact_name:       contactName,
+        first_name:         firstName.trim(),   // KYC/KYB: store granular, not just combined
+        last_name:          lastName.trim(),
         company_name:       cleanCompany,
         email:              cleanEmail,
         service,

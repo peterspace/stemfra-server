@@ -14,7 +14,7 @@ async function payersForSites(siteIds) {
   const contactIds = [...new Set((sites || []).map(s => s.owner_contact_id).filter(Boolean))];
   const [{ data: companies }, { data: contacts }] = await Promise.all([
     companyIds.length ? supabase.from('companies').select('id, name').in('id', companyIds) : Promise.resolve({ data: [] }),
-    contactIds.length ? supabase.from('contacts').select('id, full_name, email, country').in('id', contactIds) : Promise.resolve({ data: [] }),
+    contactIds.length ? supabase.from('contacts').select('id, full_name, email, country, state').in('id', contactIds) : Promise.resolve({ data: [] }),
   ]);
   const coById = Object.fromEntries((companies || []).map(c => [c.id, c]));
   const ctById = Object.fromEntries((contacts || []).map(c => [c.id, c]));
@@ -29,7 +29,7 @@ async function payersForSites(siteIds) {
         name: ct?.full_name || co?.name || '',
         email: ct?.email || '',
         country: ct?.country || '',
-        state: '', // billing-contact state lands with the KYC work (P0.5)
+        state: ct?.state || '',
       },
     };
   }

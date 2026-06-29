@@ -10,6 +10,7 @@ const userSettingsRoutes = require('./routes/userSettings');
 const presenceRoutes   = require('./routes/presence');
 const { startStalePresenceSweeper } = require('./routes/presence');
 const { startOutreachReplySweeper } = require('./lib/outreachReplySweeper');
+const { startBillingCycleSweeper } = require('./lib/billingCycleSweeper');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
 const siteFormsRoutes   = require('./routes/siteForms');
@@ -164,4 +165,7 @@ server.listen(PORT, () => {
   // Lead-gen Phase 2: poll sent-outreach Gmail threads for replies → flip leads
   // warm. Idle (no-op) until the Google service account is configured.
   startOutreachReplySweeper();
+  // System A billing: open one recurring charge per active manual-provider
+  // subscription per calendar month (Payoneer etc.; Stripe self-bills).
+  startBillingCycleSweeper();
 });
