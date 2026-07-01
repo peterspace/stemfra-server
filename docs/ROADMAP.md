@@ -9,6 +9,10 @@ recommended build sequence. Per-feature detail lives in the linked docs; this is
   ("Marcus Argyle"); `demo_link` map + send-outreach wiring.
 - Email open-tracking (pixel + endpoint); Mark outreach (send as `mark@`, reply sweeper).
 - `provisionSite` vertical-alias fix; `boutique_gyms` vertical deactivated.
+- **Pricing page honesty pass** — removed "— 2 months free" from the Annual
+  toggle; **trimmed all 3 tiers + the core strip to features that ship today**
+  (payment/membership/voice features gated → documented in `docs/OFFER_TIERS.md`,
+  re-add as they land). ⚠ **Pro is now thin** — see P6.1 (product decision pending).
 
 ## ⚙️ Operational / parallel (Peter — not code)
 - **Start Stripe application NOW with EIN + passport** (ITIN likely isn't the gate); confirm EIN on file.
@@ -117,6 +121,137 @@ Remaining (lower, item 14): demo_sites table + SUBJECT_TO_SERVICE/KNOWN_TEMPLATE
 20. Stacy **S3 (act)** + **S4**.
 21. **Ledger** agent (Agent 6).
 22. Dynamic CORS (query live custom domains) — deferred.
+
+## P6 — Offer maintainability + site lifecycle (NEW, queued 2026-06-29)
+_Raised by Peter while reviewing the pricing page + CMS Sites page. 23 + 24 SHIPPED
+this session; 25–27 still pending._
+
+23. ✅ **Pro-tier product decision — DONE: marked "Coming soon" / waitlist.** After
+    the honesty trim Pro's deliverable delta over Growth was just SMS reminders +
+    priority support (headline AI Voice Receptionist + custom email + promo codes
+    are 🟡/🔴). Decision: sell **Essential + Growth** now; Pro renders as a
+    **"Coming soon" waitlist card** (pill + "Join the waitlist" → `/contact?interest=pro-waitlist`),
+    still listing its aspirational features. Flip `coming_soon` off in the catalog
+    when voice-booking ships. (`verticals.js` flag + Pricing.jsx render + DB catalog.)
+24. ✅ **Server-driven offer/tier data — DONE.** The DB plan catalog
+    (`crm_settings.billing_plans`) now carries the **full offer**: per-tier
+    `label/promise/featured/badge/coming_soon/order` + `features[]` (each
+    `{text,status}`) + a `core_platform[]` strip, alongside the prices the billing
+    engine already read. `status` = **live / gated / soon**; the marketing page
+    shows only `live` on a live tier (gated/soon kept for re-add, shown on a
+    coming-soon tier). Surface: `GET/PUT /api/admin/billing/plans` (PLATFORM_ADMIN,
+    `billing.setPlans` validates money fields) + public `GET /api/plans`. The
+    marketing pricing page consumes it (`mergeTiers`/`mergeCore`, `verticals.js`
+    = fallback). **CRM editor**: `/billing/plans` (`pages/OfferEditor.jsx`, linked
+    from the Billing header) — edit names/prices/promises/badges/coming-soon +
+    add/remove/reorder features with a live/gated/soon status, no deploy. Kills the
+    `verticals.js`↔DB drift (subsumes P3 item 12). _Annual discount is in the
+    catalog (`annual_discount_months`) but the page still reads the local constant —
+    minor follow-up to thread it through `annualPrice()`._
+25. ✅ **CMS plan upgrade/downgrade — DONE (2026-06-29).** Owner self-serve
+    upgrade/downgrade from CMS Account → Billing ("Change plan" card). Server:
+    `billing.changeSubscriptionPlan` + `POST /api/cms/billing/change-plan`
+    (requireCmsAuth + ownership + status guard active/past_due; rejects coming-soon
+    tiers), tier list surfaced via `getBilling` (`availablePlans`/`currentTier`/
+    `canChangePlan`). New monthly rate takes effect **next cycle** (the cycle opener
+    reads `monthly_amount_cents`); tier entitlement (`metadata.tier`) flips
+    immediately; `plan_history` trail + `site_activity` audit so staff request the
+    new amount. No mid-cycle proration under manual Payoneer — Stripe will add real
+    proration when it's the active provider. CMS: `useChangePlan` + `ChangePlanCard`
+    (confirm step). Verified: routes 401-gated, CMS `tsc --noEmit` clean.
+26. ✅ **Site deletion + lifecycle cleanup — DONE (2026-06-29).** Policy (Peter):
+    **both** staff + owner can delete · **90-day** grace · **block on unpaid +
+    cancel sub** · export deferred to v2. Built: schema (`sites.deleted_at`/
+    `deletion_reason`/`deletion_initiated_by` + partial index, no enum change);
+    `deleteSiteCascade` extended to all **26** site-scoped tables + best-effort mode
+    (also fixes the rollback-orphan gap); `lib/siteDeletion.js`
+    (`softDeleteSite` → detach CF host + cancel billing + stamp + audit;
+    `restoreSite`; `hardPurgeSite` → Cloudinary destroy + full cascade);
+    `lib/siteDeletionSweeper.js` (purges past the 90-day grace, started in index.js).
+    Endpoints: staff `POST /api/admin/sites/:id/{delete,restore}` (+ `?deleted=true`
+    list + `force` past unpaid); owner `POST /api/cms/sites/:id/{delete,restore}`.
+    UI: CRM Sites Active/Deleted tabs + delete modal (type-DELETE, force-on-unpaid)
+    + Restore; CMS Sites delete modal + owner-context hides deleted. Verified:
+    routes 401-gated, all files parse/typecheck clean, schema applied (0 sites
+    flagged). Spec: `docs/SITE_DELETION.md`. _(Not E2E-run against a live site —
+    detach/purge hit real CF/Cloudinary; logic mirrors the proven detach + rollback
+    paths.)_
+27. ✅ **Domain registrar — v1 BUILT 2026-06-29 (Porkbun, staff-mediated), inert
+    until keys.** `lib/registrar/{porkbun,index}.js` + `/api/admin/domains/*`
+    (healthcheck/search/requirements/register; `confirm`-gated, dryRun otherwise) +
+    CRM Sites Domain modal "Buy a domain" tab. Real buy → register → Porkbun DNS
+    (apex ALIAS + www CNAME → `{project}.pages.dev`) → `attachCustomDomain` to Pages
+    → `sites.custom_domain` → bill client retail via `billing_charges` 'adjustment'
+    → audit. Verified: module chain loads, `isConfigured()=false`, retail markup
+    ($11.08→$18.08); routes added (server was down at test time — unrelated to my
+    code, all files `node --check`/esbuild clean). **Blocked on Peter:** Porkbun
+    account + **funded balance** + API keys (`docs/DOMAINS.md` checklist). **Needs
+    live verification:** apex ALIAS ↔ Cloudflare Pages custom-domain validation.
+    **v2 deferred:** customer self-serve CMS buy · `site_domain_purchases` table +
+    renewal/expiry sweeper · `check_domain_availability_and_price` as search backend.
+
+## P7 — Marketing funnel: theme galleries (NEW, 2026-06-30)
+_Marketing site (`stemfra_client`). Per-vertical theme pages drive the buy path:
+Products/Discover → `/themes/:vertical` → pick a theme → pricing → onboarding.
+Done this session unless noted._
+
+28. ✅ **Per-vertical theme gallery** — new route `/themes/:vertical` +
+    `ThemeGallery.jsx` + `data/themes.js` (9 live demos mapped per vertical, synced
+    to `provision-demos.js`). Each theme card: screenshot → "Preview live ↗" (opens
+    the real demo) + **"Select this theme"** → `/pricing?vertical=&theme=`. "Discover"
+    (BrowseDrawer) + the Templates page tiles now route here (were dead-ending at the
+    contact form). Pricing page reads `?vertical=&theme=`, shows a "Selected theme"
+    chip, and threads both into every "Start for free" CTA → CMS `/signup?plan=&vertical=&theme=`.
+    Yoga is `comingSoon` (renders a muted card) until its mockup lands.
+29. **High-res, content-edited theme screenshots (PENDING — Peter).** v1 uses
+    WordPress mShots auto-screenshots (grey placeholder on first load → not
+    production-grade). Peter will edit each demo's content/images for uniqueness, then
+    share hi-res shots. Plan: capture the 9 live demos (full-page or hero), upload to
+    Cloudinary, set `screenshot` on each theme in `data/themes.js` (one field per
+    theme, no page edits). Flip yoga's `comingSoon` off once its shot is in.
+30. **Onboarding should CONSUME the `theme` param (PENDING — last mile of the buy
+    loop).** The marketing theme rides to `/signup?theme=<key>` but the CMS
+    `SignupPage` currently ignores it. To provision the chosen template: SignupPage
+    reads `theme` → `onboarding.ts` payload → server `/api/onboarding/signup` →
+    `provisionSite({ templateSlug })`. Needs a **marketing-theme-key → platform
+    template-slug** map (e.g. `manhattan`→`barbershops-manhattan`, `sorrel`→
+    `salons-sorrel`). Until wired, the param is harmless (passes through, unused).
+
+## P8 — Pricing V3 + feature backlog (NEW, 2026-06-30)
+_Full design history + tier maps + research: `stemfra_pricing_system/TIER_VERSIONS.md`
+(co-located with the Squarespace/Mindbody/Wodify competitor analysis). V3 = "generous
+core + growth tiers." When adopted, mirror into `crm_settings.billing_plans`._
+
+31. ✅ **RESOLVED P6.1 (Pro was thin).** Decision (Peter): **drop the AI Voice
+    Receptionist from the CLIENT tiers** — SMBs don't need it, Front Desk (chat)
+    covers them. Pro re-anchors on SMS reminders + 2-way texting + marketing + custom
+    email + phone support. **Stemfra keeps its own voice agent** for internal use
+    (concierge/front desk), per the AI-agents roadmap — just not sold to clients.
+32. **Un-gate Table 2 (built-but-gated) the moment Stripe Connect is live** — card
+    payments at booking, memberships/packs/drop-ins, member accounts, refund/pause/
+    cancel tools, accelerated payouts. All built + verified (System B); un-gate = a
+    CRM `billing_plans` status flip, no deploy. **Biggest "tiers feel full" win.**
+33. ✅ **"Start for free" CTA is intentional, KEEP it** (decided 2026-06-30). It's the
+    point of building **Stacy** — AI-guided self-serve onboarding ("free to experience,
+    pay to publish") means fewer support staff. Squarespace's model; Squarespace (a
+    website builder) is our real category — Mindbody/Wodify (high-touch booking
+    software) aren't, so we don't copy their demo-first funnel. The earlier
+    "demo/discovery-call first" stance is retired (offer doc + TIER_VERSIONS.md updated).
+    Open last-mile: SignupPage should consume the `theme` param (P7.30) so onboarding
+    provisions the chosen template.
+34. **Custom business email** — ship **Cloudflare Email Routing (free forwarding)** as
+    the Pro perk ($0, reuses our DNS); Google Workspace (~$8/user retail, ~$3 reseller)
+    as a later paid add-on. (Research in TIER_VERSIONS.md §A.)
+35. **Unified inbox + 2-way texting (owner↔client)** — Pro-only; reuses CRM Twilio
+    rails. Needs per-tenant A2P 10DLC registration templated into onboarding first;
+    pair with SMS reminders. Not a launch blocker. (Research §B.)
+36. **Table-3 nice-to-haves added to backlog** (priority order): pageview/traffic
+    analytics (ad-spend) · at-risk/churn alerts · lead conversion board (pipeline) ·
+    advanced/custom report builder. Lower: POS (Stripe Terminal) · Mailchimp/Zapier ·
+    MCP/API access · announcement bar/promo pop-up · media library.
+    **Parked until client demand:** sell courses / on-demand content (Peter's call).
+    **Excluded:** branded app · physical eCommerce · marketplace · deep fitness
+    hardware · payroll · family groups · pick-a-spot.
 
 ---
 _Conventions: additive schema only (regen types after); propose → ship in focused

@@ -26,16 +26,17 @@ async function signup(req, res) {
     if (rateLimited(ip)) return res.status(429).json({ error: 'Too many signups from here — please try again later.' });
 
     const {
-      name, email, password, company, vertical, city, template,
-      firstName, lastName, country, state, bookingProvider, bookingUrl, paymentMethods, tier,
+      name, email, password, company, vertical, starterId, city, template,
+      firstName, lastName, country, state, bookingProvider, bookingUrl, paymentMethods, tier, goals,
     } = req.body || {};
     const result = await onboardCustomer({
-      name, email, password, company, vertical,
+      name, email, password, company, vertical: vertical || null, starterId: starterId || null,
       city: city || null, templateSlug: template || null,
       firstName: firstName || null, lastName: lastName || null,
       country: country || null, state: state || null,
       bookingProvider: bookingProvider || null, bookingUrl: bookingUrl || null,
       paymentMethods: paymentMethods || null, tier: tier || null,
+      goals: Array.isArray(goals) ? goals : null,
     });
 
     res.json({

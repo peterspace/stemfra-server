@@ -20,6 +20,19 @@ const STACY_N8N_URL = process.env.STACY_N8N_URL;          // public n8n Stacy we
 const N8N_SECRET = process.env.N8N_WEBHOOK_SECRET;        // sent as x-leadgen-secret (server→n8n convention)
 const STACY_MODEL = process.env.STACY_MODEL || 'gpt-4o';  // per-conversation default; provider-switchable in n8n
 
+// S3 (act) — whitelist the actions Stacy may PROPOSE. The server never executes;
+// it relays a validated proposal to the CMS, which shows a confirm card and (on
+// the owner's explicit OK) runs the real endpoint. Stacy stays "confirm-before-act".
+// Currently the only action is 'clone' (duplicate the current site).
+function normalizeAction(a) {
+  if (!a || typeof a !== 'object' || a.type !== 'clone') return null;
+  return {
+    type: 'clone',
+    businessName: (a.businessName && String(a.businessName).trim().slice(0, 80)) || null,
+    city: (a.city && String(a.city).trim().slice(0, 60)) || null,
+  };
+}
+
 // Append messages to a conversation's jsonb array (single owner per chat → no race concern at S1).
 async function appendMessages(id, msgs) {
   const { data } = await supabase.from('agent_conversations').select('messages').eq('id', id).single();
@@ -117,6 +130,7 @@ async function send(req, res) {
     let reply = '';
     let handoff = false;
     let toolLog = [];
+    let action = null;
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
@@ -130,6 +144,7 @@ async function send(req, res) {
       reply = data.reply ?? data.output ?? '';
       handoff = !!data.handoff;
       toolLog = Array.isArray(data.tool_log) ? data.tool_log : [];
+      action = normalizeAction(data.action);
     } catch (e) {
       console.error('[stacy.send] n8n error:', e.message);
       return res.status(502).json({ error: 'Stacy could not respond right now. Please try again.' });
@@ -156,7 +171,7 @@ async function send(req, res) {
       }
     }
 
-    res.json({ reply, handoff, conversationId });
+    res.json({ reply, handoff, action, conversationId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

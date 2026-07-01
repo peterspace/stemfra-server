@@ -132,4 +132,20 @@ async function markPaid(req, res) {
   } catch (e) { return res.status(500).json({ success: false, message: e.message }); }
 }
 
-module.exports = { getProvider, setProvider, listCharges, requestDetails, startBilling, openCycle, markRequested, markPaid };
+// GET /api/admin/billing/plans — the full catalog (prices + offer copy) for the CRM editor.
+async function getPlans(_req, res) {
+  try {
+    const plans = await billing.getPlans();
+    return res.json({ plans });
+  } catch (e) { return res.status(500).json({ success: false, message: e.message }); }
+}
+
+// PUT /api/admin/billing/plans — replace the catalog (prices + offer copy).
+async function putPlans(req, res) {
+  try {
+    const plans = await billing.setPlans((req.body || {}).plans || req.body);
+    return res.json({ success: true, plans });
+  } catch (e) { return res.status(400).json({ success: false, message: e.message }); }
+}
+
+module.exports = { getProvider, setProvider, listCharges, requestDetails, startBilling, openCycle, markRequested, markPaid, getPlans, putPlans };

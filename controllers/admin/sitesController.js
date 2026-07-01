@@ -10,17 +10,22 @@ const { attachSiteDomain, detachSiteDomain, projectFor } = require('../../lib/at
 const cf = require('../../lib/cloudflarePages');
 const { publishSite, unpublishSite, getBillingStatus } = require('../../lib/sitePublish');
 const { evaluateCompleteness } = require('../../lib/siteCompleteness');
+const { softDeleteSite, restoreSite } = require('../../lib/siteDeletion');
 
 const ZONE = 'stemfra.com';
 const tempPassword = () => `St${crypto.randomBytes(6).toString('hex')}`; // 14 chars
 
-// GET /api/admin/sites — every customer site, newest first.
+// GET /api/admin/sites — every customer site, newest first. Soft-deleted sites
+// are hidden by default; pass ?deleted=true to list them (for Restore).
 async function listSites(req, res) {
   try {
-    const { data, error } = await supabase
+    const showDeleted = req.query.deleted === 'true';
+    let q = supabase
       .from('sites')
-      .select('id, subdomain, custom_domain, status, went_live_at, created_at, booking_mode, booking_config, payments_enabled, company:companies(name), vertical:verticals(slug, display_name), owner:contacts!owner_contact_id(full_name, email), subscriptions(status)')
+      .select('id, subdomain, custom_domain, status, deleted_at, went_live_at, created_at, booking_mode, booking_config, payments_enabled, company:companies(name), vertical:verticals(slug, display_name), owner:contacts!owner_contact_id(full_name, email), subscriptions(status)')
       .order('created_at', { ascending: false });
+    q = showDeleted ? q.not('deleted_at', 'is', null) : q.is('deleted_at', null);
+    const { data, error } = await q;
     if (error) throw new Error(error.message);
     const bookingLabel = (mode, cfg) => {
       if (mode === 'link_out') return (cfg && cfg.provider_name) ? `External · ${cfg.provider_name}` : 'External';
@@ -42,6 +47,7 @@ async function listSites(req, res) {
       ownerEmail: s.owner?.email || null,
       liveUrl: `https://${s.subdomain}.${ZONE}`,
       wentLiveAt: s.went_live_at,
+      deletedAt: s.deleted_at || null,
       createdAt: s.created_at,
     }));
     res.json({ sites });
@@ -69,6 +75,39 @@ async function provision(req, res) {
       previewUrl: `https://${result.site.subdomain}.${ZONE}`,
       loginEmail: ownerEmail,
       tempPassword: password, // shown once for the staff→client handoff
+    });
+  } catch (err) {
+    if (err.code === 'email_taken') return res.status(409).json({ error: err.message, code: err.code });
+    if (err.code === 'bad_input' || err.code === 'weak_password') return res.status(400).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// POST /api/admin/sites/:siteId/clone { businessName, ownerEmail, ownerName?, city? }
+// Staff clone an EXISTING site (any customer's, or a demo/Starter) into a NEW
+// account — its exact design + catalog + content as a starting point. Uses the
+// staff-privileged cloneSourceId path (not the public whitelist). Returns a
+// one-time temp password for the high-touch handoff, like provision.
+async function cloneAdmin(req, res) {
+  try {
+    const { businessName, ownerEmail, ownerName, city } = req.body || {};
+    if (!businessName || !ownerEmail) {
+      return res.status(400).json({ error: 'businessName and ownerEmail are required.' });
+    }
+    const password = tempPassword();
+    const result = await onboardCustomer({
+      name: ownerName, email: ownerEmail, password,
+      company: businessName, cloneSourceId: req.params.siteId,
+      city: city || null,
+    });
+    res.json({
+      ok: true,
+      siteId: result.site.siteId,
+      subdomain: result.site.subdomain,
+      previewUrl: `https://${result.site.subdomain}.${ZONE}`,
+      loginEmail: ownerEmail,
+      tempPassword: password,
+      counts: result.site.counts,
     });
   } catch (err) {
     if (err.code === 'email_taken') return res.status(409).json({ error: err.message, code: err.code });
@@ -165,4 +204,30 @@ async function removeCustomDomain(req, res) {
   }
 }
 
-module.exports = { listSites, provision, attach, detach, publish, unpublish, readiness, setCustomDomain, removeCustomDomain };
+// POST /api/admin/sites/:siteId/delete { reason?, force? } — staff soft-delete.
+// Detaches CF host(s), cancels billing, 90-day grace then sweeper hard-purges.
+// force=true bypasses the unpaid-charge guardrail (e.g. test sites).
+async function deleteSite(req, res) {
+  try {
+    const actorName = req.staffUser?.email || req.staffUser?.full_name || 'staff';
+    const result = await softDeleteSite(req.params.siteId, {
+      reason: req.body?.reason || null, by: req.staffUser?.id || null, actorName, force: !!req.body?.force,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    if (err.code === 'unpaid_charges') return res.status(409).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// POST /api/admin/sites/:siteId/restore — staff restore within the grace window.
+async function restore(req, res) {
+  try {
+    const actorName = req.staffUser?.email || req.staffUser?.full_name || 'staff';
+    res.json({ ok: true, ...(await restoreSite(req.params.siteId, { actorName })) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { listSites, provision, cloneAdmin, attach, detach, publish, unpublish, readiness, setCustomDomain, removeCustomDomain, deleteSite, restore };

@@ -11,6 +11,7 @@ const presenceRoutes   = require('./routes/presence');
 const { startStalePresenceSweeper } = require('./routes/presence');
 const { startOutreachReplySweeper } = require('./lib/outreachReplySweeper');
 const { startBillingCycleSweeper } = require('./lib/billingCycleSweeper');
+const { startSiteDeletionSweeper } = require('./lib/siteDeletionSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
@@ -109,6 +110,7 @@ app.get('/health', (req, res) => {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/contact',  contactRoutes);
 app.use('/api/onboarding', require('./routes/onboarding'));
+app.use('/api/starters',   require('./routes/starters'));   // public Starter catalog (clone-to-onboard)
 app.use('/api/insights', insightsRoutes);
 app.use('/api/plans',    require('./routes/plans'));   // public pricing catalog (single source)
 app.use('/api/twilio',        twilioRoutes);
@@ -138,6 +140,7 @@ app.use('/api/cms/sites', cmsSitesRouter);
 app.use('/api/cms/billing', require('./routes/cms/billing'));
 app.use('/api/cms/assistant', cmsAssistantRouter);
 app.use('/api/admin/sites', require('./routes/admin/sites'));
+app.use('/api/admin/domains', require('./routes/admin/domains'));
 app.use('/api/admin/templates', require('./routes/admin/templates'));
 app.use('/api/admin/subscriptions', require('./routes/admin/subscriptions'));
 app.use('/api/admin/billing', require('./routes/admin/billing'));
@@ -171,6 +174,9 @@ server.listen(PORT, () => {
   // System A billing: open one recurring charge per active manual-provider
   // subscription per calendar month (Payoneer etc.; Stripe self-bills).
   startBillingCycleSweeper();
+  // Site deletion: hard-purge sites that have been soft-deleted past the 90-day
+  // grace window (Cloudinary media + all DB rows). See lib/siteDeletion.js.
+  startSiteDeletionSweeper();
   // Lead-gen follow-up sequencer (A2 → read-gated call → A8 → A20). Inert until
   // crm_settings.leadgen_sequencer.enabled = true.
   startOutreachSequencer();
