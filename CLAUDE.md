@@ -1,5 +1,10 @@
 # Stemfra Server — Claude memory
 
+> **📚 Docs hub:** every Stemfra doc across all repos is indexed at
+> [`~/Documents/stemfra/docs/README.md`](../docs/README.md). Start there (+ the root
+> `SESSION_HANDOFF.md`) to find any doc, and follow its rules for where new docs go.
+> This repo's `docs/` holds ROADMAP + the operational docs.
+
 **Last updated: 2026-06-07**
 
 Node/Express backend serving CMS, Platform, CRM, n8n, and marketing-site concerns for the Stemfra platform. Companion file to `~/Documents/stemfra/stemfra_platform/CLAUDE.md` (the customer-facing monorepo) and `~/Documents/stemfra/stemfra-ops/CLAUDE.md` (the internal CRM). When working in `stemfra_server/`, this file is the source of truth.
