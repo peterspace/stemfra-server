@@ -209,13 +209,19 @@ Done this session unless noted._
     share hi-res shots. Plan: capture the 9 live demos (full-page or hero), upload to
     Cloudinary, set `screenshot` on each theme in `data/themes.js` (one field per
     theme, no page edits). Flip yoga's `comingSoon` off once its shot is in.
-30. **Onboarding should CONSUME the `theme` param (PENDING — last mile of the buy
-    loop).** The marketing theme rides to `/signup?theme=<key>` but the CMS
-    `SignupPage` currently ignores it. To provision the chosen template: SignupPage
-    reads `theme` → `onboarding.ts` payload → server `/api/onboarding/signup` →
-    `provisionSite({ templateSlug })`. Needs a **marketing-theme-key → platform
-    template-slug** map (e.g. `manhattan`→`barbershops-manhattan`, `sorrel`→
-    `salons-sorrel`). Until wired, the param is harmless (passes through, unused).
+30. ✅ **Onboarding CONSUMES the `theme` param (2026-07-02) — via Starter clone, not
+    `templateSlug`.** Both marketing entry points now provision the *exact previewed
+    site*: the Themes Gallery already links `/signup?starter=<subdomain>` (→ clone that
+    Starter), and the Pricing path carries `/signup?theme=<key>` — `SignupPage` now maps
+    the key → the same demo subdomain via a `THEME_STARTERS` map (9 entries: `manhattan`
+    →`rourke-sloane`, `sorrel`→`linden-lark`, …) and threads it as `starterId`. **Chose
+    clone-the-Starter over the originally-planned `provisionSite({templateSlug})`:** the
+    9 theme demos are complete, correctly-templated preview sites (24–37 sections), so
+    cloning gives the customer precisely what they previewed (renamed to their brand),
+    not the generic vertical fixture on that template. Server side needed no change —
+    `onboardCustomer({starterId})` → `getApprovedStarter` (reads `sites.metadata.is_starter`,
+    already flagged on the 9 demos + 4 fixtures) → `cloneSite`. Harmless when neither
+    param is present (falls back to vertical default). Not blocked on `stemfra_client`.
 
 ## P8 — Pricing V3 + feature backlog (NEW, 2026-06-30)
 _Full design history + tier maps + research: `stemfra_pricing_system/TIER_VERSIONS.md`
@@ -237,8 +243,8 @@ core + growth tiers." When adopted, mirror into `crm_settings.billing_plans`._
     website builder) is our real category — Mindbody/Wodify (high-touch booking
     software) aren't, so we don't copy their demo-first funnel. The earlier
     "demo/discovery-call first" stance is retired (offer doc + TIER_VERSIONS.md updated).
-    Open last-mile: SignupPage should consume the `theme` param (P7.30) so onboarding
-    provisions the chosen template.
+    Last-mile ✅ done (P7.30): SignupPage consumes the `theme`/`starter` param so
+    onboarding clones the chosen theme's previewed site.
 34. **Custom business email** — ship **Cloudflare Email Routing (free forwarding)** as
     the Pro perk ($0, reuses our DNS); Google Workspace (~$8/user retail, ~$3 reseller)
     as a later paid add-on. (Research in TIER_VERSIONS.md §A.)
