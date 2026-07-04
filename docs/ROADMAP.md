@@ -262,3 +262,22 @@ core + growth tiers." When adopted, mirror into `crm_settings.billing_plans`._
 ---
 _Conventions: additive schema only (regen types after); propose → ship in focused
 batches → verify; keep this file current as items land._
+
+
+## P9 — Wellness verticals + Marketing Mockups follow-ups (NEW, 2026-07-04)
+
+Session log: `docs/WORK_2026-07-04.md`. Everything below is queued from the 2026-07-03/04 session (all work UNCOMMITTED as of writing — commit pass needed first).
+
+**Marketing Mockups → production (the tool is feature-complete locally):**
+- [ ] Commit the arc across `stemfra_server` / `stemfra-ops` / `stemfra_client` (+ platform changes)
+- [ ] Server Docker image: enable Playwright captures in prod — the current `node:22-alpine` base is NOT a supported Playwright platform (musl); move the runtime stage to a debian-based image (or `mcr.microsoft.com/playwright`) + `npx playwright install --with-deps chromium`, then drop the `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` guard from the Dockerfile. (`sharp` works on alpine; `MOCKUP_RENDER_URL` defaults to crm.stemfra.com in prod.)
+- [ ] Flip `stemfra-ops/.env` `VITE_STEMFRA_SERVER_URL` back to prod; deploy CRM + marketing site
+
+**Massage vertical (Escape theme v1 + structure pass done; seed = calm-roots-massage):**
+- [ ] Peter's real-browser walk of :5181 (the completeness-gate visual half)
+- [ ] Remaining Escape 🟡 fidelity: `facility_highlights:process-steps` · `service_menu:diamond-split` · `single-rate-panel` pricing · per-section `backgrounds` painting (dark/white bands — benefits every theme)
+- [ ] Confirm massage/spa pricing placeholders (massage $1200/79 · spa $1500/99 — set by Claude, unconfirmed)
+- [ ] Create the Cloudflare Pages project `stemfra-massage` (prod prerequisite)
+- [ ] Teach the n8n lead-gen workflow the 'massage' vertical (3-place sync: CRM + server done)
+- [ ] Marketing site wiring for massage (themes.js gallery entry, pricing page, demo site + Starter flag) — after the theme walk
+- [ ] **Spa vertical**: clone from the COMPLETED massage (app copy on :5182 + seed via onboardCustomer + reactivate the parked `spa`/`spa-classic` DB rows re-sourced from massage)

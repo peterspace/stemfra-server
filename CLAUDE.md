@@ -5,7 +5,7 @@
 > `SESSION_HANDOFF.md`) to find any doc, and follow its rules for where new docs go.
 > This repo's `docs/` holds ROADMAP + the operational docs.
 
-**Last updated: 2026-06-07**
+**Last updated: 2026-07-04**
 
 Node/Express backend serving CMS, Platform, CRM, n8n, and marketing-site concerns for the Stemfra platform. Companion file to `~/Documents/stemfra/stemfra_platform/CLAUDE.md` (the customer-facing monorepo) and `~/Documents/stemfra/stemfra-ops/CLAUDE.md` (the internal CRM). When working in `stemfra_server/`, this file is the source of truth.
 
@@ -173,6 +173,24 @@ Activity-feed inserts use a `logActivity({ action, entityType, entityId, actorId
 - `routes/insights.js` — CRUD for the `/blog`/Insights public content. GET/list, GET/:slug, POST, PATCH/:slug, DELETE/:slug.
 - `routes/userSettings.js` — `GET`, `PATCH /api/user-settings`. CRM user prefs.
 - `routes/devPreview.js` — dev-only email template previews under `/dev/preview`, gated by `NODE_ENV !== 'production'`.
+
+## Marketing Mockups endpoints (`/api/admin/mockups/*` + `/api/marketing/*`, 2026-07-03/04)
+
+Serves the CRM's **Marketing → Mockups** studio (full doc: `stemfra-ops/docs/MARKETING_MOCKUPS.md` — read it before touching these). New deps: **`playwright`** (+ chromium binary) and **`sharp`**. Files: `controllers/admin/mockupsController.js` + `routes/admin/mockups.js` (staff-gated `PLATFORM_OPS`) + `routes/marketing.js` (public).
+
+- `POST /capture` — Playwright renders the CRM's chrome-less `/render/mockup` route (env `MOCKUP_RENDER_URL`; dev `localhost:5178`, prod `https://crm.stemfra.com`) at 1–4× → sharp WebP → Cloudinary `stemfra_assets/mockups`.
+- `GET /assets` · `POST /upload` (busboy — **must `req.pipe(bb)`**) · `POST /assets/delete` (folder-guarded) — the brand-asset sources library (`stemfra_assets/mockups/sources`).
+- `POST /screenshot-demo` — screenshots a DEMO PAGE: `{starterId, path}` only (server resolves the URL via `lib/starters previewUrlFor` — SSRF-safe); hides the preview ribbon + chat launcher; `fullPage` mode returns an inline 2× base64 master; `clip` mode re-captures a region at 4× (fit-capped to WebP 16383/side + ~24MP).
+- `POST /prepare-page` · `GET /masters` · `POST /crop-master` — **prepared masters**: a demo page rendered ONCE at 4× and stored as Cloudinary TILES (≤~24MP each; the tile map on the demo's `metadata.mockup_masters`); `crop-master` sharp-stitches any region (or the whole page, auto-fit) without re-rendering.
+- `GET /saved` · `POST /save` · `POST /delete-saved` — composed mockups persisted on the demo's `metadata.marketing_mockups` (read-modify-write; preserves `is_starter` etc.).
+- **PUBLIC** `GET /api/marketing/mockups` — newest saved `finalUrl` per demo keyed by subdomain; consumed by `stemfra_client` `WorkMarquee` (fallback-preserving).
+- **Prod deploy prerequisites (NOT done):** chromium (`npx playwright install --with-deps chromium`) + sharp in the Docker image; `MOCKUP_RENDER_URL` env; CRM `.env` back to prod API.
+
+CORS additions: dev origins `5178` (CRM), `5181`/`5182` (massage/spa templates).
+
+## Verticals registry note (2026-07-04)
+
+`lib/verticalConfig.js`: **massage** added (wellness pillar; seed `calm-roots-massage`, a **generated UUID, not a sentinel**), **spa** deferred (built from massage later), **boutique_gyms removed** (retired). Lead-gen allow-list derives from it; the CRM dropdown carries massage; **the n8n workflow does not know 'massage' yet** (3-place sync rule).
 
 ## Future architecture: planned CMS service split
 
