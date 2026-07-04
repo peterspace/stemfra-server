@@ -52,7 +52,10 @@ const allowedOrigins = [
   'http://localhost:5175',   // stemfra_salons template (dev)
   'http://localhost:5176',   // stemfra_crossfit template (dev)
   'http://localhost:5177',   // stemfra_yoga template (dev)
+  'http://localhost:5181',   // stemfra_massage template (dev)
+  'http://localhost:5182',   // stemfra_spa template (dev — built after massage)
   'http://localhost:5180',   // stemfra_cms (dev)
+  'http://localhost:5178',   // stemfra-ops CRM (dev)
 ];
 
 // Pattern-matched origins for the multi-tenant Cloudflare Pages deployments.
@@ -111,6 +114,7 @@ app.get('/health', (req, res) => {
 app.use('/api/contact',  contactRoutes);
 app.use('/api/onboarding', require('./routes/onboarding'));
 app.use('/api/starters',   require('./routes/starters'));   // public Starter catalog (clone-to-onboard)
+app.use('/api/marketing',  require('./routes/marketing'));  // public marketing-site reads (hero mockups)
 app.use('/api/insights', insightsRoutes);
 app.use('/api/plans',    require('./routes/plans'));   // public pricing catalog (single source)
 app.use('/api/twilio',        twilioRoutes);
@@ -146,6 +150,7 @@ app.use('/api/admin/subscriptions', require('./routes/admin/subscriptions'));
 app.use('/api/admin/billing', require('./routes/admin/billing'));
 app.use('/api/admin/bookings', require('./routes/admin/bookings'));
 app.use('/api/admin/memberships', require('./routes/admin/memberships'));
+app.use('/api/admin/mockups', require('./routes/admin/mockups'));
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {
