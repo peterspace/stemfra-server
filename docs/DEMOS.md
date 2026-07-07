@@ -35,14 +35,14 @@ seed, no Pages project). Each is `live` at `{subdomain}.stemfra.com`.
 | Vertical | Theme | Brand | URL |
 | --- | --- | --- | --- |
 | barbershops | Manhattan | Rourke & Sloane | https://rourke-sloane.stemfra.com |
-| barbershops | Classic NYC | Halsey & Crowe | https://halsey-crowe.stemfra.com |
-| salons | Sorrel | Linden & Lark | https://linden-lark.stemfra.com |
+| barbershops | Classic NYC | Argyle & Sons | https://argyle-and-sons.stemfra.com |
+| salons | Sorrel | Maison Solène | https://maison-lune.stemfra.com |
 | salons | Beauty House | Vesper Beauty House | https://vesper-beauty-house.stemfra.com |
 | crossfit | Box | Ironclad Athletics | https://ironclad-athletics.stemfra.com |
-| crossfit | Volt | Voltage Strength | https://voltage-strength.stemfra.com |
+| crossfit | Arclight | Forge & Bell | https://forge-and-bell.stemfra.com |
 | crossfit | BlackFly | Blackfly Barbell | https://blackfly-barbell.stemfra.com |
 | crossfit | 212 | 212 Strength Co. | https://212-strength-co.stemfra.com |
-| yoga_pilates | Sanctuary | Wildflower Yoga + Pilates | https://wildflower-yoga-pilates.stemfra.com |
+| yoga_pilates | Sanctuary | Meadowlark Yoga + Pilates | https://wildflower-yoga-pilates.stemfra.com |
 
 ## How a demo is provisioned
 
