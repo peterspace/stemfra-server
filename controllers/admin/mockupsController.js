@@ -221,7 +221,7 @@ async function screenshotDemo(req, res) {
     // hiding them doesn't reflow the fold: the PreviewRibbon (role="status") + the Front
     // Desk chat launcher (aria-label="Chat with us").
     await page
-      .addStyleTag({ content: '[role="status"],[aria-label="Chat with us"]{display:none!important}' })
+      .addStyleTag({ content: '[role="status"],[aria-label="Chat with us"],[role="dialog"],[aria-label="Cookie notice"],[aria-label="Announcement"]{display:none!important}' })
       .catch(() => {});
 
     if (clipMode) {
@@ -402,7 +402,7 @@ async function preparePage(req, res) {
     await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(800);
     await page
-      .addStyleTag({ content: '[role="status"],[aria-label="Chat with us"]{display:none!important}' })
+      .addStyleTag({ content: '[role="status"],[aria-label="Chat with us"],[role="dialog"],[aria-label="Cookie notice"],[aria-label="Announcement"]{display:none!important}' })
       .catch(() => {});
     // Scroll through so lazy-loaded images render, then settle back at the top.
     await page.evaluate(async () => {
