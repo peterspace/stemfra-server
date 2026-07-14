@@ -41,7 +41,9 @@ async function createSite(req, res) {
         ownerContactId: contactId,
         displayName: businessName,
         city,
-        createdBy: req.cmsUser.id,
+        // No createdBy: sites.created_by → profiles(id) is the STAFF actor.
+        // Client owners have no profile row (staff-only since Wave 0) — passing
+        // their auth id violates the FK. The owner is captured via owner_contact_id.
       });
     } catch (err) {
       // provisionSite rolls back the partial site itself; clean up the orphan company.
@@ -101,7 +103,8 @@ async function cloneOwnSite(req, res) {
     try {
       site = await cloneSite({
         sourceSiteId, companyId, ownerContactId: contactId,
-        displayName: businessName, city, createdBy: req.cmsUser.id,
+        displayName: businessName, city,
+        // No createdBy — same FK reasoning as create() above.
       });
     } catch (err) {
       try { await supabase.from('companies').delete().eq('id', companyId); } catch { /* best-effort */ }
@@ -170,4 +173,32 @@ async function restoreOwnSite(req, res) {
   }
 }
 
-module.exports = { createSite, cloneOwnSite, deleteOwnSite, restoreOwnSite };
+// PATCH /api/cms/sites/:siteId/business-name { name } — owner renames the
+// BUSINESS behind a site (companies.name = the public brand: header/footer
+// wordmark, hero brand text, SEO title fallback, publish-checklist item).
+async function updateBusinessName(req, res) {
+  try {
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Enter a business name.' });
+    if (name.length > 120) return res.status(400).json({ error: 'Keep the name under 120 characters.' });
+
+    const site = await verifySiteOwnership(req.cmsUser.id, req.params.siteId);
+    if (!site) return res.status(403).json({ error: 'Not your site' });
+
+    const { data: full, error: readErr } = await supabase
+      .from('sites').select('company_id').eq('id', site.id).single();
+    if (readErr || !full?.company_id) throw new Error('Could not resolve the business for this site.');
+
+    const { error } = await supabase.from('companies').update({ name }).eq('id', full.company_id);
+    if (error) throw new Error(`company: ${error.message}`);
+
+    try {
+      await logSiteActivity({ siteId: site.id, action: 'business_name_updated', actorName: req.cmsUser.email, details: { name } });
+    } catch { /* best-effort audit */ }
+    res.json({ ok: true, name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { createSite, cloneOwnSite, deleteOwnSite, restoreOwnSite, updateBusinessName };

@@ -1,5 +1,9 @@
 # Lead-Gen Module — Server Side
 
+> **What happens AFTER a lead lands** (templates, Mark's sends, the follow-up drip,
+> read-gated voice calls) is documented in [OUTREACH.md](OUTREACH.md) — read it before
+> touching send-outreach, the sequencer, or the Score & Draft prompt.
+
 How `stemfra-server` brokers AI-scored lead-gen runs between the CRM and the
 n8n workflow that does the actual scraping + scoring + DB insert.
 

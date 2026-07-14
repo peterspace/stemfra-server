@@ -122,6 +122,23 @@ router.post('/trigger', async (req, res) => {
   const segments       = [city, stateSegment, countrySegment].filter(Boolean);
   const defaultQuery   = `${verticalText} in ${segments.join(', ')}`;
 
+  // The active A1 outreach template (CRM → Email Templates) rides along so the
+  // scoring agent drafts INSIDE the agreed structure — flow, self-serve CTA and
+  // the literal {{demo_link}} / {{start_free_link}} merge fields intact (those
+  // two are resolved at send time by send-outreach). Editing A1 in the CRM
+  // retunes the agent on the next run; the Template Manager stays the single
+  // source of truth. Best-effort: without it the agent falls back to freehand.
+  let template_a1 = null;
+  try {
+    const { data: tpl } = await supabase
+      .from('email_templates')
+      .select('subject, body')
+      .eq('code', 'A1')
+      .eq('is_active', true)
+      .maybeSingle();
+    if (tpl) template_a1 = tpl;
+  } catch { /* freehand fallback */ }
+
   const payload = {
     system,
     vertical,
@@ -133,6 +150,7 @@ router.post('/trigger', async (req, res) => {
     search_query: search_query || defaultQuery,
     max_results: maxResults,
     min_score:   minScore,
+    template_a1,
     triggered_by: user.id,
     triggered_at: new Date().toISOString(),
   };

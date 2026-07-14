@@ -1,12 +1,8 @@
 const supabase = require('../config/supabase');
-const nodemailer = require('nodemailer');
-
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-  });
-}
+const emails = require('../templates/transactionalEmails');
+const { sendMail } = require('../lib/mailer');
+const { cmsMagicLink } = require('../lib/cmsMagicLink');
+const { getSiteNotifyPrefs } = require('../lib/notifyPrefs');
 
 // POST /api/site-forms/lead
 // Body: { siteId, name, email, phone, subject, message, sourcePage }
@@ -63,14 +59,15 @@ const submitSiteLead = async (req, res) => {
     try {
       const { data: owner } = await supabase
         .from('contacts')
-        .select('email, full_name')
+        .select('email, full_name, auth_user_id')
         .eq('id', site.owner_contact_id)
         .single();
 
-      if (owner?.email) {
-        const transporter = createTransporter();
-        await transporter.sendMail({
-          from: `"STEMfra Sites" <${process.env.GMAIL_USER}>`,
+      const prefs = await getSiteNotifyPrefs(site.id);
+      if (owner?.email && prefs.owner_lead) {
+        const dashboardUrl = await cmsMagicLink(owner.auth_user_id, '/leads');
+        await sendMail({
+          fromName: 'STEMfra Sites',
           to: owner.email,
           subject: `New enquiry from your website${subject ? ` — ${subject}` : ''}`,
           text: [
@@ -84,6 +81,12 @@ const submitSiteLead = async (req, res) => {
             `Message:`,
             message.trim(),
           ].filter(Boolean).join('\n'),
+          html: emails.ownerLeadNotification({
+            name, email, phone,
+            subject: subject ? subject.trim() : null,
+            message: message.trim(),
+            dashboardUrl,
+          }),
         });
       }
     } catch (emailErr) {
@@ -98,4 +101,48 @@ const submitSiteLead = async (req, res) => {
   }
 };
 
-module.exports = { submitSiteLead };
+// POST /api/site-forms/newsletter
+// Body: { siteId, email } — footer newsletter signup. Live/previewing sites
+// only; duplicate signups return ok silently (never leak list membership).
+// Light per-IP+site rate limit (in-memory, per-instance — same convention as
+// the public site-chat endpoint).
+const newsletterHits = new Map(); // `${ip}:${siteId}` → timestamps
+function newsletterRateLimited(ip, siteId) {
+  const key = `${ip}:${siteId}`;
+  const now = Date.now();
+  const hits = (newsletterHits.get(key) || []).filter((ts) => now - ts < 60_000);
+  hits.push(now);
+  newsletterHits.set(key, hits);
+  if (newsletterHits.size > 5000) newsletterHits.clear(); // crude memory cap
+  return hits.length > 10;
+}
+
+const subscribeNewsletter = async (req, res) => {
+  const { siteId, email } = req.body || {};
+  const clean = String(email || '').trim().toLowerCase();
+  if (!siteId || !/^\S+@\S+\.\S+$/.test(clean)) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+  }
+  if (newsletterRateLimited(req.ip, siteId)) {
+    return res.status(429).json({ success: false, message: 'Too many attempts — try again in a minute.' });
+  }
+  try {
+    const { data: site } = await supabase.from('sites').select('id, status').eq('id', siteId).single();
+    if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
+    if (!['live', 'previewing'].includes(site.status)) {
+      return res.status(403).json({ success: false, message: 'Site is not accepting submissions.' });
+    }
+    const { error } = await supabase
+      .from('site_newsletter_subscribers')
+      .insert([{ site_id: siteId, email: clean, source: 'footer' }]);
+    // Unique (site_id, lower(email)) → duplicates report success (idempotent).
+    if (error && !/duplicate|unique/i.test(error.message)) {
+      return res.status(500).json({ success: false, message: 'Could not subscribe — try again.' });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Could not subscribe — try again.' });
+  }
+};
+
+module.exports = { submitSiteLead, subscribeNewsletter };

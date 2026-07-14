@@ -10,7 +10,8 @@
 //
 // Single-var supabase require per the server convention.
 const supabase = require('../../config/supabase');
-const nodemailer = require('nodemailer');
+const emails = require('../../templates/transactionalEmails');
+const { sendMail } = require('../../lib/mailer');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { buildSiteContext } = require('../../lib/stacyContext');
 const { buildOnboardingChecklist, setOnboardingState } = require('../../lib/stacyOnboarding');
@@ -46,13 +47,6 @@ async function appendToolLog(id, entries) {
   await supabase.from('agent_conversations').update({ tool_log: [...(data?.tool_log || []), ...entries] }).eq('id', id);
 }
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-  });
-}
-
 // Real handoff: when Stacy flags a human is wanted, write a site_activity audit
 // row (await — one fast insert) + fire a best-effort staff email (NOT awaited, so
 // it never delays the chat reply; email failure is logged, never thrown). This is
@@ -68,10 +62,10 @@ async function notifyHandoff({ site, ownerEmail, message, reply }) {
   });
 
   const to = process.env.NOTIFY_EMAIL || process.env.GMAIL_USER;
-  if (!to || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
+  if (!to) return;
   const label = site.subdomain || site.id;
-  createTransporter().sendMail({
-    from: `"STEMfra Stacy" <${process.env.GMAIL_USER}>`,
+  sendMail({
+    fromName: 'STEMfra Stacy',
     to,
     replyTo: ownerEmail || undefined,
     subject: `Stacy: ${label} asked to talk to a human`,
@@ -81,6 +75,7 @@ async function notifyHandoff({ site, ownerEmail, message, reply }) {
       `What they said:\n"${message}"\n\n` +
       `Stacy replied:\n"${reply}"\n\n` +
       `Follow up with them directly.`,
+    html: emails.staffHandoffNotification({ siteLabel: label, ownerEmail, message, reply }),
   }).catch(err => console.error('[stacy.handoff] email failed:', err.message));
 }
 

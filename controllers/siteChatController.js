@@ -7,7 +7,10 @@
 //
 // Single-var supabase require per the server convention.
 const supabase = require('../config/supabase');
-const nodemailer = require('nodemailer');
+const { sendMail } = require('../lib/mailer');
+const { cmsMagicLink } = require('../lib/cmsMagicLink');
+const { getSiteNotifyPrefs } = require('../lib/notifyPrefs');
+const emails = require('../templates/transactionalEmails');
 const { DateTime } = require('luxon');
 const { buildSiteContext } = require('../lib/stacyContext');
 const { runBookingTool } = require('../lib/frontdeskBooking');
@@ -102,15 +105,14 @@ async function captureLead(site, convId, lead) {
 }
 
 async function notifyOwnerOfLead(site, lead) {
-  if (!site.owner_contact_id || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
-  const { data: owner } = await supabase.from('contacts').select('email, full_name').eq('id', site.owner_contact_id).single();
+  if (!site.owner_contact_id) return;
+  const prefs = await getSiteNotifyPrefs(site.id);
+  if (!prefs.owner_chat_lead) return;
+  const { data: owner } = await supabase.from('contacts').select('email, full_name, auth_user_id').eq('id', site.owner_contact_id).single();
   if (!owner?.email) return;
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-  });
-  await transporter.sendMail({
-    from: `"STEMfra Sites" <${process.env.GMAIL_USER}>`,
+  const dashboardUrl = await cmsMagicLink(owner.auth_user_id, '/leads');
+  await sendMail({
+    fromName: 'STEMfra Sites',
     to: owner.email,
     subject: `New chat lead from your website — ${lead.intent}`,
     text: [
@@ -125,6 +127,10 @@ async function notifyOwnerOfLead(site, lead) {
       ``,
       `See it in your dashboard under Leads.`,
     ].join('\n'),
+    html: emails.ownerChatLeadNotification({
+      name: lead.name, email: lead.email, phone: lead.phone,
+      intent: lead.intent, summary: lead.summary, dashboardUrl,
+    }),
   });
 }
 

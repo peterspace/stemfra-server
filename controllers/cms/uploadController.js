@@ -20,6 +20,7 @@ const ALLOWED_VIDEO_MIMES = new Set([
 ]);
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;    // 30MB raw input cap; post-WebP usually 200-900KB (rare uploads of branding photos can reach this)
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;   // 100MB hard cap (ambient hero loops can be hefty); 15s recommended via client-side
+const MAX_IMAGE_DIMENSION = 2560;            // stored images fit a 2560×2560 box (no surface renders larger; huge originals were the real storage cost)
 
 function isImageMime(m) { return m && m.startsWith('image/'); }
 function isVideoMime(m) { return m && m.startsWith('video/'); }
@@ -175,6 +176,13 @@ async function uploadImage(req, res) {
         // typically 5-10x smaller than raw input.
         uploadOptions.format = 'webp';
         uploadOptions.quality = 'auto:good';
+        // Dimension cap (2026-07-09): a 6000px camera original stayed 6000px
+        // after the WebP transcode and could still weigh many MB. No site
+        // surface renders wider than ~2560px, so cap the stored asset to fit
+        // a 2560×2560 box (`limit` never upscales, aspect preserved).
+        uploadOptions.width = MAX_IMAGE_DIMENSION;
+        uploadOptions.height = MAX_IMAGE_DIMENSION;
+        uploadOptions.crop = 'limit';
       }
       // Video: no format/quality transformation in v1. Cloudinary's video pipeline
       // handles h.264 normalization internally; we could add eager: [{ ... thumb }]
@@ -329,6 +337,108 @@ async function buildUsageHaystack(siteId) {
   return parts.join('\n');
 }
 
+/**
+ * POST /api/cms/site-uploads/copy
+ * { sourceMediaId, targetSiteId }
+ *
+ * Cross-site image reuse: copies an image the owner uploaded on ONE of their
+ * sites into ANOTHER site they own (the Library tab's site picker). A real
+ * COPY — Cloudinary duplicates the asset into the target site's folder and a
+ * new site_media row is inserted — rather than a shared reference, so each
+ * site stays self-contained: the per-subdomain folder convention holds, the
+ * "In use/Unused" scan stays accurate, and deleting the original never breaks
+ * the copy. Images only in v1.
+ */
+async function copyMedia(req, res) {
+  try {
+    if (!isCloudinaryConfigured()) return res.status(503).json({ error: 'Cloudinary is not configured.' });
+    const { sourceMediaId, targetSiteId } = req.body || {};
+    if (!sourceMediaId || !targetSiteId) {
+      return res.status(400).json({ error: 'sourceMediaId and targetSiteId required' });
+    }
+
+    const { data: media, error: mediaErr } = await supabase
+      .from('site_media')
+      .select('*')
+      .eq('id', sourceMediaId)
+      .single();
+    if (mediaErr || !media) return res.status(404).json({ error: 'Source media not found' });
+    if (isVideoMime(media.mime_type)) {
+      return res.status(400).json({ error: 'Only images can be copied across sites for now.' });
+    }
+
+    // Must own BOTH the source asset's site and the target site.
+    const [sourceSite, targetSite] = await Promise.all([
+      verifySiteOwnership(req.cmsUser.id, media.site_id),
+      verifySiteOwnership(req.cmsUser.id, targetSiteId),
+    ]);
+    if (!sourceSite || !targetSite) return res.status(403).json({ error: 'You do not own both sites' });
+
+    // Same-site pick — nothing to copy; hand back the existing asset.
+    if (media.site_id === targetSiteId) {
+      return res.json({ mediaId: media.id, secure_url: media.original_url, copied: false });
+    }
+
+    const contactId = await resolveContactId(req.cmsUser.id);
+    const id = crypto.randomUUID().replace(/-/g, '');
+    // Cloudinary pulls the existing delivery URL server-to-server (no re-upload
+    // from the browser). Well-formed sources (WebP within the dimension cap)
+    // copy byte-identical — no second lossy transcode. Legacy sources that
+    // predate the cap (oversized originals, seeded JPG/PNGs) get normalized to
+    // capped WebP on the way so the copy doesn't propagate the bloat.
+    const oversized = Math.max(media.width || 0, media.height || 0) > MAX_IMAGE_DIMENSION;
+    const notWebp = media.mime_type !== 'image/webp';
+    const normalize = oversized || notWebp;
+    const result = await cloudinary.uploader.upload(media.original_url, {
+      folder: targetSite.subdomain,
+      public_id: id,
+      resource_type: 'image',
+      ...(normalize
+        ? { format: 'webp', quality: 'auto:good', width: MAX_IMAGE_DIMENSION, height: MAX_IMAGE_DIMENSION, crop: 'limit' }
+        : {}),
+      context: {
+        site_id: targetSiteId,
+        uploaded_by: contactId || '',
+        alt: media.alt_text || '',
+        copied_from: media.storage_key || '',
+      },
+    });
+    const copiedMime = normalize ? 'image/webp' : media.mime_type;
+
+    const { data: copy, error: insertErr } = await supabase
+      .from('site_media')
+      .insert({
+        site_id: targetSiteId,
+        filename: media.filename,
+        mime_type: copiedMime,
+        size_bytes: result.bytes,
+        width: result.width ?? null,
+        height: result.height ?? null,
+        storage_key: result.public_id,
+        storage_provider: 'cloudinary',
+        original_url: result.secure_url,
+        alt_text: media.alt_text,
+        uploaded_by: contactId,
+      })
+      .select()
+      .single();
+    if (insertErr) console.warn('[uploads/copy] site_media insert failed:', insertErr);
+
+    return res.json({
+      mediaId: copy?.id || null,
+      secure_url: result.secure_url,
+      public_id: result.public_id,
+      width: result.width ?? null,
+      height: result.height ?? null,
+      bytes: result.bytes,
+      copied: true,
+    });
+  } catch (err) {
+    console.error('[uploads/copy] error:', err);
+    return res.status(500).json({ error: 'Copy failed' });
+  }
+}
+
 async function listMedia(req, res) {
   try {
     const siteId = req.query.siteId;
@@ -367,4 +477,4 @@ async function listMedia(req, res) {
   }
 }
 
-module.exports = { healthcheck, uploadImage, deleteMedia, listMedia };
+module.exports = { healthcheck, uploadImage, deleteMedia, listMedia, copyMedia };

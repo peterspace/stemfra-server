@@ -5,6 +5,7 @@
 // Service-role client (bypasses RLS) is required to set auth_user_id.
 // Single-var supabase require per convention.
 const supabase = require('../config/supabase');
+const { sendCancellationEmails, sendRescheduleEmails } = require('../lib/bookingEmails');
 const { stripe } = require('../config/stripe');
 const { logSiteActivity } = require('../lib/activity');
 const { DateTime } = require('luxon');
@@ -130,6 +131,8 @@ async function cancelBooking(req, res) {
       siteId: b.site_id, actorName: user.email,
       action: 'booking_cancelled_by_member', entityType: 'site_booking', entityId: b.id,
     });
+    // N1: cancellation confirmation to the member + heads-up to the owner.
+    sendCancellationEmails(b.id, { cancelledByBusiness: false }).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     console.error('[siteMembers.cancelBooking]', err.message);
@@ -272,6 +275,8 @@ async function rescheduleBooking(req, res) {
       action: 'booking_rescheduled_by_member', entityType: 'site_booking', entityId: b.id,
       details: { new_starts_at: newStartISO },
     });
+    // N1: new-time confirmation to the member (old time shown for clarity).
+    sendRescheduleEmails(b.id, { oldStartsAtISO: b.starts_at }).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     console.error('[siteMembers.rescheduleBooking]', err.message);

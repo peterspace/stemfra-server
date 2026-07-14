@@ -277,7 +277,34 @@ Session log: `docs/WORK_2026-07-04.md`. Everything below is queued from the 2026
 - [ ] Peter's real-browser walk of :5181 (the completeness-gate visual half)
 - [ ] Remaining Escape 🟡 fidelity: `facility_highlights:process-steps` · `service_menu:diamond-split` · `single-rate-panel` pricing · per-section `backgrounds` painting (dark/white bands — benefits every theme)
 - [ ] Confirm massage/spa pricing placeholders (massage $1200/79 · spa $1500/99 — set by Claude, unconfirmed)
-- [ ] Create the Cloudflare Pages project `stemfra-massage` (prod prerequisite)
+- [x] ~~Create the Cloudflare Pages project `stemfra-massage`~~ DONE — verified 2026-07-10: all 7 Pages projects (4 templates + CMS + massage + spa) exist, env vars complete, latest deploys green (repo pushed 2026-07-07).
 - [ ] Teach the n8n lead-gen workflow the 'massage' vertical (3-place sync: CRM + server done)
 - [ ] Marketing site wiring for massage (themes.js gallery entry, pricing page, demo site + Starter flag) — after the theme walk
 - [ ] **Spa vertical**: clone from the COMPLETED massage (app copy on :5182 + seed via onboardCustomer + reactivate the parked `spa`/`spa-classic` DB rows re-sourced from massage)
+
+---
+
+## 📌 Status refresh (2026-07-10)
+
+**Peter's dispositions on the open list:**
+- Porkbun: verification DONE — only **funding the prepaid balance** remains.
+- Wellness pricing: **uniform 3-tier pricing for ALL verticals** (no per-vertical prices). ✅ DB `verticals` rows aligned 2026-07-10 (`build_price_cents=100000`, `monthly_price_cents=9900` fleet-wide — these feed publishController + admin Stripe checkout, so the legacy $750/49-style numbers would have billed wrong). Deeper follow-up: the publish flow should eventually read the chosen TIER's price from `crm_settings.billing_plans`, not the vertical row.
+- ✅ Yoga un-flagged (theme card + drawer "Soon" badge removed; Wren Yoga card live w/ hero-fold).
+- ✅ Annual discount threaded: Pricing.jsx now uses catalog `annual_discount_months` (verticals.js constant = fallback only).
+- ~~Template Pages env~~ VERIFIED 2026-07-10 via CF API: all 7 projects carry VITE_SUPABASE_URL/ANON_KEY/SERVER_URL + NODE_VERSION — nothing to rectify.
+- CRM `.env` stays on the dev endpoint during development (flip at deploy time only).
+
+**P9 corrections (stale):** spa vertical DONE (3 themes: Ellaris default · Lumora · Respira); massage walk + marketing wiring DONE (themes.js/pricing/products/Starters all carry massage+spa); what remains from P9 = commit pass · Docker/Playwright base · CF Pages projects for massage+spa · n8n massage(+spa) vertical · Escape 🟡 fidelity variants.
+
+## P10 — New planned arcs (2026-07-10, PLANNING AGREED — build order TBD with Peter)
+_Peter's cases #1–#11 (#8 beta-test done; #10 = the standing pending list above). **Full Q&A + agreed plans: `docs/P10_CASES.md`.** Build order agreed: 40 → 38 → 39 → 43+45 → 37 → 42-R1 → 41._
+
+37. **CMS ease-of-use program** (case 1) — honest score ~6.5/10 today. Plan: (a) plain-language + guidance polish pass in-product; (b) click-to-edit live preview (the parked Phase B postMessage bridge); (c) 5–10 short task videos + docs AFTER the UI stabilizes; (d) NO Squarespace-style version branding — use the existing notification system (`broadcast_announcement`) as an in-app "What's new" channel + a changelog page; (e) usability sessions with 2–3 founding-cohort owners.
+38. **CMS Theme studio + plans display** (case 2) — upgrade Settings→Style themes grid to the marketing-gallery register (hero-fold mockups via `GET /api/marketing/mockups`, brand/city, Preview → demo, Switch stays); tier cards in Account→Billing "Change plan" rendered from `/api/plans` (same catalog as marketing).
+39. **Promo banners/popups catalog** (case 3) — `site_promotions` schema + ~10 token-driven banner archetypes (overlay popups + inline bands + top bar) + template `PromotionHost` (frequency-capped, a11y) + CMS Promotions editor with visual style picker. v1 display-only; v2 ties into promo codes when payments land.
+40. **Staff mode in the CMS** (case 4) — NOT a separate admin CMS: @stemfra.com Google auth recognized in the existing CMS → all-sites picker (staff RLS already grants data access) → "Editing as Stemfra staff" banner + `site_activity` audit on every write + server-side staff bypass of `verifySiteOwnership` (logged). CRM keeps ops; CMS becomes the shared content-editing surface.
+41. **CMS mobile** (case 5) — ladder: (1) responsive polish + PWA (installable, web-push via the existing notification system) NOW-ish; (2) store wrapper (Capacitor) when store presence matters; (3) native = parked until client demand.
+42. **Website "Remix" AI theme composer** (case 6) — phased: R1 machine-readable **variant registry** (archetype→variants→content keys) + per-variant preview captures (extend the mockup pipeline) + a visual component browser; R2 remix engine (LLM picks arrangement/variants/palette/fonts within compatibility rules → writes an inactive `templates` row → theme-audit validates → human approves); R3 owner-facing per-section "swap the look" picker. Internal catalog-velocity tool FIRST (distinctness standard still gates what ships).
+43. **Domain → Cloudflare zone automation** (case 7) — today: registered + DNS at Porkbun, CF only validates the Pages custom domain. Target: keep registration at Porkbun, **move DNS to a CF zone** at purchase (create zone via CF API → set nameservers via Porkbun API) for proxy/SSL/WAF + programmatic DNS (synergy w/ email routing #34 + Workspace #45). Full registrar transfer to CF = optional ≥60 days post-registration (ICANN lock), not v1. BYO-domain users keep ownership (connect-only, as today).
+44. **Email template suite + auth security** (case 9) — unified branded base template (header/footer) across ALL transactional mail (billing request/receipt, booking, welcome); customize Supabase Auth templates (OTP/magic-link) + wire custom SMTP for brand consistency; **new-device/location login alerts** (capture login events → email w/ "this was me / secure account"); 2FA TOTP already live in CMS → add recovery codes + staff enforcement; email-approved-login gate = later phase.
+45. **Customer professional email** (case 11) — ladder: (1) **Cloudflare Email Routing forwarding as the Pro perk** ($0 COGS, needs #43's CF-zone DNS); (2) Google Workspace referral/assisted setup (client pays Google); (3) full Workspace resale via a distributor (Pax8/Sherweb, ~$3–4 wholesale vs $7–8 retail) only at volume — needs reseller onboarding, provisioning via Reseller API, billing + support burden.

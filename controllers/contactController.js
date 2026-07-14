@@ -1,5 +1,5 @@
 const supabase = require('../config/supabase');
-const nodemailer = require('nodemailer');
+const { sendMail } = require('../lib/mailer');
 const buildNotificationEmail = require('../templates/notificationEmail');
 const buildConfirmationEmail = require('../templates/confirmationEmail');
 const { fireSpeedToLead } = require('../routes/speedToLead');
@@ -22,16 +22,6 @@ const KNOWN_TEMPLATE_SLUGS = new Set([
   'suite', 'academic', 'plate',
 ]);
 
-// ─── Reusable transporter ─────────────────────────────────────────────────────
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  });
-}
 
 // ─── POST /api/contact ────────────────────────────────────────────────────────
 const submitContact = async (req, res) => {
@@ -106,8 +96,6 @@ const submitContact = async (req, res) => {
       .then((r) => { if (!r.ok) console.warn('[contactController] speed-to-lead not started:', r.reason); })
       .catch((e) => console.error('[contactController] speed-to-lead error:', e.message));
 
-    const transporter = createTransporter();
-
     // 2. Internal notification → support@stemfra.com
     const notification = buildNotificationEmail({
       firstName: firstName.trim(),
@@ -119,12 +107,12 @@ const submitContact = async (req, res) => {
       createdAt: lead.created_at,
     });
 
-    const toStemfra = await transporter.sendMail({
-      from:    `"STEMfra" <${process.env.GMAIL_USER}>`,
-      to:      process.env.NOTIFY_EMAIL,
-      subject: notification.subject,
-      html:    notification.html,
-      text:    notification.text,
+    const toStemfra = await sendMail({
+      fromName: 'STEMfra',
+      to:       process.env.NOTIFY_EMAIL,
+      subject:  notification.subject,
+      html:     notification.html,
+      text:     notification.text,
     });
 
     console.log({ toStemfra });
@@ -143,12 +131,12 @@ const submitContact = async (req, res) => {
         message: cleanMessage,
       });
 
-      const toUser = await transporter.sendMail({
-        from:    `"STEMfra" <${process.env.GMAIL_USER}>`,
-        to:      cleanEmail,
-        subject: confirmation.subject,
-        html:    confirmation.html,
-        text:    confirmation.text,
+      const toUser = await sendMail({
+        fromName: 'STEMfra',
+        to:       cleanEmail,
+        subject:  confirmation.subject,
+        html:     confirmation.html,
+        text:     confirmation.text,
       });
 
       console.log({ toUser });

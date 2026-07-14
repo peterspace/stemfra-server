@@ -204,7 +204,9 @@ async function screenshotDemo(req, res) {
   // The legacy top-fold mode stays fixed at 1280×960.
   const width = (fullPage || clipMode) ? Math.min(Math.max(Number(viewportWidth) || 1280, 320), 2048) : 1280;
   const height = (fullPage || clipMode) ? Math.min(Math.max(Number(viewportHeight) || 720, 480), 1440) : 960;
-  const isMobile = (fullPage || clipMode) && width < 700; // phone-sized → emulate mobile (touch, mobile meta)
+  // Boolean() — the fold path leaves (fullPage || clipMode) undefined, and
+  // Playwright hard-rejects a non-boolean isMobile.
+  const isMobile = Boolean((fullPage || clipMode) && width < 700); // phone-sized → emulate mobile (touch, mobile meta)
 
   let browser;
   try {
@@ -638,6 +640,49 @@ async function deleteSaved(req, res) {
   }
 }
 
+// POST /api/admin/mockups/featured { starterId } — flag ONE demo per vertical as
+// "Featured" (the CRM Demo catalog's star). Exclusive within the vertical:
+// setting a demo clears `metadata.is_featured_demo` on its siblings — the same
+// pattern as featured team members on the template sites. Consumed via
+// GET /api/starters (`featured`) → the marketing showcase surfaces (e.g. the
+// Products drawer tablet).
+async function setFeaturedDemo(req, res) {
+  const { starterId } = req.body || {};
+  if (!starterId) return res.status(400).json({ error: 'starterId required' });
+  try {
+    const { data: target, error } = await supabase
+      .from('sites')
+      .select('id, vertical_id, metadata')
+      .eq('id', starterId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!target || !(target.metadata && target.metadata.is_starter === true)) {
+      return res.status(404).json({ error: 'Demo (starter) site not found' });
+    }
+    // Every starter in the SAME vertical: flag the target, clear the rest.
+    const { data: siblings, error: sibErr } = await supabase
+      .from('sites')
+      .select('id, metadata')
+      .eq('vertical_id', target.vertical_id)
+      .filter('metadata->>is_starter', 'eq', 'true');
+    if (sibErr) throw new Error(sibErr.message);
+    for (const s of siblings || []) {
+      const shouldHave = s.id === target.id;
+      const has = !!(s.metadata && s.metadata.is_featured_demo);
+      if (shouldHave === has) continue; // already correct — skip the write
+      const metadata = { ...(s.metadata || {}) };
+      if (shouldHave) metadata.is_featured_demo = true;
+      else delete metadata.is_featured_demo;
+      const { error: upErr } = await supabase.from('sites').update({ metadata }).eq('id', s.id);
+      if (upErr) throw new Error(upErr.message);
+    }
+    res.json({ ok: true, featured: starterId });
+  } catch (err) {
+    console.error('mockup setFeaturedDemo failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 // GET /api/marketing/mockups — PUBLIC (no auth). The marketing site reads saved hero
 // composites here, keyed by demo subdomain (newest saved mockup WITH a finalUrl per demo).
 // Only demo/Starter sites carry marketing_mockups, so scope the scan to them.
@@ -646,25 +691,40 @@ async function marketingMockups(req, res) {
     const { data: sites, error } = await supabase
       .from('sites')
       .select('subdomain, metadata')
-      .contains('metadata', { is_starter: true });
+      .contains('metadata', { is_starter: true })
+      .is('deleted_at', null); // soft-deleted demos drop out immediately
     if (error) throw new Error(error.message);
-    const byDomain = {};
+    // Newest saved mockup per (subdomain, SCENE) — the marketing surfaces each
+    // consume a different scene (grid-angled → home marquee, tablet → products
+    // sidebar, page-duo → theme cards, page-desktop-mobile → theme showcase),
+    // so one-per-subdomain isn't enough. Re-saving in the CRM re-skins only the
+    // matching surface. Consumers filter by `scene`.
+    const byKey = {};
     for (const s of sites || []) {
       const list = s.metadata && s.metadata.marketing_mockups;
       if (!Array.isArray(list)) continue;
       for (const m of list) {
         if (!m.finalUrl) continue;
-        const prev = byDomain[s.subdomain];
+        const key = `${s.subdomain}::${m.scene || 'default'}`;
+        const prev = byKey[key];
         if (!prev || String(m.updatedAt || '') > String(prev.updatedAt || '')) {
-          byDomain[s.subdomain] = { subdomain: s.subdomain, url: m.finalUrl, scene: m.scene || null, sceneLabel: m.sceneLabel || null, updatedAt: m.updatedAt || null };
+          byKey[key] = {
+            subdomain: s.subdomain,
+            url: m.finalUrl,
+            scene: m.scene || null,
+            sceneLabel: m.sceneLabel || null,
+            width: m.finalWidth || null,
+            height: m.finalHeight || null,
+            updatedAt: m.updatedAt || null,
+          };
         }
       }
     }
-    res.json({ mockups: Object.values(byDomain) });
+    res.json({ mockups: Object.values(byKey) });
   } catch (err) {
     console.error('marketingMockups failed:', err.message);
     res.status(500).json({ error: err.message });
   }
 }
 
-module.exports = { capture, listAssets, uploadAsset, deleteAsset, screenshotDemo, preparePage, listMasters, cropMaster, listSaved, saveMockup, deleteSaved, marketingMockups };
+module.exports = { capture, listAssets, uploadAsset, deleteAsset, screenshotDemo, preparePage, listMasters, cropMaster, listSaved, saveMockup, deleteSaved, setFeaturedDemo, marketingMockups };

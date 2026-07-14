@@ -4,7 +4,8 @@
 // mounted in index.js with express.raw() and registered BEFORE the global
 // express.json() parser. Single-var supabase require per server convention.
 const supabase = require('../config/supabase');
-const nodemailer = require('nodemailer');
+const emails = require('../templates/transactionalEmails');
+const { sendMail } = require('../lib/mailer');
 const { stripe } = require('../config/stripe');
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -79,13 +80,6 @@ async function handleMembershipCheckout(s) {
   else await supabase.from('site_subscriptions').insert(row);
 }
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-  });
-}
-
 // Paid-but-dropped backstop: a succeeded PaymentIntent with no booking means the
 // customer's card was charged but the booking never got written (e.g. the
 // browser died between confirmPayment and createBooking). We don't auto-create
@@ -104,8 +98,8 @@ async function alertOrphanPayment(pi) {
   const to = process.env.NOTIFY_EMAIL;
   if (!to) return;
   try {
-    await createTransporter().sendMail({
-      from: process.env.GMAIL_USER,
+    await sendMail({
+      fromName: 'STEMfra Sites',
       to,
       subject: `⚠ Orphan payment: $${amount} charged with no booking (${pi.id})`,
       text: [
@@ -118,6 +112,7 @@ async function alertOrphanPayment(pi) {
         '',
         'Action: reconcile manually — create the booking for the customer, or refund the charge in the Stripe dashboard.',
       ].join('\n'),
+      html: emails.staffOrphanPaymentAlert({ amountLabel: `$${amount}`, paymentIntentId: pi.id, siteId }),
     });
   } catch (e) {
     console.error('[stripe.webhook] orphan alert email failed:', e.message);

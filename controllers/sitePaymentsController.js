@@ -15,7 +15,7 @@ function config(_req, res) {
  * { ok:false, code, message, notReady } when the site can't take payments yet.
  * Shared by the public POST handler and the Front Desk in-chat payment flow.
  */
-async function createBookingIntent({ siteId, serviceId }) {
+async function createBookingIntent({ siteId, serviceId, customerEmail }) {
   if (!stripe) return { ok: false, code: 503, message: 'Payments are not configured.', notReady: true };
   if (!siteId || !serviceId) return { ok: false, code: 400, message: 'Missing siteId or serviceId.' };
 
@@ -46,6 +46,10 @@ async function createBookingIntent({ siteId, serviceId }) {
     amount,
     currency,
     automatic_payment_methods: { enabled: true },
+    // N1: Stripe emails the customer a receipt on success (LIVE mode only —
+    // test mode never sends, so this stays dormant until Stripe verification
+    // completes; no extra gate needed).
+    ...(customerEmail ? { receipt_email: customerEmail } : {}),
     ...(fee > 0 ? { application_fee_amount: fee } : {}),
     transfer_data: { destination: acct.stripe_account_id },
     on_behalf_of: acct.stripe_account_id,
@@ -61,7 +65,7 @@ async function createBookingIntent({ siteId, serviceId }) {
  */
 async function createIntent(req, res) {
   try {
-    const r = await createBookingIntent({ siteId: req.body?.siteId, serviceId: req.body?.serviceId });
+    const r = await createBookingIntent({ siteId: req.body?.siteId, serviceId: req.body?.serviceId, customerEmail: req.body?.customerEmail });
     if (!r.ok) return res.status(r.code).json({ success: false, message: r.message });
     if (r.free) return res.json({ success: true, free: true });
     res.json({ success: true, clientSecret: r.clientSecret, paymentIntentId: r.paymentIntentId, amount: r.amount, currency: r.currency, applicationFee: r.applicationFee, platformMargin: r.platformMargin });

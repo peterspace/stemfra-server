@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireStaffRole, PLATFORM_OPS } = require('../../middleware/staffAuth');
-const { capture, listAssets, uploadAsset, deleteAsset, screenshotDemo, preparePage, listMasters, cropMaster, listSaved, saveMockup, deleteSaved } = require('../../controllers/admin/mockupsController');
+const { capture, listAssets, uploadAsset, deleteAsset, screenshotDemo, preparePage, listMasters, cropMaster, listSaved, saveMockup, deleteSaved, setFeaturedDemo } = require('../../controllers/admin/mockupsController');
 
 // POST /api/admin/mockups/capture — render + screenshot a mockup config → Cloudinary.
 router.post('/capture', requireStaffRole(...PLATFORM_OPS), capture);
@@ -23,5 +23,9 @@ router.post('/crop-master', requireStaffRole(...PLATFORM_OPS), cropMaster);
 router.get('/saved', requireStaffRole(...PLATFORM_OPS), listSaved);
 router.post('/save', requireStaffRole(...PLATFORM_OPS), saveMockup);
 router.post('/delete-saved', requireStaffRole(...PLATFORM_OPS), deleteSaved);
+
+// POST /api/admin/mockups/featured — flag ONE demo per vertical as Featured
+// (exclusive; drives the marketing showcase surfaces via /api/starters).
+router.post('/featured', requireStaffRole(...PLATFORM_OPS), setFeaturedDemo);
 
 module.exports = router;

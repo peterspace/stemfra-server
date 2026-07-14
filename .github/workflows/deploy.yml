@@ -88,6 +88,10 @@ jobs:
             GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
             NOTIFY_EMAIL=support@stemfra.com
             LOGO_URL=https://stemfra.com/stemfra_logo.png
+            EMAIL_PROVIDER=resend
+            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+            RESEND_FROM_DOMAIN=mail.stemfra.com
+            RESEND_FROM_ADDRESS=notifications@mail.stemfra.com
             TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
             TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
             TWILIO_API_KEY_SID=${{ secrets.TWILIO_API_KEY_SID }}
@@ -115,6 +119,7 @@ jobs:
             CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}
             CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}
             CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
+            MOCKUP_RENDER_URL=https://crm.stemfra.com
             CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             CLOUDFLARE_ZONE_ID=${{ secrets.CLOUDFLARE_ZONE_ID }}
             CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}

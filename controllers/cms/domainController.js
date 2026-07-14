@@ -11,7 +11,9 @@ const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { projectFor } = require('../../lib/attachSiteDomain');
 const cf = require('../../lib/cloudflarePages');
 const registrar = require('../../lib/registrar');
+const { provisionDomainZone } = require('../../lib/domainZone');
 const { logSiteActivity } = require('../../lib/activity');
+const billing = require('../../lib/billing');
 
 const DOMAIN_RE = /^([a-z0-9-]+\.)+[a-z]{2,}$/;
 
@@ -172,44 +174,30 @@ async function registerOwn(req, res) {
     if (!reg.isConfigured()) return res.status(503).json({ error: 'Domain registration is not available right now.', code: 'registrar_unconfigured' });
     if (!domain) return res.status(400).json({ error: 'domain is required' });
 
-    const { customDomain, slug } = await loadVerticalAndDomain(siteId);
+    const { customDomain } = await loadVerticalAndDomain(siteId);
     if (customDomain) {
       return res.status(409).json({ error: `This site is already connected to ${customDomain}. Disconnect it first to register a new domain.` });
     }
 
-    // Instant-buy gate: an ACTIVE platform subscription to invoice against.
+    // A subscription to invoice the domain against (created by the publish flow).
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('id, currency, provider, status')
       .eq('site_id', siteId)
       .maybeSingle();
-    if (!sub || sub.status !== 'active') {
-      return res.status(402).json({ error: 'Domain purchases need an active Stemfra plan. Contact us and we will set you up.', code: 'subscription_required' });
+    if (!sub) {
+      return res.status(402).json({ error: 'Set up your Stemfra plan first — then we can add a domain to your invoice.', code: 'subscription_required' });
     }
 
-    // Fresh availability + exact cost (the registrar rejects a mismatched cost).
+    // Fresh availability + exact retail cost for the invoice.
     const avail = await reg.checkDomain(domain);
     if (!avail.available) return res.status(409).json({ error: `${avail.domain} is not available`, availability: avail });
 
-    // Dev-only dry run for end-to-end testing without spending.
-    const dryRun = process.env.NODE_ENV !== 'production' && req.body?.dryRun === true;
-    const result = await reg.register(avail.domain, { costCents: avail.costCents, whoisPrivacy: true, dryRun });
-    if (dryRun) {
-      return res.json({ ok: true, dryRun: true, domain: avail.domain, costCents: avail.costCents, retailCents: avail.retailCents });
-    }
-
-    // Real registration succeeded — wire everything best-effort (never lose the purchase).
-    const project = projectFor(slug);
-    const target = `${project}.pages.dev`;
-    const steps = {};
-    try { await reg.createDnsRecord(avail.domain, { type: 'ALIAS', name: '', content: target }); steps.apex = 'ok'; }
-    catch (e) { steps.apex = e.message; }
-    try { await reg.createDnsRecord(avail.domain, { type: 'CNAME', name: 'www', content: target }); steps.www = 'ok'; }
-    catch (e) { steps.www = e.message; }
-    try { await cf.attachCustomDomain(project, avail.domain); steps.attach = 'ok'; }
-    catch (e) { steps.attach = e.message; }
-    await supabase.from('sites').update({ custom_domain: avail.domain }).eq('id', siteId);
-
+    // GATED (2026-07-14): we do NOT purchase the domain at the registrar here.
+    // Instead we invoice the owner our retail price via Payoneer and email a
+    // payment request; Stemfra staff register + wire the domain once payment
+    // clears (admin registerDomain). This avoids spending at the registrar
+    // before the customer has paid.
     let chargeId = null;
     try {
       const { data: ch } = await supabase.from('billing_charges').insert({
@@ -217,21 +205,23 @@ async function registerOwn(req, res) {
         line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
         amount_cents: avail.retailCents, currency: sub.currency || 'USD',
         due_date: dueInDays(7), status: 'due', provider: sub.provider || 'payoneer',
-        metadata: { type: 'domain_registration', domain: avail.domain, order_id: result.orderId, cost_cents: avail.costCents, registrar: process.env.DOMAIN_REGISTRAR || 'porkbun', purchased_by: 'owner' },
+        metadata: { type: 'domain_registration', domain: avail.domain, cost_cents: avail.costCents, registrar: process.env.DOMAIN_REGISTRAR || 'porkbun', purchased_by: 'owner', pending_registration: true },
       }).select('id').single();
       chargeId = ch?.id || null;
-    } catch (e) { steps.billing = e.message; }
+    } catch (e) {
+      return res.status(500).json({ error: `Could not create the invoice: ${e.message}` });
+    }
+
+    // Email the payment request (best-effort; the insert already rang the bell).
+    if (chargeId) { try { await billing.markRequested(chargeId, { by: null }); } catch { /* email best-effort */ } }
 
     logSiteActivity({
-      siteId, action: 'domain_registered', actorName: req.cmsUser.email || 'owner',
+      siteId, action: 'domain_invoice_requested', actorName: req.cmsUser.email || 'owner',
       entityType: 'site', entityId: siteId,
-      details: { domain: avail.domain, order_id: result.orderId, cost_cents: avail.costCents, retail_cents: avail.retailCents, steps, charge_id: chargeId, purchased_by: 'owner' },
+      details: { domain: avail.domain, retail_cents: avail.retailCents, cost_cents: avail.costCents, charge_id: chargeId, purchased_by: 'owner' },
     });
 
-    res.json({
-      ok: true, domain: avail.domain, retailCents: avail.retailCents,
-      cnameTarget: target, steps, billed: !!chargeId,
-    });
+    res.json({ ok: true, invoiced: true, domain: avail.domain, retailCents: avail.retailCents });
   } catch (e) {
     res.status(502).json({ error: e.message, porkbun: e.porkbun || undefined });
   }

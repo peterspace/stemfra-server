@@ -12,6 +12,8 @@ const { startStalePresenceSweeper } = require('./routes/presence');
 const { startOutreachReplySweeper } = require('./lib/outreachReplySweeper');
 const { startBillingCycleSweeper } = require('./lib/billingCycleSweeper');
 const { startSiteDeletionSweeper } = require('./lib/siteDeletionSweeper');
+const { startBookingReminderSweeper } = require('./lib/bookingReminderSweeper');
+const { startLifecycleSweeper } = require('./lib/lifecycleSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
@@ -30,6 +32,7 @@ const cmsSiteUploadsRouter = require('./routes/cms/siteUploads');
 const cmsPaymentsRouter = require('./routes/cms/payments');
 const cmsPublishRouter = require('./routes/cms/publish');
 const cmsSiteDomainRouter = require('./routes/cms/siteDomain');
+const cmsSiteEmailRouter = require('./routes/cms/siteEmail');
 const cmsSitesRouter = require('./routes/cms/sites');
 const cmsAssistantRouter = require('./routes/cms/assistant');
 const busboy = require('connect-busboy');
@@ -123,6 +126,7 @@ app.use('/api/presence',      presenceRoutes);
 app.use('/api/leadgen',       leadgenRoutes);
 app.use('/api/speed-to-lead', speedToLeadRoutes);
 app.use('/api/site-forms',    siteFormsRoutes);
+app.use('/api/site-emails',   require('./routes/emailPrefs'));
 app.use('/api/site-chat',     require('./routes/siteChat'));
 app.use('/api/concierge',     require('./routes/concierge'));
 app.use('/api/voice',         require('./routes/voice'));
@@ -140,6 +144,8 @@ app.use('/api/cms/site-uploads', cmsSiteUploadsRouter);
 app.use('/api/cms/payments', cmsPaymentsRouter);
 app.use('/api/cms/site-publish', cmsPublishRouter);
 app.use('/api/cms/site-domain', cmsSiteDomainRouter);
+app.use('/api/cms/site-email', cmsSiteEmailRouter);
+app.use('/api/cms/bookings', require('./routes/cms/bookings'));
 app.use('/api/cms/sites', cmsSitesRouter);
 app.use('/api/cms/billing', require('./routes/cms/billing'));
 app.use('/api/cms/assistant', cmsAssistantRouter);
@@ -151,6 +157,8 @@ app.use('/api/admin/billing', require('./routes/admin/billing'));
 app.use('/api/admin/bookings', require('./routes/admin/bookings'));
 app.use('/api/admin/memberships', require('./routes/admin/memberships'));
 app.use('/api/admin/mockups', require('./routes/admin/mockups'));
+app.use('/api/admin/marketing-assets', require('./routes/admin/marketingAssets'));
+app.use('/api/admin/theme-registry', require('./routes/admin/themeRegistry'));
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {
@@ -182,6 +190,9 @@ server.listen(PORT, () => {
   // Site deletion: hard-purge sites that have been soft-deleted past the 90-day
   // grace window (Cloudinary media + all DB rows). See lib/siteDeletion.js.
   startSiteDeletionSweeper();
+  startBookingReminderSweeper();
+  // Lifecycle/marketing emails (N4): first-visit follow-up, etc. Opt-out honored.
+  startLifecycleSweeper();
   // Lead-gen follow-up sequencer (A2 → read-gated call → A8 → A20). Inert until
   // crm_settings.leadgen_sequencer.enabled = true.
   startOutreachSequencer();

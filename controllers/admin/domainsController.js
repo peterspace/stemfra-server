@@ -7,6 +7,7 @@ const supabase = require('../../config/supabase');
 const registrar = require('../../lib/registrar');
 const cf = require('../../lib/cloudflarePages');
 const { projectFor } = require('../../lib/verticalConfig');
+const { provisionDomainZone } = require('../../lib/domainZone');
 const { logSiteActivity } = require('../../lib/activity');
 
 const dueInDays = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
@@ -81,6 +82,10 @@ async function registerDomain(req, res) {
     catch (e) { steps.www = e.message; }
     try { await cf.attachCustomDomain(project, avail.domain); steps.attach = 'ok'; }
     catch (e) { steps.attach = e.message; }
+    // Case 7: Cloudflare zone + NS delegation + Email Routing (shared orchestrator —
+    // keep in step with cms/domainController.registerOwn).
+    try { const z = await provisionDomainZone(avail.domain, target); Object.assign(steps, z.steps); }
+    catch (e) { steps.zone = e.message; }
     await supabase.from('sites').update({ custom_domain: avail.domain }).eq('id', siteId);
 
     // Bill the customer our retail price (one-off). Needs a subscription to hang

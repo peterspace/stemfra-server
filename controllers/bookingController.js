@@ -1,16 +1,32 @@
 const supabase = require('../config/supabase');
-const nodemailer = require('nodemailer');
 const { DateTime } = require('luxon');
 const { stripe } = require('../config/stripe');
-
-function createTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-  });
-}
+const { sendMail } = require('../lib/mailer');
 
 const en = (v) => (v && typeof v === 'object' ? (v.en ?? '') : (v || ''));
+const emails = require('../templates/transactionalEmails');
+const { sendOwnerNewBookingEmail } = require('./../lib/bookingEmails');
+
+// Tenant email bits for confirmations: the business logo
+// (site_theme_settings.logo_url) + its public email (home location_map section
+// content.email, CMS-editable) — used in the branded header, the anti-phishing
+// footer line, and as the reply-to so "just reply" actually reaches the
+// business. Best-effort: the confirmation still sends without them.
+const getTenantEmailBits = async (siteId) => {
+  const bits = { logoUrl: null, businessEmail: null, businessUrl: null };
+  try {
+    const { data: theme } = await supabase.from('site_theme_settings').select('logo_url').eq('site_id', siteId).maybeSingle();
+    bits.logoUrl = theme?.logo_url || null;
+    const { data: site } = await supabase.from('sites').select('subdomain, custom_domain').eq('id', siteId).maybeSingle();
+    if (site) bits.businessUrl = `https://${site.custom_domain || `${site.subdomain}.stemfra.com`}`;
+    const { data: page } = await supabase.from('site_pages').select('id').eq('site_id', siteId).eq('slug', 'home').maybeSingle();
+    if (page) {
+      const { data: secs } = await supabase.from('site_sections').select('content').eq('page_id', page.id).eq('section_type', 'location_map').limit(1);
+      bits.businessEmail = secs?.[0]?.content?.email || null;
+    }
+  } catch { /* best-effort */ }
+  return bits;
+};
 
 const SLOT_GRID_MINUTES = 15;
 
@@ -241,18 +257,34 @@ const placeBooking = async ({
   // Best-effort confirmation email to the customer
   try {
     if (customer.email) {
-      const transporter = createTransporter();
-      await transporter.sendMail({
-        from: `"${emailFromName}" <${process.env.GMAIL_USER}>`,
+      const bits = await getTenantEmailBits(siteId);
+      await sendMail({
+        fromName: emailFromName,
+        replyTo: bits.businessEmail || undefined,
         to: customer.email,
         subject: 'Your appointment is confirmed',
         text: `Your appointment is confirmed for ${startsAt.toFormat('cccc, LLLL d')} at ${startsAt.toFormat('h:mm a')}.\n\nWe look forward to seeing you.`,
+        html: emails.bookingConfirmation({
+          businessName: emailFromName,
+          businessLogoUrl: bits.logoUrl,
+        businessUrl: bits.businessUrl,
+          businessEmail: bits.businessEmail,
+          firstName: customer.firstName,
+          serviceName: en(service.name) || 'Appointment',
+          dateLabel: startsAt.toFormat('cccc, LLLL d'),
+          timeLabel: startsAt.toFormat('h:mm a'),
+          durationLabel: service.duration_minutes ? `${service.duration_minutes} min` : null,
+        }),
       });
       await supabase.from('site_bookings').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', booking.id);
     }
   } catch (emailErr) {
     console.error('booking confirmation email failed:', emailErr.message);
   }
+
+  // N1: owner "you have a new booking" email (fire-and-forget; site toggle
+  // via site_theme_settings.metadata.notify_owner_bookings !== false).
+  sendOwnerNewBookingEmail(booking.id).catch(() => {});
 
   return {
     ok: true,
@@ -624,21 +656,35 @@ const createBookingGroup = async (req, res) => {
             `\n\nPlease visit our booking page to pick new times for these.`
           : '';
 
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-        });
-        await transporter.sendMail({
-          from: `"Maison Lune" <${process.env.GMAIL_USER}>`,
+        const bits = await getTenantEmailBits(siteId);
+        await sendMail({
+          fromName: 'Maison Lune',
+          replyTo: bits.businessEmail || undefined,
           to: customer.email,
           subject: 'Your visit is confirmed',
           text: `Your visit is confirmed.\n\n${lines}\n\n${totalLine}${failureLines}\n\nWe look forward to seeing you.`,
+          html: emails.visitConfirmation({
+            businessName: 'Maison Lune',
+            businessLogoUrl: bits.logoUrl,
+            businessUrl: bits.businessUrl,
+        businessUrl: bits.businessUrl,
+            businessEmail: bits.businessEmail,
+            dateLabel: booked[0]?.date || '',
+            items: booked.map(b => ({ time: b.time, service: `${b.serviceName?.en || 'Service'} · $${(b.priceCents / 100).toFixed(0)}` })),
+            totalLabel: `$${(booked.reduce((s, b) => s + b.priceCents, 0) / 100).toFixed(0)}`,
+            failureNote: failed.length > 0
+              ? `Some services could not be booked (the slots were just taken): ${failed.map(f => f.serviceName?.en || 'Service').join(', ')}. Please pick new times on the booking page.`
+              : null,
+          }),
         });
         await supabase.from('site_booking_groups').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', group.id);
       }
     } catch (emailErr) {
       console.error('booking-group confirmation email failed:', emailErr.message);
     }
+
+    // N1: one owner notification for the visit (first booked item carries the summary).
+    if (booked[0]?.id) sendOwnerNewBookingEmail(booked[0].id).catch(() => {});
 
     return res.status(201).json({
       success: true,
@@ -790,18 +836,30 @@ const bookClassSession = async ({ siteId, sessionId, customer, notes, paymentInt
 
   try {
     if (customer.email) {
-      const transporter = createTransporter();
-      await transporter.sendMail({
-        from: `"${emailFromName}" <${process.env.GMAIL_USER}>`,
+      const bits = await getTenantEmailBits(siteId);
+      await sendMail({
+        fromName: emailFromName,
+        replyTo: bits.businessEmail || undefined,
         to: customer.email,
         subject: 'Your class is booked',
         text: `You're booked for ${en(s.service?.name)} on ${start.toFormat('cccc, LLLL d')} at ${start.toFormat('h:mm a')}.\n\nSee you there!`,
+        html: emails.classConfirmation({
+          businessName: emailFromName,
+          businessLogoUrl: bits.logoUrl,
+        businessUrl: bits.businessUrl,
+          businessEmail: bits.businessEmail,
+          serviceName: en(s.service?.name) || 'Class',
+          dateLabel: start.toFormat('cccc, LLLL d'),
+          timeLabel: start.toFormat('h:mm a'),
+        }),
       });
       await supabase.from('site_bookings').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', booking.id);
     }
   } catch (emailErr) {
     console.error('class confirmation email failed:', emailErr.message);
   }
+
+  sendOwnerNewBookingEmail(booking.id).catch(() => {});
 
   return { ok: true, code: 201, booking: { id: booking.id, date: start.toFormat('cccc, LLLL d'), time: start.toFormat('h:mm a') } };
 };

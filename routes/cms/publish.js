@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const { requireCmsAuth } = require('../../middleware/cmsAuth');
-const { getReadiness, publish, unpublish, billingCheckout } = require('../../controllers/cms/publishController');
+const { getReadiness, publish, unpublish, billingCheckout, requestPublishInvoice } = require('../../controllers/cms/publishController');
 
 // All auth-gated + ownership-checked in the controller.
 router.get('/readiness/:siteId', requireCmsAuth, getReadiness);
 router.post('/publish', requireCmsAuth, publish);
 router.post('/unpublish', requireCmsAuth, unpublish);
-router.post('/billing-checkout', requireCmsAuth, billingCheckout);
+router.post('/billing-checkout', requireCmsAuth, billingCheckout); // Stripe (gated off for now)
+router.post('/request-invoice', requireCmsAuth, requestPublishInvoice); // Payoneer invoice-to-publish
 
 module.exports = router;
