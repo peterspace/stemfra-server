@@ -135,3 +135,7 @@ jobs:
             STRIPE_SUBSCRIPTION_APP_FEE_PCT=4.5
             CMS_URL=https://cms.stemfra.com
             PLATFORM_BILLING_RETURN_URL=https://cms.stemfra.com
+            DOMAIN_REGISTRAR=porkbun
+            PORKBUN_API_KEY=${{ secrets.PORKBUN_API_KEY }}
+            PORKBUN_SECRET_API_KEY=${{ secrets.PORKBUN_SECRET_API_KEY }}
+            STEMFRA_ADMIN_SECRET=66603862aa074ad66f1562685e882c039cc862153bb9af38

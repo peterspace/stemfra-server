@@ -25,9 +25,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 # Chromium + its OS dependencies (as root; --with-deps runs apt-get).
 # The mockup controllers already launch with --no-sandbox (required in containers).
-RUN npx playwright install --with-deps chromium \
+# NON-FATAL: the browser is only needed by the staff mockup-CAPTURE endpoints; a
+# download hiccup on the VPS builder must NOT block the whole API deploy, so we
+# never fail the build here (playwright's npm package still loads at runtime;
+# only a live capture would degrade if chromium is absent).
+RUN (npx playwright install --with-deps chromium || echo "WARN: chromium install failed — mockup capture will be degraded") \
   && rm -rf /var/lib/apt/lists/* \
-  && chmod -R a+rX /ms-playwright
+  && (chmod -R a+rX /ms-playwright 2>/dev/null || true)
 
 USER node
 COPY --chown=node:node . .
