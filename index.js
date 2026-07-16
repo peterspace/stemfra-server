@@ -59,6 +59,7 @@ const allowedOrigins = [
   'http://localhost:5182',   // stemfra_spa template (dev — built after massage)
   'http://localhost:5180',   // stemfra_cms (dev)
   'http://localhost:5178',   // stemfra-ops CRM (dev)
+  'http://localhost:5183',   // stemfra_business (dev — plans & pitch decks)
 ];
 
 // Pattern-matched origins for the multi-tenant Cloudflare Pages deployments.
@@ -120,6 +121,7 @@ app.use('/api/starters',   require('./routes/starters'));   // public Starter ca
 app.use('/api/marketing',  require('./routes/marketing'));  // public marketing-site reads (hero mockups)
 app.use('/api/insights', insightsRoutes);
 app.use('/api/plans',    require('./routes/plans'));   // public pricing catalog (single source)
+app.use('/api/business', require('./routes/business')); // stemfra_business app: AI drafting copilot (staff-only)
 app.use('/api/twilio',        twilioRoutes);
 app.use('/api/user-settings', userSettingsRoutes);
 app.use('/api/presence',      presenceRoutes);

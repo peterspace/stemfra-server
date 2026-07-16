@@ -129,6 +129,14 @@ On success: streams the file directly into `cloudinary.uploader.upload_stream` (
 
 **Payments (`/api/cms/payments`, `controllers/cms/paymentsController.js`)** — Stripe Connect (Express). `POST /connect-link` (create/reuse Express account + onboarding link), `GET /status?siteId=` (refresh capabilities from Stripe; also returns `account.livemode` for the CMS "Test mode" badge), `POST /dashboard-link` (added 2026-06-23 — `stripe.accounts.createLoginLink` → Express dashboard, for the CMS "Manage in Stripe" link), `GET /healthcheck`.
 
+## Business app endpoint (`/api/business/*`, 2026-07-16)
+
+Serves the **stemfra_business** app (staff-only business-plan / pitch-deck builder at `localhost:5183`). `routes/business.js` + `lib/businessAssist.js`. Document PERSISTENCE is NOT here — it lives in the browser via the `business_documents` table + staff RLS (the app writes directly, no server round-trip). This route only serves the **AI drafting copilot**, which needs the server-held `OPENAI_API_KEY`:
+- `GET /assist/healthcheck` — `{ ok, configured, model }`.
+- `POST /assist` — `requireStaffAuth`. Body `{ mode: 'draft'|'edit', instruction, context?, blockType?, block? }` → returns `{ block }` (one block's content object; the client re-attaches id/visible/type). Uses GPT (`BUSINESS_MODEL` → `LEADGEN_MODEL` → `gpt-4o`), consistent with the 2026-06-26 "back-office drafting standardizes on OpenAI" decision (same key as leadgenDraft/voiceBrain). System prompt carries the block-shape catalog + the "pre-revenue, never fabricate traction/stats" guardrail; `live-metric`/`divider` are never AI-drafted. CORS: `localhost:5183` added to the allowlist.
+
+`business_documents` table (staff-only RLS via `is_stemfra_staff()`): `{ id, slug (unique), kind, title, blocks jsonb, created_at, updated_at, updated_by }`. One row per document-type slug for v1. Purely additive/isolated — no other app references it. Full app docs: `stemfra_business/CLAUDE.md`.
+
 ## CMS auth middleware
 
 `middleware/cmsAuth.js`. Exports three helpers used by the upload routes (and intended for every future CMS endpoint):
