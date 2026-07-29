@@ -17,12 +17,21 @@ model** (`docs/COMMISSION_MODEL.md`)._
    CRM `/site-monitor` (`pages/SiteMonitor.jsx` + `useSiteMonitor`): window presets +
    custom range, "Inactive > 1 year" filter, sort, totals strip, freshness tints, manual
    Nudge (mailto) + open-site. No automatic dormancy actions, by design.
-2. **Task 56 — Public Docs / Help Center: SPEC WRITTEN 2026-07-29, delegated.**
-   Full build spec at `stemfra_client/docs/DOCS_CENTER_SPEC.md` (Airwallex-pattern
-   shell on WHITE, /docs + /docs/:category + /docs/:category/:slug, structured-block
-   content, 6 categories / 25 articles with per-article authoritative sources + hard
-   truth rules: no tiers/SMS/auto-debit/voice). Execution = an Opus 4.8 executor
-   session per the Advisor strategy; Fable reviews after. Do not push (deploys).
+2. **Task 56 — Public Docs / Help Center: ✅ BUILT 2026-07-29 (committed, not pushed).**
+   Live in `stemfra_client` at `/docs` + `/docs/:category` + `/docs/:category/:slug`.
+   Structured-block content in `src/app/docs/data/{gettingStarted,domains,payments,
+   bookings,billing,account}.js` (6 categories / 25 articles) + `index.js` registry;
+   components in `src/app/docs/` (DocsLayout/Sidebar/Toc/Blocks/Hub/Category/Article),
+   all on WHITE canvas (Peter's call). Wired into routes.js (+ PRERENDER_PATHS via
+   `docsPaths()`), seo.js (`seoForDocs`), Footer ("Help Center" link) + FAQ cross-link.
+   Truth rules held (no tiers/SMS/auto-debit/voice; commission framing throughout).
+   Verified: `npm run build` prerenders 48 routes (32 docs) + sitemap; browser walk
+   of hub + Stripe article (images/table/callout/TOC render); all 10 internal links
+   resolve; `grep -R "—" src/app/docs` clean. Spec: `stemfra_client/docs/DOCS_CENTER_SPEC.md`.
+   ⚠ Follow-up (flagged, NOT done): `stemfra_client/src/app/pages/FAQ.jsx` and
+   `stemfra_platform/docs/STRIPE_ONBOARDING.md` still carry the OLD subscription-model
+   language ("$1,000 setup fee", "monthly subscription", "not a percentage") that
+   contradicts the commission model — should be rewritten to match /fees + the docs.
 3. **Task 57 — domain policy:** ✅ onboarding "Do you already have a website domain?"
    question DONE (2026-07-29, verified UI + persistence) — signup step 1 cards (Not yet /
    Yes I own one + optional domain input); answer normalized (lowercase, proto/www/path
@@ -493,13 +502,14 @@ non-external-dependency items can start now._
   owner/staff-INITIATED deletion only.)
 
 New tasks:
-56. **Public Docs / Help Center** (NEW — "every major platform has docs, we don't").
-    A markdown-driven, searchable help center at `stemfra.com/docs` (or `help.`/`docs.`).
-    Categories: Getting started · **Domains (connect / buy / transfer — seed from the
-    CF Registrar research + our own flows)** · CMS how-tos (content/media/themes) ·
-    Bookings & payments · SMS & notifications · Billing & commission · Account. Payoffs:
-    support deflection + SEO + a legitimacy signal for Airwallex/A2P compliance. Ties
-    into P10 case-1 task videos. **Buildable NOW — no external dependency.**
+56. **Public Docs / Help Center** — ✅ DONE 2026-07-29 (committed, not pushed; see
+    the top-status block for the file map + verification + the FAQ/STRIPE_ONBOARDING
+    follow-up). Shipped as a structured-block help center at `stemfra.com/docs` on a
+    WHITE canvas: 6 categories / 25 articles (Getting started · Domains · Payments &
+    Stripe · Bookings · Billing & commission · Account), each article with per-section
+    sources, prerendered + in the sitemap, linked from the Footer + FAQ. Truth rules
+    held (no tiers/SMS/auto-debit/voice). Search + feedback widget intentionally
+    skipped for v1 (spec §3). Still ties into P10 case-1 task videos when those land.
 57. **Domain policy build** — free-subdomain default + BYO connect + the onboarding
     "have a domain?" question + buy-through-us COLLECT-FIRST. Tiers 1+2 (subdomain +
     BYO) need no external approval — build now; collect-first buy waits on a card/
