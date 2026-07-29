@@ -17,8 +17,12 @@ model** (`docs/COMMISSION_MODEL.md`)._
    CRM `/site-monitor` (`pages/SiteMonitor.jsx` + `useSiteMonitor`): window presets +
    custom range, "Inactive > 1 year" filter, sort, totals strip, freshness tints, manual
    Nudge (mailto) + open-site. No automatic dormancy actions, by design.
-2. **Task 56 — Public Docs / Help Center.** Not built (a `stemfra_cms/public/help/` stub
-   holds the Stripe-onboarding screenshots — seed material). Buildable now.
+2. **Task 56 — Public Docs / Help Center: SPEC WRITTEN 2026-07-29, delegated.**
+   Full build spec at `stemfra_client/docs/DOCS_CENTER_SPEC.md` (Airwallex-pattern
+   shell on WHITE, /docs + /docs/:category + /docs/:category/:slug, structured-block
+   content, 6 categories / 25 articles with per-article authoritative sources + hard
+   truth rules: no tiers/SMS/auto-debit/voice). Execution = an Opus 4.8 executor
+   session per the Advisor strategy; Fable reviews after. Do not push (deploys).
 3. **Task 57 — domain policy:** ✅ onboarding "Do you already have a website domain?"
    question DONE (2026-07-29, verified UI + persistence) — signup step 1 cards (Not yet /
    Yes I own one + optional domain input); answer normalized (lowercase, proto/www/path
