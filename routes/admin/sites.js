@@ -2,10 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { requireStaffRole, PLATFORM_OPS } = require('../../middleware/staffAuth');
 const { listSites, provision, cloneAdmin, attach, detach, publish, unpublish, readiness, setCustomDomain, removeCustomDomain, deleteSite, restore } = require('../../controllers/admin/sitesController');
+const { monitor } = require('../../controllers/admin/siteMonitorController');
 
 const gate = requireStaffRole(...PLATFORM_OPS);
 
 router.get('/', gate, listSites);
+// Task 59 — observe-only per-site activity/performance metrics (no auto-purge).
+router.get('/monitor', gate, monitor);
 router.post('/provision', gate, provision);
 router.post('/:siteId/clone', gate, cloneAdmin);
 router.get('/:siteId/readiness', gate, readiness);

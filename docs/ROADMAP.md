@@ -9,10 +9,16 @@ _Verified against code + DB + env, not just doc claims. Active arc = **P13 commi
 model** (`docs/COMMISSION_MODEL.md`)._
 
 **Genuinely OPEN engineering tasks:**
-1. **Task 59 — CRM Activity/Performance monitor** (observe-only per-site metrics). NOT built
-   (audited: no such page in stemfra-ops). Buildable now.
-2. **Task 56 — Public Docs / Help Center.** Not built (an untracked `stemfra_cms/public/help/`
-   stub exists). Buildable now.
+1. ✅ **Task 59 — CRM Site Monitor DONE (2026-07-29, verified in-browser).** Observe-only
+   per-site activity/performance: server `GET /api/admin/sites/monitor`
+   (`controllers/admin/siteMonitorController.js`, PLATFORM_OPS; window metrics bookings/
+   revenue/leads/chats/subscribers + all-time + lastActiveAt from booking/lead/chat/
+   site_activity; JS aggregation over capped fetches — move to SQL group-by at scale) +
+   CRM `/site-monitor` (`pages/SiteMonitor.jsx` + `useSiteMonitor`): window presets +
+   custom range, "Inactive > 1 year" filter, sort, totals strip, freshness tints, manual
+   Nudge (mailto) + open-site. No automatic dormancy actions, by design.
+2. **Task 56 — Public Docs / Help Center.** Not built (a `stemfra_cms/public/help/` stub
+   holds the Stripe-onboarding screenshots — seed material). Buildable now.
 3. **Task 57 — domain policy remainder:** onboarding "have a domain?" question +
    collect-first buy-through-us (buy waits on a payment rail). Subdomain default + BYO
    connect + CMS search/buy UI are DONE.
@@ -499,10 +505,10 @@ New tasks:
     commission shift DONE 2026-07-29** (pricing page, /fees policy, Terms/Refund, signup
     acceptance persistence). **Remaining: Batch 2b auto-debit only** (blocked on Airwallex
     card KYB). Details: COMMISSION_MODEL.md §7b.
-59. **CRM Activity / Performance monitor** (observe-only, replaces the rejected auto-sweep)
-    — per-site metrics (bookings / visits / last-active) + month / date-range /
-    "inactive > 1 year" filters + manual staff actions (pause, nudge). No automatic
-    dormancy purge. Feeds off booking/visit data we already capture. **Buildable NOW.**
+59. ✅ **CRM Activity / Performance monitor — DONE 2026-07-29** (see the WHERE WE STAND
+    block, item 1, for the build record). Observe-only per-site metrics + window/date-range/
+    inactive filters + manual nudge; no automatic dormancy purge. "Visits" metric is out of
+    scope until site analytics ship (parked) — activity = bookings/leads/chats/audit events.
 60. ✅ **Adjust-booking at delivery — DONE + verified (2026-07-28).** "Adjust service or
     price" control in `BookingDetailModal` (service swap / custom name / price / duration,
     with a reason) → **server endpoint** `PATCH /api/cms/bookings/:id/adjust`
