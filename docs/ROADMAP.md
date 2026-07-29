@@ -28,10 +28,10 @@ model** (`docs/COMMISSION_MODEL.md`)._
    Verified: `npm run build` prerenders 48 routes (32 docs) + sitemap; browser walk
    of hub + Stripe article (images/table/callout/TOC render); all 10 internal links
    resolve; `grep -R "—" src/app/docs` clean. Spec: `stemfra_client/docs/DOCS_CENTER_SPEC.md`.
-   ⚠ Follow-up (flagged, NOT done): `stemfra_client/src/app/pages/FAQ.jsx` and
-   `stemfra_platform/docs/STRIPE_ONBOARDING.md` still carry the OLD subscription-model
-   language ("$1,000 setup fee", "monthly subscription", "not a percentage") that
-   contradicts the commission model — should be rewritten to match /fees + the docs.
+   ✅ Follow-up DONE (2026-07-29, committed not pushed): `stemfra_client/src/app/pages/
+   FAQ.jsx` + `stemfra_platform/docs/STRIPE_ONBOARDING.md` rewritten to the commission
+   model (free website, no setup/monthly fee, flat 5% on sales billed separately by
+   invoice; card money still flows to the tenant's own Stripe/bank) + em-dashes cleaned.
 3. **Task 57 — domain policy:** ✅ onboarding "Do you already have a website domain?"
    question DONE (2026-07-29, verified UI + persistence) — signup step 1 cards (Not yet /
    Yes I own one + optional domain input); answer normalized (lowercase, proto/www/path
