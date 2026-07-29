@@ -77,12 +77,15 @@ never a payment rake, so losing Connect application fees costs nothing).
 - **Helcim / GoCardless / Clover / Adyen** — market intelligence only.
   GoCardless gets a future trigger: revisit when membership-heavy fitness
   clients report card-expiry churn (bank debit rarely expires).
-- **Mindbody/Vagaro/Boulevard — hard line, no API integration.** Formalize the
-  escape hatch as product: per-site **external booking URL** option — Book-Now
-  buttons become external links; the Front Desk chatbot *deflects* ("here's
-  the booking link") instead of booking natively. Sells SEO sites to
-  Mindbody die-hards today; native migration later. (Check `booking_mode` /
-  `booking_config` for existing support before building.)
+- **Mindbody/Vagaro/Boulevard — hard line, no API integration.** (Unchanged.)
+  ⛔ **REVERSED 2026-07-29 (Peter):** the "external booking URL / link-out"
+  escape hatch was REMOVED — Stemfra native booking is now the ONLY booking
+  system. The `link_out` mode, the `/api/cms/payments/booking-mode` endpoint,
+  the CMS provider dropdown + URL field, and the Front Desk deflection are all
+  gone (`consultation_form` "no online booking" is retained). Do NOT rebuild
+  the link-out option. See ROADMAP item #8 for the full removal list.
+  _Historical (superseded):_ per-site external booking URL option — Book-Now
+  buttons become external links; the Front Desk chatbot deflects to the link.
 
 ## 3. The acquisition funnel (from the Kai Stone playbook)
 
@@ -348,10 +351,10 @@ natural next step — it also lets us store the test key to run the real Checkou
 - `GET /api/cms/payments/keys?siteId=` — NON-secret status (masked publishable, keyType,
   status, hasWebhookSecret, lastVerifiedAt, livemode). Never decrypts the secret.
 - `DELETE /api/cms/payments/keys` {siteId} — disconnect: remove creds + payments_enabled=false.
-- `GET/POST /api/cms/payments/booking-mode` — the Mindbody/Vagaro escape hatch. Writes
-  sites.booking_mode ('native'|'link_out') + booking_config.booking_url. The Front Desk
-  chat ALREADY deflects to that URL when link_out (lib/frontdeskBooking.js) — this just
-  lets the owner set it. link_out requires a valid https URL.
+- ⛔ `GET/POST /api/cms/payments/booking-mode` — **REMOVED 2026-07-29** (external
+  link-out reversal; see §2 + ROADMAP #8). Was the Mindbody/Vagaro escape hatch
+  (wrote sites.booking_mode='link_out' + booking_config.booking_url). Native
+  booking is now the only system; this endpoint no longer exists.
 
 Verified: shape validation (accept rk_/sk_/pk_, reject junk + pk-as-secret), keyType
 derivation, booking-mode round-trip meets the Front Desk deflection condition + restores.

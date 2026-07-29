@@ -259,57 +259,8 @@ async function deleteKeys(req, res) {
   }
 }
 
-// ─── P12 external-booking-URL (Mindbody/Vagaro escape hatch) ──────────────────
-// Front Desk chat already deflects to booking_config.booking_url when
-// booking_mode='link_out' (lib/frontdeskBooking.js). This lets the owner SET it.
-
-/** GET /api/cms/payments/booking-mode?siteId=… → { mode, bookingUrl } */
-async function getBookingMode(req, res) {
-  try {
-    const siteId = req.query.siteId;
-    if (!siteId) return res.status(400).json({ error: 'siteId required' });
-    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
-    if (!site) return res.status(403).json({ error: 'Not authorized for this site' });
-    const { data } = await supabase.from('sites').select('booking_mode, booking_config').eq('id', siteId).single();
-    res.json({ mode: data?.booking_mode || 'native', bookingUrl: data?.booking_config?.booking_url || null });
-  } catch (err) {
-    console.error('[payments.getBookingMode]', err.message);
-    res.status(500).json({ error: 'Could not read booking mode.' });
-  }
-}
-
-/**
- * POST /api/cms/payments/booking-mode  { siteId, mode, bookingUrl? }
- * mode 'native' → Stemfra takes bookings/payments. mode 'link_out' → Book-Now
- * buttons + the Front Desk chat hand off to bookingUrl (their existing Mindbody/
- * Vagaro page); native booking + payments are bypassed.
- */
-async function setBookingMode(req, res) {
-  try {
-    const { siteId, mode, bookingUrl } = req.body || {};
-    if (!siteId) return res.status(400).json({ error: 'siteId required' });
-    if (!['native', 'link_out'].includes(mode)) return res.status(400).json({ error: "mode must be 'native' or 'link_out'." });
-    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
-    if (!site) return res.status(403).json({ error: 'Not authorized for this site' });
-
-    if (mode === 'link_out') {
-      const url = String(bookingUrl || '').trim();
-      if (!/^https:\/\/.+/.test(url)) return res.status(400).json({ error: 'A valid https booking link is required for link-out mode.' });
-      const { data: cur } = await supabase.from('sites').select('booking_config').eq('id', siteId).single();
-      const booking_config = { ...(cur?.booking_config || {}), booking_url: url };
-      await supabase.from('sites').update({ booking_mode: 'link_out', booking_config }).eq('id', siteId);
-      return res.json({ ok: true, mode: 'link_out', bookingUrl: url });
-    }
-    await supabase.from('sites').update({ booking_mode: 'native' }).eq('id', siteId);
-    res.json({ ok: true, mode: 'native' });
-  } catch (err) {
-    console.error('[payments.setBookingMode]', err.message);
-    res.status(500).json({ error: 'Could not update booking mode.' });
-  }
-}
-
 module.exports = {
   healthcheck, connectLink, status, dashboardLink,
-  // P12 direct-keys + external-booking-URL:
-  saveKeys, getKeysStatus, deleteKeys, getBookingMode, setBookingMode,
+  // P12 direct keys (the business's own Stripe):
+  saveKeys, getKeysStatus, deleteKeys,
 };

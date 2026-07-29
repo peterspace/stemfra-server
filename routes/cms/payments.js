@@ -3,7 +3,7 @@ const router = express.Router();
 const { requireCmsAuth } = require('../../middleware/cmsAuth');
 const {
   healthcheck, connectLink, status, dashboardLink,
-  saveKeys, getKeysStatus, deleteKeys, getBookingMode, setBookingMode,
+  saveKeys, getKeysStatus, deleteKeys,
 } = require('../../controllers/cms/paymentsController');
 
 // Public — config presence check
@@ -18,9 +18,5 @@ router.post('/dashboard-link', requireCmsAuth, dashboardLink);
 router.post('/keys', requireCmsAuth, saveKeys);
 router.get('/keys', requireCmsAuth, getKeysStatus);
 router.delete('/keys', requireCmsAuth, deleteKeys);
-
-// P12 external-booking-URL (Mindbody/Vagaro escape hatch).
-router.get('/booking-mode', requireCmsAuth, getBookingMode);
-router.post('/booking-mode', requireCmsAuth, setBookingMode);
 
 module.exports = router;

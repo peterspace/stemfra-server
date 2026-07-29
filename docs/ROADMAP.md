@@ -134,7 +134,17 @@ payment answer; deferred as low priority._
    System-B integrations to add; feeds payer data (incl. `contacts.state`) into P0.
 7. ✅ **CMS client Billing section** (DONE 2026-06-29) — Account → Billing: subscription
    + charge history + editable billing contact. `/api/cms/billing`.
-8. ✅ **Payment/booking-provider setting (#3)** — DONE: CMS "Booking & payments"
+8. ⛔ **Payment/booking-provider setting (#3) — REVERSED 2026-07-29 (Peter's call).**
+   The external "link-out to Mindbody/Vagaro/etc." booking option was REMOVED so
+   Stemfra's own native booking is the ONLY booking system. Gone: the `link_out`
+   radio + provider dropdown + URL field in CMS `BookingSection.tsx`, the
+   `bookingProviders.ts` catalog, the server `/api/cms/payments/booking-mode`
+   endpoint + `getBookingMode`/`setBookingMode`, the Front Desk `link_out`
+   deflection, the template CTA `link_out` branch, and the Help Center article.
+   RETAINED: `consultation_form` ("no online booking" → phone/contact). The DB
+   `booking_mode` enum still carries the unused `link_out` value (not dropped).
+   The only competitor stance now on record is "no API integration" (unchanged).
+   _Historical (superseded):_ DONE: CMS "Booking & payments"
    (provider + URL), Front Desk agent gate, all 4 template Book CTAs, CRM
    visibility. (Optional Q2 payment-link URL field still pending — see note above.)
    _Original spec:_ Where the client picks how THEY take

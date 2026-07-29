@@ -27,8 +27,7 @@ async function listSites(req, res) {
     q = showDeleted ? q.not('deleted_at', 'is', null) : q.is('deleted_at', null);
     const { data, error } = await q;
     if (error) throw new Error(error.message);
-    const bookingLabel = (mode, cfg) => {
-      if (mode === 'link_out') return (cfg && cfg.provider_name) ? `External · ${cfg.provider_name}` : 'External';
+    const bookingLabel = (mode) => {
       if (mode === 'consultation_form') return 'No online booking';
       return 'Stemfra';
     };
@@ -39,8 +38,7 @@ async function listSites(req, res) {
       subdomain: s.subdomain,
       customDomain: s.custom_domain || null,
       status: s.status,
-      booking: bookingLabel(s.booking_mode, s.booking_config),
-      bookingUrl: s.booking_config?.booking_url || null,
+      booking: bookingLabel(s.booking_mode),
       paymentsEnabled: !!s.payments_enabled,
       billing: s.subscriptions?.[0]?.status || null,
       ownerName: s.owner?.full_name || null,
