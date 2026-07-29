@@ -19,9 +19,13 @@ model** (`docs/COMMISSION_MODEL.md`)._
    Nudge (mailto) + open-site. No automatic dormancy actions, by design.
 2. **Task 56 — Public Docs / Help Center.** Not built (a `stemfra_cms/public/help/` stub
    holds the Stripe-onboarding screenshots — seed material). Buildable now.
-3. **Task 57 — domain policy remainder:** onboarding "have a domain?" question +
-   collect-first buy-through-us (buy waits on a payment rail). Subdomain default + BYO
-   connect + CMS search/buy UI are DONE.
+3. **Task 57 — domain policy:** ✅ onboarding "Do you already have a website domain?"
+   question DONE (2026-07-29, verified UI + persistence) — signup step 1 cards (Not yet /
+   Yes I own one + optional domain input); answer normalized (lowercase, proto/www/path
+   stripped) into `sites.metadata.onboarding.domain {has_domain, domain}` for the
+   Settings → Domain card + staff to act on post-signup. Subdomain default + BYO connect
+   + CMS search/buy UI were already DONE. **Remaining: collect-first buy-through-us only**
+   (waits on a payment rail).
 4. **P12 Wave 2 Task 9 — owner/staff SMS alerts** — gated on A2P vetting (v2 submitted
    2026-07-26).
 5. **P10 case 42 "Remix" R2/R3** (AI theme composer engine) — R1 registry done; rest pending.
