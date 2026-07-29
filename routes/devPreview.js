@@ -89,12 +89,16 @@ router.get('/confirmation', (req, res) => {
 const send = (res, html) => res.set('Content-Type', 'text/html').send(html);
 
 router.get('/booking-confirmation', (_req, res) => send(res, tx.bookingConfirmation({
-  businessName: 'Argyle & Sons', businessLogoUrl: ARGYLE_LOGO, businessUrl: ARGYLE_URL, businessEmail: 'hello@argyle-and-sons.com', firstName: 'James', serviceName: 'Classic Cut & Hot Towel',
+  businessName: 'Argyle & Sons', businessLogoUrl: ARGYLE_LOGO, businessUrl: ARGYLE_URL, businessEmail: 'hello@argyle-and-sons.com',
+  businessAccent: '#A07C3B', businessFont: 'Playfair Display',
+  businessPhotoUrl: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=460&h=900&fit=crop&q=80',
+  firstName: 'James', serviceName: 'Classic Cut & Hot Towel',
   dateLabel: 'Friday, July 17', timeLabel: '2:30 PM', durationLabel: '45 min',
 })));
 
 router.get('/class-confirmation', (_req, res) => send(res, tx.classConfirmation({
-  businessName: 'Lila Studio', businessLogoUrl: ARGYLE_LOGO, businessEmail: 'hello@lila-studio.com', serviceName: 'Vinyasa Flow',
+  businessName: 'Lila Studio', businessLogoUrl: ARGYLE_LOGO, businessEmail: 'hello@lila-studio.com',
+  businessAccent: '#B57254', businessFont: 'Fraunces', serviceName: 'Vinyasa Flow',
   dateLabel: 'Saturday, July 18', timeLabel: '9:00 AM',
 })));
 
@@ -217,7 +221,7 @@ router.get('/platform-invoice', (_req, res) => send(res, tx.platformInvoice({
   businessName: 'Argyle & Sons', greetingName: 'Marcus',
   rows: [{ label: 'Website setup (one-time)', value: '$1,000.00' }, { label: 'Growth plan — first month', value: '$199.00' }],
   amountLabel: '$1,199.00', dueLabel: 'July 20, 2025',
-  paymentInstructions: 'Click Pay now above to pay securely via Payoneer — card or bank transfer. Prefer another method? Just reply to this email.',
+  paymentInstructions: 'Use Settle invoice above to pay securely via Payoneer — card or bank transfer. Should you prefer another method, simply reply to this email.',
   dashboardUrl: 'https://cms.stemfra.com/billing',
   payUrl: 'https://pay.payoneer.com/request/demo-a1b2c3d4',
   invoiceRef: 'a1b2c3d4',

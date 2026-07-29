@@ -10,10 +10,12 @@ const userSettingsRoutes = require('./routes/userSettings');
 const presenceRoutes   = require('./routes/presence');
 const { startStalePresenceSweeper } = require('./routes/presence');
 const { startOutreachReplySweeper } = require('./lib/outreachReplySweeper');
+const { startCommissionScheduler } = require('./lib/commissionScheduler');
 const { startBillingCycleSweeper } = require('./lib/billingCycleSweeper');
 const { startSiteDeletionSweeper } = require('./lib/siteDeletionSweeper');
 const { startBookingReminderSweeper } = require('./lib/bookingReminderSweeper');
 const { startLifecycleSweeper } = require('./lib/lifecycleSweeper');
+const { startBookingCheckoutSweeper } = require('./lib/bookingCheckoutSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
@@ -101,6 +103,11 @@ app.use(cors({
 // verification needs the raw, unparsed request body.
 app.use('/api/stripe/webhook', express.raw({ type: '*/*' }), require('./routes/stripeWebhook'));
 
+// Document export (stemfra_business, staff-only) — registered before the global
+// 10kb json parser because it receives multi-MB HTML+CSS payloads; the route
+// carries its own express.json({ limit: '60mb' }).
+app.use('/api/export', require('./routes/export'));
+
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(busboy({ limits: { files: 1, fileSize: 105 * 1024 * 1024 } })); // 105MB headroom over the 100MB video cap; 30MB image cap also fits
@@ -117,6 +124,7 @@ app.get('/health', (req, res) => {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/contact',  contactRoutes);
 app.use('/api/onboarding', require('./routes/onboarding'));
+app.use('/api/setup-call', require('./routes/setupCall'));  // public: marketing "Book a setup call" (video + Meet)
 app.use('/api/starters',   require('./routes/starters'));   // public Starter catalog (clone-to-onboard)
 app.use('/api/marketing',  require('./routes/marketing'));  // public marketing-site reads (hero mockups)
 app.use('/api/insights', insightsRoutes);
@@ -148,6 +156,9 @@ app.use('/api/cms/site-publish', cmsPublishRouter);
 app.use('/api/cms/site-domain', cmsSiteDomainRouter);
 app.use('/api/cms/site-email', cmsSiteEmailRouter);
 app.use('/api/cms/bookings', require('./routes/cms/bookings'));
+app.use('/api/cms/email-templates', require('./routes/cms/emailTemplates'));
+app.use('/api/cms/google-profile', require('./routes/cms/googleProfile'));
+app.use('/api/cms/reports', require('./routes/cms/reports'));
 app.use('/api/cms/sites', cmsSitesRouter);
 app.use('/api/cms/billing', require('./routes/cms/billing'));
 app.use('/api/cms/assistant', cmsAssistantRouter);
@@ -193,9 +204,15 @@ server.listen(PORT, () => {
   // grace window (Cloudinary media + all DB rows). See lib/siteDeletion.js.
   startSiteDeletionSweeper();
   startBookingReminderSweeper();
+  // P12 direct-key payments: reconcile held (pending_payment) bookings against
+  // Stripe — finalize paid-but-closed-tab checkouts, release abandoned holds.
+  startBookingCheckoutSweeper();
   // Lifecycle/marketing emails (N4): first-visit follow-up, etc. Opt-out honored.
   startLifecycleSweeper();
   // Lead-gen follow-up sequencer (A2 → read-gated call → A8 → A20). Inert until
   // crm_settings.leadgen_sequencer.enabled = true.
   startOutreachSequencer();
+  // Commission (P13): meter the just-closed month → billing_charges kind='commission'.
+  // Gated OFF (COMMISSION_SCHEDULER_ENABLED=true to arm); manual /commission/run meanwhile.
+  startCommissionScheduler();
 });

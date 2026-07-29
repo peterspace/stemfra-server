@@ -27,7 +27,7 @@ async function signup(req, res) {
 
     const {
       name, email, password, company, vertical, starterId, city, template,
-      firstName, lastName, country, state, bookingProvider, bookingUrl, paymentMethods, tier, goals,
+      firstName, lastName, country, state, bookingProvider, bookingUrl, paymentMethods, tier, goals, feesAccepted,
     } = req.body || {};
     const result = await onboardCustomer({
       name, email, password, company, vertical: vertical || null, starterId: starterId || null,
@@ -37,6 +37,7 @@ async function signup(req, res) {
       bookingProvider: bookingProvider || null, bookingUrl: bookingUrl || null,
       paymentMethods: paymentMethods || null, tier: tier || null,
       goals: Array.isArray(goals) ? goals : null,
+      feesAccepted: !!feesAccepted,
     });
 
     res.json({

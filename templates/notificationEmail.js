@@ -9,6 +9,7 @@ function buildNotificationEmail(data) {
 
   const html = renderEmail({
     preheader: `${firstName} ${lastName} — ${subject}`,
+    eyebrow: 'New enquiry',
     heading: `New message from ${firstName} ${lastName}`,
     paragraphs: [`Received ${date} via the contact form on stemfra.com.`],
     rows: [

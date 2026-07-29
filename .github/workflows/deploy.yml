@@ -133,6 +133,8 @@ jobs:
             STRIPE_PROCESSING_PCT_BPS=290
             STRIPE_PROCESSING_FIXED_CENTS=30
             STRIPE_SUBSCRIPTION_APP_FEE_PCT=4.5
+            PAYMENT_CREDENTIALS_KEK=${{ secrets.PAYMENT_CREDENTIALS_KEK }}
+            COMMISSION_SCHEDULER_ENABLED=false
             CMS_URL=https://cms.stemfra.com
             PLATFORM_BILLING_RETURN_URL=https://cms.stemfra.com
             DOMAIN_REGISTRAR=porkbun

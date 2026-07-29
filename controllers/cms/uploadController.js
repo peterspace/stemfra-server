@@ -18,12 +18,19 @@ const ALLOWED_IMAGE_MIMES = new Set([
 const ALLOWED_VIDEO_MIMES = new Set([
   'video/mp4',
 ]);
+// Documents (v1: PDF only) — used for billing/payment RECEIPT uploads, not site media.
+// Cloudinary stores these as `resource_type: 'raw'` (no transform, served as-is).
+const ALLOWED_DOC_MIMES = new Set([
+  'application/pdf',
+]);
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;    // 30MB raw input cap; post-WebP usually 200-900KB (rare uploads of branding photos can reach this)
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;   // 100MB hard cap (ambient hero loops can be hefty); 15s recommended via client-side
+const MAX_DOC_BYTES = 15 * 1024 * 1024;      // 15MB — a payment receipt PDF is small; generous headroom for scans
 const MAX_IMAGE_DIMENSION = 2560;            // stored images fit a 2560×2560 box (no surface renders larger; huge originals were the real storage cost)
 
 function isImageMime(m) { return m && m.startsWith('image/'); }
 function isVideoMime(m) { return m && m.startsWith('video/'); }
+function isDocMime(m) { return ALLOWED_DOC_MIMES.has(m); }
 
 /**
  * GET /api/cms/site-uploads/healthcheck
@@ -97,15 +104,16 @@ async function uploadImage(req, res) {
       return sendOnce(400, { error: 'siteId required (send as a form field before the file)' });
     }
 
-    // ─── MIME sniff: route to image or video flow ────────────────────────────
+    // ─── MIME sniff: route to image, video, or doc (PDF receipt) flow ────────
     const isImage = isImageMime(mimeType);
     const isVideo = isVideoMime(mimeType);
+    const isDoc = isDocMime(mimeType);
 
-    if (!isImage && !isVideo) {
+    if (!isImage && !isVideo && !isDoc) {
       file.resume();
       return sendOnce(400, {
         error: 'Unsupported file type',
-        allowed: [...ALLOWED_IMAGE_MIMES, ...ALLOWED_VIDEO_MIMES],
+        allowed: [...ALLOWED_IMAGE_MIMES, ...ALLOWED_VIDEO_MIMES, ...ALLOWED_DOC_MIMES],
       });
     }
     if (isImage && !ALLOWED_IMAGE_MIMES.has(mimeType)) {
@@ -117,8 +125,8 @@ async function uploadImage(req, res) {
       return sendOnce(400, { error: 'Video must be mp4 (h.264).' });
     }
 
-    const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
-    const maxLabel = isVideo ? '50MB' : '8MB';
+    const maxBytes = isVideo ? MAX_VIDEO_BYTES : isDoc ? MAX_DOC_BYTES : MAX_IMAGE_BYTES;
+    const maxLabel = isVideo ? '100MB' : isDoc ? '15MB' : '30MB';
 
     // NOTE: do NOT attach a `data` listener here — it would switch the file stream
     // into flowing mode BEFORE we've awaited the ownership check, causing the
@@ -153,7 +161,9 @@ async function uploadImage(req, res) {
           sendOnce(413, {
             error: isVideo
               ? `Video too big (max ${maxLabel}).`
-              : `File too large (max ${maxBytes} bytes)`,
+              : isDoc
+                ? `File too big (max ${maxLabel}).`
+                : `File too large (max ${maxBytes} bytes)`,
           });
         }
       });
@@ -162,11 +172,11 @@ async function uploadImage(req, res) {
       const uploadOptions = {
         folder,
         public_id: id,
-        resource_type: isVideo ? 'video' : 'image',
+        resource_type: isVideo ? 'video' : isDoc ? 'raw' : 'image',
         context: {
           site_id: siteId,
           uploaded_by: contactId || '',
-          alt: isVideo ? '' : (altText || ''),   // videos ignore alt
+          alt: isVideo || isDoc ? '' : (altText || ''),   // videos/docs ignore alt
         },
       };
 
@@ -233,7 +243,7 @@ async function uploadImage(req, res) {
             bytes: result.bytes,
             format: result.format,
             mime_type: storedMime,
-            resource_type: isVideo ? 'video' : 'image',
+            resource_type: isVideo ? 'video' : isDoc ? 'raw' : 'image',
           });
         }
       );
@@ -284,7 +294,7 @@ async function deleteMedia(req, res) {
     if (media.storage_provider === 'cloudinary' && media.storage_key) {
       // Phase 2: derive resource_type from stored mime_type so video destroys hit
       // Cloudinary's video pipeline, not the image one.
-      const resourceType = isVideoMime(media.mime_type) ? 'video' : 'image';
+      const resourceType = isVideoMime(media.mime_type) ? 'video' : isDocMime(media.mime_type) ? 'raw' : 'image';
       try {
         await cloudinary.uploader.destroy(media.storage_key, { resource_type: resourceType });
       } catch (cdnErr) {

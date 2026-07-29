@@ -3,8 +3,8 @@
 const express = require('express');
 const { requireStaffRole, PLATFORM_ADMIN } = require('../../middleware/staffAuth');
 const {
-  getProvider, setProvider, listCharges, requestDetails,
-  startBilling, openCycle, markRequested, markPaid, getPlans, putPlans,
+  getProvider, setProvider, listCharges, invoicePdf, bookingExport, requestDetails,
+  startBilling, openCycle, markRequested, markPaid, getPlans, putPlans, runCommission,
 } = require('../../controllers/admin/billingController');
 
 const router = express.Router();
@@ -15,9 +15,12 @@ router.post('/provider', gate, setProvider);
 router.get('/plans', gate, getPlans);
 router.put('/plans', gate, putPlans);
 router.get('/charges', gate, listCharges);
+router.get('/charges/:id/invoice.pdf', gate, invoicePdf);
+router.get('/charges/:id/booking-export.csv', gate, bookingExport);
 router.get('/charges/:id/request-details', gate, requestDetails);
 router.post('/charges/:id/requested', gate, markRequested);
 router.post('/charges/:id/paid', gate, markPaid);
+router.post('/commission/run', gate, runCommission);
 router.post('/:siteId/start', gate, startBilling);
 router.post('/:siteId/open-cycle', gate, openCycle);
 

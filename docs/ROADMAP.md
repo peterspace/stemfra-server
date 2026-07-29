@@ -1,8 +1,55 @@
 # Stemfra — Roadmap & Pending Tasks (prioritized)
 
-_Updated 2026-06-29. Single cross-repo source of truth. The order below IS the
-recommended build sequence. Per-feature detail lives in the linked docs; this is
-"what's next and why."_
+_Updated 2026-07-29 (full-project audit pass). Single cross-repo source of truth.
+The order below IS the recommended build sequence. Per-feature detail lives in the
+linked docs; this is "what's next and why."_
+
+## 📌 WHERE WE STAND (2026-07-29 audit — read this before the per-arc detail)
+_Verified against code + DB + env, not just doc claims. Active arc = **P13 commission
+model** (`docs/COMMISSION_MODEL.md`)._
+
+**Genuinely OPEN engineering tasks:**
+1. **Task 59 — CRM Activity/Performance monitor** (observe-only per-site metrics). NOT built
+   (audited: no such page in stemfra-ops). Buildable now.
+2. **Task 56 — Public Docs / Help Center.** Not built (an untracked `stemfra_cms/public/help/`
+   stub exists). Buildable now.
+3. **Task 57 — domain policy remainder:** onboarding "have a domain?" question +
+   collect-first buy-through-us (buy waits on a payment rail). Subdomain default + BYO
+   connect + CMS search/buy UI are DONE.
+4. **P12 Wave 2 Task 9 — owner/staff SMS alerts** — gated on A2P vetting (v2 submitted
+   2026-07-26).
+5. **P10 case 42 "Remix" R2/R3** (AI theme composer engine) — R1 registry done; rest pending.
+6. **P10 case 1 remainder** — task videos + a "What's new" channel (guidance polish shipped).
+7. **VSL production** (P12 "Last") — deliberately last.
+
+**⚠ DEPLOY/OPS GAPS found by the audit (silent breakage risk):**
+- **`PAYMENT_CREDENTIALS_KEK` is MISSING from `deploy.yml`** → the P12 direct-keys payment
+  system is silently DISABLED in production even though the code shipped. Add the secret +
+  env line before any tenant uses card payments in prod.
+- **`COMMISSION_SCHEDULER_ENABLED` absent everywhere** — intentional pre-launch (manual
+  `/commission/run` works), but MUST be armed (deploy.yml) at launch or invoicing won't run.
+- **HUGE UNCOMMITTED SURFACE:** effectively ALL of P12+P13 is uncommitted — stemfra_server
+  72 dirty paths (incl. `lib/commission*.js`, `lib/paymentCredentials.js`, COMMISSION_MODEL/
+  P12_PLAN docs), stemfra_platform 74 (CMS billing/payments/promotions/staff-mode work),
+  stemfra-ops 14 (compliance packet + SetupCalls), stemfra_client 6 (commission pricing +
+  /fees + Terms/Refund), stemfra_business ~20. A VPS/Pages rebuild from `main` today would
+  ship NONE of it. **Commit pass = highest-priority housekeeping.**
+- Per-tenant Stripe webhook (`/api/stripe/webhook/:siteId`) deliberately deferred
+  (redirect-verify + sweeper covers one-time charges — see P12_PLAN); the stored per-site
+  webhook secret is currently written but never read.
+
+**Waiting on EXTERNAL (no code blocked behind them except as noted):**
+- **A2P 10DLC** — campaign v2 resubmitted 2026-07-26, vetting typically ≤5 days → unlocks
+  Wave 2 Task 9 (SMS alerts).
+- **Airwallex card KYB** — unlocks Batch 2b auto-debit; activates with trading history.
+  Manual bank-transfer invoicing loop is COMPLETE and is the live collection path.
+- **Stripe (Stemfra's own) verification** — NOT blocking anything current (commission model
+  collects by invoice; tenant card payments use the tenants' OWN keys). Only gates the
+  dormant Connect/System-B path + platform auto-debit alternatives.
+- ~~Porkbun account~~ ✅ verified + funded; CMS domain search tested live. First real
+  purchase still untested (deliberate).
+- ~~Cloudflare API token scopes~~ ✅ done — full domain-zone + Email Routing + Resend
+  workflow shipped and tested (prod deploy.yml carries EMAIL_PROVIDER=resend + keys).
 
 ## ✅ Done this session (2026-06-28/29)
 - 9 demo sites (one per active theme, 4 verticals), owner `peechizzy@gmail.com`
@@ -14,7 +61,7 @@ recommended build sequence. Per-feature detail lives in the linked docs; this is
   (payment/membership/voice features gated → documented in `docs/OFFER_TIERS.md`,
   re-add as they land). ⚠ **Pro is now thin** — see P6.1 (product decision pending).
 
-## ⚙️ Operational / parallel (Peter — not code)
+## ⚙️ Operational / parallel (Peter — not code) — ⚠ HISTORICAL (2026-06-29); superseded by the "WHERE WE STAND" block above
 - **Start Stripe application NOW with EIN + passport** (ITIN likely isn't the gate); confirm EIN on file.
 - ITIN application (~3–4 mo) — for tax filing, tracked separately.
 - Lemon Squeezy / Paddle — evaluate only **if/when approved**; not required (Payoneer interim → Stripe target).
@@ -308,3 +355,173 @@ _Peter's cases #1–#11 (#8 beta-test done; #10 = the standing pending list abov
 43. **Domain → Cloudflare zone automation** (case 7) — today: registered + DNS at Porkbun, CF only validates the Pages custom domain. Target: keep registration at Porkbun, **move DNS to a CF zone** at purchase (create zone via CF API → set nameservers via Porkbun API) for proxy/SSL/WAF + programmatic DNS (synergy w/ email routing #34 + Workspace #45). Full registrar transfer to CF = optional ≥60 days post-registration (ICANN lock), not v1. BYO-domain users keep ownership (connect-only, as today).
 44. **Email template suite + auth security** (case 9) — unified branded base template (header/footer) across ALL transactional mail (billing request/receipt, booking, welcome); customize Supabase Auth templates (OTP/magic-link) + wire custom SMTP for brand consistency; **new-device/location login alerts** (capture login events → email w/ "this was me / secure account"); 2FA TOTP already live in CMS → add recovery codes + staff enforcement; email-approved-login gate = later phase.
 45. **Customer professional email** (case 11) — ladder: (1) **Cloudflare Email Routing forwarding as the Pro perk** ($0 COGS, needs #43's CF-zone DNS); (2) Google Workspace referral/assisted setup (client pays Google); (3) full Workspace resale via a distributor (Pax8/Sherweb, ~$3–4 wholesale vs $7–8 retail) only at volume — needs reseller onboarding, provisioning via Reseller API, billing + support burden.
+
+## P11 — Voice agent maturation (NEW, 2026-07-21 — baseline scored, phased plan agreed)
+
+_Benchmarked "Mark" against the Retell (customer-support) and Thoughtly (outbound-sales)
+2026 evaluations. **Baseline: ✓ 7 · ◐ 15 · ✗ 16** — strong conversational core (barge-in,
+grounded answers, 60-msg memory + caller-ID after the 2026-07-21 fixes), thin around the
+call (actions, escalation, dispositions, multichannel, analytics, compliance).
+**Full scorecard + phased roadmap: `docs/VOICE_AGENT.md`** — re-score there as we improve._
+
+46. ✅ **Phase 0 — correctness** (DONE 2026-07-21): support-intent routing (support calls currently file as
+    SALES LEADS — wrong queue), transcript persistence, structured dispositions v1,
+    outbound updates the source lead (no dup inserts).
+47. ✅ **Phase 1 — sales quick wins** (DONE 2026-07-21, verified): sub-60s reply-triggered calling (5–10× stat), live
+    transfer + staff summary, post-call recap email/SMS (new chocolate templates),
+    voicemail detection/drop, qualification schema.
+48. ✅ **Phase 2 — support abilities** (DONE 2026-07-22): caller-ID→account identification, account context via
+    Stacy's `buildSiteContext`, safe action tools (password-reset email, support ticket,
+    callback) via the Front Desk server-orchestrated tool-loop pattern.
+49. **Phase 3 — tenant voice** ("never miss a call", the remaining roadmap agent): per-site
+    numbers, Front Desk brain + `runBookingTool` over the voice relay, owner opt-in. Spec first.
+50. **Phase 4 — scale**: CRM call analytics (measure the 40–70% resolution benchmark),
+    DNC/TCPA machinery before colder outbound, premium voice, load testing.
+
+## P12 — Payments pivot + acquisition funnel (NEW, 2026-07-22 — AGREED, supersedes P11 ordering)
+
+_Peter + Claude planning session (Fable). **Full agreed plan: `docs/P12_PLAN.md`**;
+A2P answers: `docs/A2P_REGISTRATION.md`. Key decisions: tenant payments pivot to
+DIRECT per-site Stripe keys (restricted keys, encrypted; Connect code dormant, not
+deleted) — unblocks deposits-at-booking NOW, independent of Stemfra's own Stripe
+verification; the Kai-Stone-style funnel (VSL → 45-min setup call on OUR OWN
+booking system → pay-and-publish); ONE SMS program only (Stemfra → owners+staff
+with the customer's contact details — NO tenant→end-customer SMS); Mindbody hard
+line with an external-booking-URL escape hatch. **Resequencing: Voice Phase 3/4
+(P11 items 49–50) now run AFTER P12 Waves 1–2; Phase 3 scope grows to include
+browser-voice (Stacy call tier B). VSL production is deliberately LAST.**_
+
+51. **Wave 1** — payments pivot build (`site_payment_credentials` + AES-256-GCM,
+    `getStripeForSite`, redirect-verify Checkout, per-tenant webhooks
+    `/api/stripe/webhook/:siteId`, CMS/onboarding key capture, external-booking-URL
+    option) · Mark Phase 1.5 (call-reason modal + activity-feed-enriched context)
+    · Stacy "Prefer to talk?" tier A · **Peter: submit A2P registration** (lead time).
+52. **Wave 2** — setup-call booking on the internal Stemfra site (dogfood; reminder
+    sweeper free) · pay-and-publish automation (billing_charges paid + checklist →
+    auto-publish → domain step) · owner+staff SMS alerts (post-A2P-approval) ·
+    **Case 2 tenant email redesign** (pre-existing) · switcher messaging (A13 upgrade).
+53. **Wave 3** — tenant blog completeness (massage+spa finish, per-theme audit,
+    rollout decision) · **Voice Phase 3** (tenant voice + browser-voice, spec first)
+    · Square adapter on first real demand (GoCardless trigger noted).
+54. **Wave 4** — **Voice Phase 4** (analytics, DNC/TCPA, premium voice).
+55. **Last** — VSL production (Peter's voice over a demo-site screen-share; script
+    `docs/SALES_SCRIPT_TEMPLATES.md` §1; Cloudinary hosting, `{{vsl_link}}` template
+    variable, click tracking, Mark call-flow mention).
+
+## P13 — Commission model + domain policy + public Docs (NEW, 2026-07-27)
+
+_Strategy session (Peter + Claude). **Authoritative plan doc: `docs/COMMISSION_MODEL.md`**
+(incl. a full prior-pending-tasks reconciliation with status marks). Full narrative +
+diagrams also on the **Business Model page** in `stemfra_business` (`/business-model` →
+Marketplace, Unit economics, Airwallex email). Decisions below are AGREED; the
+non-external-dependency items can start now._
+
+**Commission model — REPLACES the subscription model (not a co-model):**
+- The subscription offer ($1k build + $/mo) is **retired**. The business model is
+  **free site + 5% commission on ALL sales (unified)** — online bookings + at-visit
+  sales the tenant marks "collected" in the CMS (Reports v2, already built) = our source
+  of truth for total GMV. We are **pre-launch (no live paying subscribers)**, so there is
+  no revenue to bridge — the first tenants onboard directly onto commission.
+- Commission is collected by a **monthly metered INVOICE** paid to Stemfra's **Airwallex
+  Global Account** (US bank; details in `crm_settings.commission_bank`) + tenant **receipt
+  upload** (source-of-funds). **No setup fee, no minimum, no dormancy fee.** Processing fee
+  shown SEPARATELY (Etsy-style). (UPDATED 2026-07-27 after the Airwallex call — see below.)
+- **Marketplace / auto-split is SHELVED** — Harry Raj confirmed it is white-labelling
+  Airwallex at **~$20–25k/mo** for high-volume platforms; not viable now. Stripe Connect /
+  Adyen carry the same platform cost. **The drafted Platforms email is retired.**
+- **Card processing + AUTO-DEBIT invoices come later** — our card KYB was declined only for
+  **no business activity yet**; it unlocks as we invoice + collect. Then collection automates.
+- **Offline/cash is STILL commissioned** (unified basis) via the CMS "Mark as collected"
+  flow — no POS hardware from us. Since there is no split, **one monthly invoice covers ALL
+  income** (online + offline); the earlier online/offline collection split is moot.
+- **Revenue turns on when we start invoicing** (buildable NOW — no external gate). Pilot
+  tenants run free-to-experience until invoicing is wired; that is intentional, not a gap.
+- **Existing billing infra is REPURPOSED, not deleted:** the `billing_charges` ledger
+  + `lib/billing/` provider layer serve commission billing; the subscription-specific
+  OFFER (pricing tiers, "pick a plan") is what goes away. Downstream shifts required:
+  marketing pricing page, `crm_settings.billing_plans`, onboarding plan-selection,
+  CMS billing section, and tier-based feature gating all move from subscription to
+  commission framing.
+
+**Confirmed 2026-07-27:**
+- **Option A — truly FLAT: no tiers.** Every tenant gets every feature; we monetize
+  purely on booking volume via the uniform 5%. The Essential/Growth/Pro tier system
+  (P8) is **retired** — feature gating by tier goes away (features become universally
+  on; a few may become optional paid add-ons later, but NOT tiered subscriptions).
+- **Tenant Voice assistant RETIRED** (cost). Front Desk **chat** (Agent 2) covers
+  tenants. **Stemfra keeps its OWN voice agent "Mark"** (Agent 3) for internal
+  lead-gen / concierge / support. → **P11 item 49 (Phase 3 tenant voice) is dropped**;
+  P12 Wave 3's "Voice Phase 3" line is removed. (Consistent with P8 item 31, now final.)
+- **Subscription model PRESERVED IN DOCUMENTATION ONLY** — retired from the live offer,
+  but keep the design/infra notes intact in case we revive a subscription/hybrid option
+  later (the `billing_charges` + provider layer already supports it).
+- Etsy lessons applied: separate platform-fee vs processing-fee lines; attribution
+  (charge more / only on customers WE bring — Offsite-Ads model) as a later refinement.
+
+**Domain = the customer's responsibility → Stemfra fronts $0** (this is what makes
+"no setup fee" financially safe; a dormant tenant then costs ~$0 marginal):
+- **Free `*.stemfra.com` subdomain** (default) · **BYO connect-only** (just point
+  DNS — no transfer, no 60-day rule) · **buy-through-us COLLECT-FIRST** (charge the
+  client, then Porkbun — never front) · or self-serve at **Cloudflare Registrar
+  (at-cost)** / Porkbun. Managed domains already auto-provision a CF zone (Case 7).
+- **Connect vs transfer clarity** (from CF docs): a tenant only needs to POINT DNS
+  to launch; a full registrar transfer to Cloudflare is OPTIONAL (at-cost renewals;
+  60-day rule + EPP code + ~5 days). Shopify/Wix/Squarespace domains block NS changes
+  → intermediate registrar first. Document both; default to connect-only.
+- **Onboarding gains "Do you already have a domain?"** → No = subdomain + buy-later;
+  Yes = capture + connect (offer transfer docs).
+- **NO automatic dormancy sweep** (decided 2026-07-27). New businesses can take
+  up to ~8 months to rank on Google; if dormant sites cost ~$0 we KEEP them. Instead,
+  a **CRM Activity / Performance monitor** (observe-only): per-site activity metrics
+  (bookings, visits, last-active) with month / date-range / "inactive > 1 year"
+  filters and **manual** staff actions (pause, nudge, etc.). No `siteDeletionSweeper`
+  auto-purge for dormancy. (The 90-day lifecycle from item 26 remains for
+  owner/staff-INITIATED deletion only.)
+
+New tasks:
+56. **Public Docs / Help Center** (NEW — "every major platform has docs, we don't").
+    A markdown-driven, searchable help center at `stemfra.com/docs` (or `help.`/`docs.`).
+    Categories: Getting started · **Domains (connect / buy / transfer — seed from the
+    CF Registrar research + our own flows)** · CMS how-tos (content/media/themes) ·
+    Bookings & payments · SMS & notifications · Billing & commission · Account. Payoffs:
+    support deflection + SEO + a legitimacy signal for Airwallex/A2P compliance. Ties
+    into P10 case-1 task videos. **Buildable NOW — no external dependency.**
+57. **Domain policy build** — free-subdomain default + BYO connect + the onboarding
+    "have a domain?" question + buy-through-us COLLECT-FIRST. Tiers 1+2 (subdomain +
+    BYO) need no external approval — build now; collect-first buy waits on a card/
+    payment provider.
+58. **Commission engine — ✅ Batch 1 + Batch 2a COMPLETE (audited 2026-07-29).** Core meter
+    shipped 2026-07-27; **monthly scheduler DONE 2026-07-28** (`lib/commissionScheduler.js`,
+    env-gated OFF via `COMMISSION_SCHEDULER_ENABLED` — arm at launch, incl. deploy.yml);
+    **Batch 2a manual invoicing loop DONE 2026-07-28** (invoice PDF w/ Airwallex bank block ·
+    CMS `/billing/invoices` w/ per-field copy + receipt upload incl. PDF · CRM compliance
+    packet: invoice PDF + bookings CSV + receipt badge → mark paid); **marketing/legal
+    commission shift DONE 2026-07-29** (pricing page, /fees policy, Terms/Refund, signup
+    acceptance persistence). **Remaining: Batch 2b auto-debit only** (blocked on Airwallex
+    card KYB). Details: COMMISSION_MODEL.md §7b.
+59. **CRM Activity / Performance monitor** (observe-only, replaces the rejected auto-sweep)
+    — per-site metrics (bookings / visits / last-active) + month / date-range /
+    "inactive > 1 year" filters + manual staff actions (pause, nudge). No automatic
+    dormancy purge. Feeds off booking/visit data we already capture. **Buildable NOW.**
+60. ✅ **Adjust-booking at delivery — DONE + verified (2026-07-28).** "Adjust service or
+    price" control in `BookingDetailModal` (service swap / custom name / price / duration,
+    with a reason) → **server endpoint** `PATCH /api/cms/bookings/:id/adjust`
+    (`controllers/cms/bookingsController.js`, requireCmsAuth + verifySiteOwnership) updates
+    `service_name_snapshot` + `amount_cents` + `duration_minutes` (recomputes `ends_at`) and
+    **audits to `site_activity`** (`booking_adjusted`, before/after + reason + actor). Client
+    call in `lib/bookingNotify.ts adjustBooking`. Server-side (not client) BECAUSE owners
+    can't write `site_activity` via RLS. Verified end-to-end: $36→$60 update + audit row with
+    the correct after-amount, note, and actor. **Matters for commission** (the meter reads
+    `amount_cents`). _Remaining sub-item:_ ADD-a-service (a second `site_bookings` row sharing
+    `group_id`, salon multi-service pattern) — deferred; swap + price override cover the
+    common "facial → nails on arrival" case.
+
+**Payment norms by vertical (Peter's study, 2026-07-28 — validates unified commission):**
+- **Beauty & wellness (barber / salon / massage / spa):** pay **in-person at the POS AFTER
+  service**, card often only held for no-show; **tip chosen at the terminal**. → mostly
+  OFFLINE → commission relies on the CMS **"mark as collected"** flow; the final service/price
+  is set at checkout (hence task 60). **Tips are NOT commissioned** (not service revenue).
+- **Fitness (yoga / CrossFit):** **online / recurring BEFORE service** (memberships auto-billed,
+  drop-ins/packs prepaid). → mostly ONLINE + memberships → captured automatically by the meter.
+- Net: the **unified** commission basis (online + at-visit-collected + memberships + orders) is
+  correct — beauty leans offline-marked-collected, fitness leans online/recurring.

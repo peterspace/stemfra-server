@@ -28,6 +28,7 @@ function confirmSignup() {
   return {
     subject: 'Confirm your email',
     html: renderEmail({
+      eyebrow: 'Welcome',
       heading: 'Confirm your email',
       preheader: 'Confirm your email to finish setting up your account.',
       paragraphs: ['Welcome to Stemfra! Confirm your email address to activate your account.'],
@@ -42,6 +43,7 @@ function magicLink() {
   return {
     subject: 'Your sign-in link',
     html: renderEmail({
+      eyebrow: 'Sign in',
       heading: 'Sign in to your account',
       preheader: 'Your one-time sign-in link.',
       paragraphs: ['Use the button below to sign in. This link works once and expires shortly.'],
@@ -56,6 +58,7 @@ function resetPassword() {
   return {
     subject: 'Reset your password',
     html: renderEmail({
+      eyebrow: 'Account security',
       heading: 'Reset your password',
       preheader: 'Reset the password for your account.',
       paragraphs: ['We received a request to reset your password. Choose a new one with the button below.'],
@@ -71,6 +74,7 @@ function changeEmail() {
   return {
     subject: 'Confirm your new email address',
     html: renderEmail({
+      eyebrow: 'Account update',
       heading: 'Confirm your new email',
       preheader: 'Confirm the new email address on your account.',
       paragraphs: ['Confirm this address to finish changing the email on your account.'],

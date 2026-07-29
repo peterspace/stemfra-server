@@ -96,25 +96,9 @@ async function findEntityByPhone(phone) {
   return { entity_type: null, entity_id: null, name: phone, contact_id: null, lead_id: null };
 }
 
-/**
- * Best-effort activity log. Never throws — matches the fire-and-forget
- * pattern used by the ops `logActivity` helper.
- */
-async function logActivity({ action, entityType, entityId, actorId, actorName, entityName, details }) {
-  try {
-    await supabase.from('activity_feed').insert([{
-      action,
-      entity_type: entityType,
-      entity_id:   entityId,
-      entity_name: entityName || null,
-      actor_id:    actorId   || null,
-      actor_name:  actorName || null,
-      details:     details   || {},
-    }]);
-  } catch (err) {
-    console.warn('[twilio] activity log failed:', err.message);
-  }
-}
+// Best-effort activity log — lifted to lib/activity.js (2026-07-21) once the
+// Voice agent became a second consumer. Same fire-and-forget contract.
+const { logActivity } = require('../lib/activity');
 
 // ─── POST /api/twilio/token — Voice SDK access token ─────────────────────────
 //

@@ -29,10 +29,30 @@ const T = {
   muted: '#8A867E',
   button: '#161514',
   panel: '#FAF9F6',     // quote/message wells
-  accent: '#6366F1',    // Stemfra violet (CMS accent) — Stemfra-branded buttons/numbers
+  accent: '#6366F1',    // legacy violet — TENANT-mode fallbacks only; Stemfra mode uses S below
   link: '#1a73e8',      // hyperlink blue (Peter, 2026-07-13 — Google-style links)
 };
 const FONT = "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+
+// ─── Stemfra brand tokens (Peter, 2026-07-21: the Bentley-register redesign) ──
+// Approved via the /dev design study: chocolate bands, icon-over-wordmark
+// lockup, light 300-weight display type, tracked-out uppercase micro-labels,
+// hairline rows, one big "amount" moment, square chocolate + ghost buttons.
+// TENANT mode is untouched (its redesign is Case 2, pending).
+const S = {
+  canvas: '#f6f6f4',    // page background
+  card: '#ffffff',
+  band: '#211c18',      // Stemfra chocolate — header/footer bands, buttons, eyebrow
+  ink: '#211c18',
+  copy: '#5a5f5c',
+  micro: '#8a8f8c',     // uppercase micro-labels
+  hairline: '#e8e8e5',
+  bandText: '#c9ccc9',  // legible text/links on the chocolate bands
+  ghost: '#c9ccc9',     // ghost-button border
+};
+const SFONT = "'Helvetica Neue',Helvetica,Arial,sans-serif";
+const STEMFRA_LOGO = process.env.STEMFRA_EMAIL_LOGO_URL
+  || 'https://res.cloudinary.com/dvdbec2fe/image/upload/v1784633359/stemfra_assets/email/s-mark-cream.png';
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -47,9 +67,30 @@ const nl2br = (s) => escapeHtml(s).replace(/\n/g, '<br/>');
 // at all. So for EMAIL we flatten Cloudinary logos onto white (the card color)
 // and force PNG: no alpha to mishandle, universal client support, corners blend
 // invisibly into the white card. Non-Cloudinary URLs pass through untouched.
-function emailLogoUrl(url) {
+function emailLogoUrl(url, bg = 'white') {
   if (!url || typeof url !== 'string') return url;
-  return url.replace(/(res\.cloudinary\.com\/[^/]+\/image\/upload)\//, '$1/b_white,f_png/');
+  return url.replace(/(res\.cloudinary\.com\/[^/]+\/image\/upload)\//, `$1/b_${bg},f_png/`);
+}
+
+// Relative luminance → pick legible text (#fff vs ink) on a brand color, so an
+// accent band always reads whether the brand is dark (navy/chocolate) or light
+// (lime/terracotta).
+function luminance(hex) {
+  const c = String(hex || '').replace('#', '');
+  if (c.length !== 6) return 1;
+  const ch = (i) => {
+    const v = parseInt(c.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * ch(0) + 0.7152 * ch(2) + 0.0722 * ch(4);
+}
+const onColor = (hex) => (luminance(hex) > 0.55 ? T.ink : '#ffffff');
+
+// Email clients can't reliably load web fonts, so map the site's display font to
+// an email-safe stack that keeps its CHARACTER (serif brands get a serif heading).
+function fontStack(font) {
+  const serif = /playfair|cormorant|fraunces|bodoni|dm serif|newsreader|lora|libre|garamond|georgia|times|pt serif|serif/i.test(font || '');
+  return serif ? "Georgia,'Times New Roman',serif" : FONT;
 }
 
 // ─── Blocks (exported so callers can compose custom bodies) ──────────────────
@@ -86,6 +127,88 @@ function quoteBlock(text, label) {
     ${label ? `<p style="margin:0 0 6px;font-family:${FONT};font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:${T.muted};">${escapeHtml(label)}</p>` : ''}
     <p style="margin:0;font-family:${FONT};font-size:14px;line-height:1.65;color:${T.body};">${nl2br(text)}</p>
   </div>`;
+}
+
+// ─── Stemfra-mode blocks (Bentley register) ──────────────────────────────────
+
+// The one moment of scale: amount between two chocolate rules. Exported for the
+// billing builders (invoice / dunning / receipt).
+function amountBlock({ label, value }) {
+  return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:26px 0 0;"><tr>
+    <td align="center" style="border-top:1px solid ${S.band};border-bottom:1px solid ${S.band};padding:30px 0 32px;">
+      <div style="font-family:${SFONT};font-weight:400;font-size:10px;letter-spacing:0.28em;color:${S.micro};text-transform:uppercase;">${escapeHtml(label)}</div>
+      <div style="font-family:${SFONT};font-weight:200;font-size:44px;letter-spacing:0.02em;color:${S.ink};margin-top:12px;">${escapeHtml(value)}</div>
+    </td></tr></table>`;
+}
+
+function sRows(rows) {
+  const tr = rows.filter(Boolean).map((r) => `
+    <tr>
+      <td style="padding:16px 0;border-top:1px solid ${S.hairline};font-family:${SFONT};font-weight:400;font-size:10px;letter-spacing:0.22em;color:${S.micro};text-transform:uppercase;">${escapeHtml(r.label)}</td>
+      <td align="right" style="padding:16px 0;border-top:1px solid ${S.hairline};font-family:${SFONT};font-weight:300;font-size:15px;color:${S.ink};">${escapeHtml(r.value)}</td>
+    </tr>`).join('');
+  return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:26px 0 0;">${tr}</table>`;
+}
+
+// Square buttons: solid chocolate primary + optional ghost secondary.
+function sButtons(cta, cta2) {
+  const primary = `
+    <td style="background:${S.band};">
+      <a href="${escapeHtml(cta.url)}" style="display:inline-block;padding:17px 44px;font-family:${SFONT};font-weight:400;font-size:12px;letter-spacing:0.24em;color:#ffffff;text-decoration:none;text-transform:uppercase;">${escapeHtml(cta.label)}</a>
+    </td>`;
+  const secondary = cta2 ? `
+    <td style="width:14px;font-size:0;">&nbsp;</td>
+    <td style="border:1px solid ${S.ghost};">
+      <a href="${escapeHtml(cta2.url)}" style="display:inline-block;padding:16px 36px;font-family:${SFONT};font-weight:400;font-size:12px;letter-spacing:0.24em;color:${S.ink};text-decoration:none;text-transform:uppercase;">${escapeHtml(cta2.label)}</a>
+    </td>` : '';
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:34px auto 0;"><tr>${primary}${secondary}</tr></table>`;
+}
+
+function stemfraDocument({ eyebrow, heading, preheader, paragraphs = [], bodyHtml = '', rows, amount, cta, cta2, note, reason, security, unsubscribeUrl, footerLinks }) {
+  const paras = paragraphs.filter(Boolean).map(p =>
+    `<p style="margin:22px 0 0;font-family:${SFONT};font-weight:300;font-size:15px;line-height:1.75;color:${S.copy};">${nl2br(p)}</p>`
+  ).join('');
+  const links = (footerLinks && footerLinks.length)
+    ? `<div style="font-family:${SFONT};font-weight:400;font-size:9px;letter-spacing:0.30em;color:${S.bandText};text-transform:uppercase;">${
+        footerLinks.map((l) => `<a href="${escapeHtml(l.url)}" style="color:${S.bandText};text-decoration:none;">${escapeHtml(l.label)}</a>`).join('&nbsp;&nbsp;&nbsp;&nbsp;')
+      }</div>`
+    : '';
+  return `<!doctype html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:${S.canvas};">
+  ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</div>` : ''}
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:${S.canvas};"><tr><td align="center" style="padding:48px 16px 64px;">
+    <table width="620" cellpadding="0" cellspacing="0" role="presentation" style="width:620px;max-width:100%;">
+
+      <tr><td align="center" style="background:${S.band};padding:32px 48px 28px;">
+        <img src="${escapeHtml(STEMFRA_LOGO)}" alt="Stemfra" width="34" style="display:block;margin:0 auto 12px;height:auto;width:34px;border:0;"/>
+        <div style="font-family:${SFONT};font-weight:300;font-size:20px;letter-spacing:0.42em;padding-left:0.42em;color:#ffffff;">STEMFRA</div>
+      </td></tr>
+
+      <tr><td style="background:${S.card};padding:52px 60px 44px;">
+        ${eyebrow ? `<div style="font-family:${SFONT};font-weight:400;font-size:11px;letter-spacing:0.28em;color:${S.band};text-transform:uppercase;">${escapeHtml(eyebrow)}</div>` : ''}
+        <div style="font-family:${SFONT};font-weight:300;font-size:30px;line-height:1.25;color:${S.ink};margin-top:${eyebrow ? '18px' : '0'};">${escapeHtml(heading)}</div>
+        ${paras}
+        ${rows && rows.length ? sRows(rows) : ''}
+        ${amount ? amountBlock(amount) : ''}
+        ${bodyHtml}
+        ${cta ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center">${sButtons(cta, cta2)}</td></tr></table>` : ''}
+        ${note ? `<p style="margin:26px auto 0;max-width:420px;font-family:${SFONT};font-weight:300;font-size:13px;line-height:1.7;color:${S.micro};text-align:center;">${nl2br(note)}</p>` : ''}
+      </td></tr>
+
+      <tr><td align="center" style="background:${S.band};padding:30px 48px 34px;">
+        ${links}
+        ${security ? `<div style="font-family:${SFONT};font-weight:300;font-size:10px;letter-spacing:0.16em;color:${S.bandText};text-transform:uppercase;margin-top:14px;line-height:1.8;">${escapeHtml(security)}</div>` : ''}
+        ${reason ? `<div style="font-family:${SFONT};font-weight:300;font-size:10px;letter-spacing:0.16em;color:${S.bandText};text-transform:uppercase;margin-top:${links || security ? '14px' : '0'};line-height:1.8;">${escapeHtml(reason)}</div>` : ''}
+        <div style="font-family:${SFONT};font-weight:300;font-size:10px;letter-spacing:0.20em;color:${S.bandText};margin-top:12px;">
+          &copy; ${new Date().getFullYear()} STEMFRA LLC&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://stemfra.com" style="color:${S.bandText};text-decoration:underline;">STEMFRA.COM</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="mailto:support@stemfra.com" style="color:${S.bandText};text-decoration:underline;">SUPPORT@STEMFRA.COM</a>
+        </div>
+        ${unsubscribeUrl ? `<div style="font-family:${SFONT};font-weight:300;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;margin-top:12px;"><a href="${escapeHtml(unsubscribeUrl)}" style="color:${S.bandText};text-decoration:underline;">Unsubscribe from these emails</a></div>` : ''}
+      </td></tr>
+
+    </table>
+  </td></tr></table>
+</body></html>`;
 }
 
 // ─── The shell ────────────────────────────────────────────────────────────────
@@ -126,6 +249,58 @@ function footer(brand, reason, security, unsubscribeUrl, footerLinks) {
   </td></tr></table>`;
 }
 
+// ─── Tenant-mode document (Case 2 — the business's OWN brand, popup style) ────
+// Modeled on a site popup: a PHOTO on the left, the message on the RIGHT (accent
+// eyebrow + serif heading + summary), then the shared "sent by … powered by
+// Stemfra" footer. Single content column when a site has no photo. The accent
+// colors the eyebrow + any button; the logo sits on white in the content column.
+function tenantDocument({ brand, heading, preheader, paragraphs = [], bodyHtml = '', rows, cta, note, reason, security, unsubscribeUrl, footerLinks }) {
+  const accent = /^#[0-9a-f]{6}$/i.test(brand.accent || '') ? brand.accent : T.ink;
+  const headFont = fontStack(brand.font);
+  const logo = brand.logoUrl
+    ? `<img src="${escapeHtml(emailLogoUrl(brand.logoUrl, 'white'))}" alt="${escapeHtml(brand.name)}" height="30" style="display:block;margin:0 0 18px;height:30px;width:auto;border:0;"/>`
+    : '';
+  const paras = paragraphs.filter(Boolean).map((p) =>
+    `<p style="margin:0 0 14px;font-family:${FONT};font-size:15px;line-height:1.7;color:${T.body};">${nl2br(p)}</p>`
+  ).join('');
+  const content = `
+    ${logo}
+    <div style="font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${accent};margin-bottom:14px;">${escapeHtml(brand.name)}</div>
+    <h1 style="margin:0 0 16px;font-family:${headFont};font-size:27px;font-weight:700;line-height:1.2;color:${T.ink};">${escapeHtml(heading)}</h1>
+    ${paras}
+    ${rows && rows.length ? rowsTable(rows) : ''}
+    ${bodyHtml}
+    ${cta ? button({ ...cta, color: cta.color || accent }) : ''}
+    ${note ? `<p style="margin:18px 0 0;font-family:${FONT};font-size:13px;line-height:1.6;color:${T.muted};">${nl2br(note)}</p>` : ''}`;
+  const photo = brand.photoUrl;
+  const cardInner = photo
+    ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
+        <td width="230" style="padding:0;background-color:${accent};background-image:url('${escapeHtml(photo)}');background-position:center;background-size:cover;background-repeat:no-repeat;"></td>
+        <td style="padding:40px 38px;vertical-align:top;background:${T.card};">${content}</td>
+      </tr></table>`
+    : `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td style="padding:40px 40px;background:${T.card};">${content}</td></tr></table>`;
+  const bizName = brand.url ? `<a href="${brand.url}" style="color:${T.link};">${escapeHtml(brand.name)}</a>` : escapeHtml(brand.name);
+  const links = (footerLinks && footerLinks.length)
+    ? footerLinks.map((l) => `<a href="${l.url}" style="color:${T.link};text-decoration:underline;">${escapeHtml(l.label)}</a>`).join(' &middot; ') : '';
+  return `<!doctype html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:${T.bg};">
+  ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</div>` : ''}
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:${T.bg};padding:44px 12px 56px;"><tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;width:100%;background:${T.card};border-radius:18px;overflow:hidden;border:1px solid ${T.border};">
+      <tr><td style="padding:0;">${cardInner}</td></tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center" style="padding:22px 40px 0;">
+      ${security ? `<p style="margin:0 0 6px;font-family:${FONT};font-size:12px;line-height:1.6;color:${T.muted};">${security}</p>` : ''}
+      ${reason ? `<p style="margin:0 0 6px;font-family:${FONT};font-size:12px;line-height:1.6;color:${T.muted};">${escapeHtml(reason)}</p>` : ''}
+      ${links ? `<p style="margin:0 0 8px;font-family:${FONT};font-size:12px;line-height:1.8;color:${T.muted};">${links}</p>` : ''}
+      <p style="margin:0;font-family:${FONT};font-size:12px;color:${T.muted};">Sent by ${bizName} &middot; powered by <a href="https://stemfra.com" style="color:${T.link};">Stemfra</a></p>
+      ${unsubscribeUrl ? `<p style="margin:6px 0 0;font-family:${FONT};font-size:12px;color:${T.muted};"><a href="${unsubscribeUrl}" style="color:${T.link};text-decoration:underline;">Unsubscribe from these emails</a></p>` : ''}
+    </td></tr></table>
+  </td></tr></table>
+</body></html>`;
+}
+
 /**
  * Render a full email document.
  * @param {object} o
@@ -139,30 +314,14 @@ function footer(brand, reason, security, unsubscribeUrl, footerLinks) {
  * @param {{name:string,logoUrl?:string,stemfra?:boolean}} [o.brand] Tenant brand; omit for Stemfra.
  * @param {string} [o.reason]           Footer "why you received this" line.
  */
-function renderEmail({ heading, preheader, paragraphs = [], bodyHtml = '', rows, cta, note, brand, reason, security, unsubscribeUrl, footerLinks, bodyAlign = 'left' }) {
+function renderEmail({ heading, eyebrow, preheader, paragraphs = [], bodyHtml = '', rows, amount, cta, cta2, note, brand, reason, security, unsubscribeUrl, footerLinks, bodyAlign = 'left' }) {
   const tenant = !!(brand && brand.name && !brand.stemfra);
-  const paras = paragraphs.filter(Boolean).map(p =>
-    `<p style="margin:0 0 14px;font-family:${FONT};font-size:15px;line-height:1.7;color:${T.body};text-align:${bodyAlign};">${nl2br(p)}</p>`
-  ).join('');
-  return `<!doctype html>
-<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;padding:0;background:${T.bg};">
-  ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</div>` : ''}
-  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:${T.bg};padding:44px 12px 56px;"><tr><td align="center">
-    <table width="560" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;width:100%;background:${T.card};border:1px solid ${T.border};border-radius:16px;">
-      <tr>${header(brand)}</tr>
-      <tr><td style="padding:22px 40px 36px;">
-        <h1 style="margin:0 0 16px;font-family:${FONT};font-size:23px;font-weight:700;letter-spacing:-.3px;line-height:1.3;color:${T.ink};text-align:center;">${escapeHtml(heading)}</h1>
-        ${paras}
-        ${rows && rows.length ? rowsTable(rows) : ''}
-        ${bodyHtml}
-        ${cta ? button({ ...cta, color: cta.color || (tenant ? T.button : T.accent) }) : ''}
-        ${note ? `<p style="margin:16px 0 0;font-family:${FONT};font-size:13px;line-height:1.6;color:${T.muted};text-align:${bodyAlign};">${nl2br(note)}</p>` : ''}
-      </td></tr>
-    </table>
-    ${footer(brand, reason, security, unsubscribeUrl, footerLinks)}
-  </td></tr></table>
-</body></html>`;
+  if (!tenant) {
+    // Stemfra brand mode → the Bentley-register chocolate document.
+    return stemfraDocument({ eyebrow, heading, preheader, paragraphs, bodyHtml, rows, amount, cta, cta2, note, reason, security, unsubscribeUrl, footerLinks });
+  }
+  // Tenant brand mode → the Case-2 popup document (the business's own colors).
+  return tenantDocument({ brand, heading, preheader, paragraphs, bodyHtml, rows, cta, note, reason, security, unsubscribeUrl, footerLinks, bodyAlign });
 }
 
-module.exports = { renderEmail, rowsTable, quoteBlock, discountBlock, button, escapeHtml, T, FONT };
+module.exports = { renderEmail, rowsTable, quoteBlock, discountBlock, button, amountBlock, escapeHtml, T, FONT, S, SFONT };

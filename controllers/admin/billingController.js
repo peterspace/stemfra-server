@@ -2,6 +2,9 @@
 // Staff-gated (PLATFORM_ADMIN). The server uses the service-role client.
 const supabase = require('../../config/supabase');
 const billing = require('../../lib/billing');
+const { meterSiteCommission, meterAllSitesForPeriod } = require('../../lib/commissionMeter');
+const { streamInvoicePdf } = require('../../lib/invoicePdf');
+const { getCommissionBank } = require('../../lib/commission');
 
 // Resolve payer details (for the Payoneer request) for a set of sites, without
 // relying on PostgREST FK-embed names: explicit company + owner-contact lookups.
@@ -62,6 +65,62 @@ async function listCharges(req, res) {
   const payers = await payersForSites((charges || []).map(c => c.site_id));
   const rows = (charges || []).map(c => ({ ...c, site: payers[c.site_id] || null }));
   return res.json({ charges: rows });
+}
+
+// GET /api/admin/billing/charges/:id/invoice.pdf — STAFF view of the tenant's
+// branded invoice (same PDF the owner sees). Part of the commission compliance packet.
+async function invoicePdf(req, res) {
+  const { data: charge } = await supabase.from('billing_charges')
+    .select('id, site_id, kind, line_items, amount_cents, currency, status, due_date, paid_at, created_at, provider')
+    .eq('id', req.params.id).maybeSingle();
+  if (!charge) return res.status(404).json({ error: 'Invoice not found' });
+  const { data: site } = await supabase.from('sites').select('owner_contact_id').eq('id', charge.site_id).maybeSingle();
+  let contact = null;
+  if (site?.owner_contact_id) {
+    const { data } = await supabase.from('contacts').select('*').eq('id', site.owner_contact_id).maybeSingle();
+    contact = data || null;
+  }
+  const bank = (charge.kind === 'commission' || charge.kind === 'adjustment') ? await getCommissionBank() : null;
+  streamInvoicePdf(res, { charge, contact, billingProfile: contact?.billing_profile || {}, provider: charge.provider, bank });
+}
+
+// GET /api/admin/billing/charges/:id/booking-export.csv — proof-of-service for a
+// commission invoice: every booking on the site within the charge's period. This is
+// the "source of funds" evidence (Airwallex may ask) that pairs with the receipt.
+function csvCell(v) {
+  const s = v == null ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+async function bookingExport(req, res) {
+  const { data: charge } = await supabase.from('billing_charges')
+    .select('id, site_id, period_start, period_end').eq('id', req.params.id).maybeSingle();
+  if (!charge) return res.status(404).json({ error: 'Charge not found' });
+  if (!charge.period_start || !charge.period_end) return res.status(400).json({ error: 'Charge has no period to export' });
+  const fromIso = new Date(charge.period_start + 'T00:00:00.000Z').toISOString();
+  const toIso = new Date(charge.period_end + 'T23:59:59.999Z').toISOString();
+  const { data: bookings } = await supabase.from('site_bookings')
+    .select('starts_at, service_name_snapshot, status, payment_status, amount_cents, metadata, team_member:site_team_members(name), customer:site_customers(first_name,last_name)')
+    .eq('site_id', charge.site_id)
+    .gte('starts_at', fromIso).lte('starts_at', toIso)
+    .order('starts_at', { ascending: true }).limit(10000);
+  const en = (v) => (typeof v === 'string' ? v : v?.en || '');
+  const rows = [['Date', 'Service', 'Customer', 'Staff', 'Status', 'Payment', 'Amount', 'Collected'].join(',')];
+  for (const b of bookings || []) {
+    const collected = b.payment_status === 'paid' || b.metadata?.collected === true;
+    rows.push([
+      b.starts_at,
+      en(b.service_name_snapshot),
+      [b.customer?.first_name, b.customer?.last_name].filter(Boolean).join(' '),
+      b.team_member?.name || '',
+      b.status || '',
+      b.payment_status || '',
+      b.amount_cents != null ? (b.amount_cents / 100).toFixed(2) : '',
+      collected ? 'yes' : 'no',
+    ].map(csvCell).join(','));
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="bookings-${charge.period_start}.csv"`);
+  return res.send(rows.join('\n'));
 }
 
 // GET /api/admin/billing/charges/:id/request-details — paste-ready Payoneer fields
@@ -148,4 +207,29 @@ async function putPlans(req, res) {
   } catch (e) { return res.status(400).json({ success: false, message: e.message }); }
 }
 
-module.exports = { getProvider, setProvider, listCharges, requestDetails, startBilling, openCycle, markRequested, markPaid, getPlans, putPlans };
+// POST /api/admin/billing/commission/run { period?, siteId?, dryRun? }
+// Meters commission (kind='commission', ledger only) for a month across all live sites,
+// or one site. period defaults to the current UTC month. Idempotent per (site, period).
+async function runCommission(req, res) {
+  try {
+    const b = req.body || {};
+    let period = b.period;
+    if (!period) {
+      const d = new Date();
+      period = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    }
+    if (!/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ success: false, message: 'period must be YYYY-MM.' });
+    }
+    const dryRun = b.dryRun === true;
+    const results = b.siteId
+      ? [await meterSiteCommission(b.siteId, period, { dryRun })]
+      : await meterAllSitesForPeriod(period, { dryRun });
+    const totalCommissionCents = results.reduce((s, r) => s + (r.amountCents || 0), 0);
+    return res.json({ success: true, period, dryRun, count: results.length, totalCommissionCents, results });
+  } catch (e) {
+    return res.status(400).json({ success: false, message: e.message });
+  }
+}
+
+module.exports = { getProvider, setProvider, listCharges, invoicePdf, bookingExport, requestDetails, startBilling, openCycle, markRequested, markPaid, getPlans, putPlans, runCommission };

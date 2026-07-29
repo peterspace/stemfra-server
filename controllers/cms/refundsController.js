@@ -1,13 +1,19 @@
-// CMS — owner-issued refunds (System B). Refunds a booking payment or a
-// subscription's latest charge, full or partial, on the owner's manual decision
-// (cancellation/refund is business-decided, often partial/delayed). Because these
-// are destination charges, we REVERSE THE TRANSFER (the gym, who chose to refund,
-// bears the refunded amount) but KEEP our application fee (standard marketplace
-// model — platform fees are non-refundable; our retained fee covers the Stripe
-// processing fee, which Stripe never returns on refunds).
+// CMS — owner-issued refunds (System B), full or partial, on the owner's manual
+// decision (cancellation/refund is business-decided, often partial/delayed).
+//
+// TWO payment models coexist here:
+//  · BOOKINGS (P12 direct keys): the charge lives entirely on the business's OWN
+//    Stripe account (getStripeForSite). Refund is a PLAIN refund on that account —
+//    no destination transfer to reverse, no platform application fee (there is
+//    none; Stemfra takes no cut of bookings).
+//  · SUBSCRIPTIONS (memberships): still the platform Connect destination-charge
+//    model (not yet pivoted — see Task #17). Refund REVERSES THE TRANSFER (the gym
+//    bears the amount) but KEEPS our application fee (non-refundable; covers the
+//    Stripe processing fee Stripe never returns on refunds).
 // Single-var supabase require per convention.
 const supabase = require('../../config/supabase');
 const { stripe } = require('../../config/stripe');
+const { getStripeForSite } = require('../../lib/paymentCredentials');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { logSiteActivity } = require('../../lib/activity');
 
@@ -18,7 +24,6 @@ const { logSiteActivity } = require('../../lib/activity');
  */
 async function refund(req, res) {
   try {
-    if (!stripe) return res.status(503).json({ success: false, message: 'Stripe not configured.' });
     const { bookingId, subscriptionId, amountCents } = req.body || {};
 
     let piId = null;
@@ -33,6 +38,7 @@ async function refund(req, res) {
       if (b.payment_status !== 'paid') return res.status(400).json({ success: false, message: 'Booking is not paid.' });
       siteId = b.site_id; piId = b.stripe_payment_intent_id; bookingRowId = b.id;
     } else if (subscriptionId) {
+      if (!stripe) return res.status(503).json({ success: false, message: 'Stripe not configured.' });
       const { data: ss } = await supabase
         .from('site_subscriptions').select('id, site_id, stripe_customer_id, metadata').eq('id', subscriptionId).single();
       if (!ss) return res.status(404).json({ success: false, message: 'Subscription not found.' });
@@ -47,23 +53,30 @@ async function refund(req, res) {
     const site = await verifySiteOwnership(req.cmsUser.id, siteId);
     if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
 
-    const refundObj = await stripe.refunds.create({
-      payment_intent: piId,
-      ...(amountCents ? { amount: amountCents } : {}),
-      reverse_transfer: true,        // the gym (who chose to refund) bears the amount
-      refund_application_fee: false, // platform fee is non-refundable (model B)
-    });
-
-    // Full booking refund → mark the row refunded (partial leaves it 'paid';
-    // the webhook also reconciles on charge.refunded for full refunds).
-    if (bookingRowId && !amountCents) {
-      await supabase.from('site_bookings').update({ payment_status: 'refunded' }).eq('id', bookingRowId);
-    }
-
-    // Record the refund on the subscription so the CMS can show "−$X refunded"
-    // (a subscription's status doesn't change on a refund, so this is the only
-    // signal). Cumulative, kept in metadata — no schema change.
-    if (subRow) {
+    let refundObj;
+    if (bookingRowId) {
+      // Direct-key booking → refund on the business's OWN account, plain refund.
+      const tenantStripe = await getStripeForSite(siteId);
+      if (!tenantStripe) return res.status(400).json({ success: false, message: 'This business is not connected to Stripe.' });
+      refundObj = await tenantStripe.refunds.create({
+        payment_intent: piId,
+        ...(amountCents ? { amount: amountCents } : {}),
+      });
+      // Full refund → mark the row refunded (partial leaves it 'paid').
+      if (!amountCents) {
+        await supabase.from('site_bookings').update({ payment_status: 'refunded' }).eq('id', bookingRowId);
+      }
+    } else {
+      // Subscription → platform Connect: reverse the transfer, keep the app fee.
+      refundObj = await stripe.refunds.create({
+        payment_intent: piId,
+        ...(amountCents ? { amount: amountCents } : {}),
+        reverse_transfer: true,        // the gym (who chose to refund) bears the amount
+        refund_application_fee: false, // platform fee is non-refundable (model B)
+      });
+      // Record the refund on the subscription so the CMS can show "−$X refunded"
+      // (a subscription's status doesn't change on a refund). Cumulative, in
+      // metadata — no schema change.
       const md = subRow.metadata || {};
       await supabase.from('site_subscriptions').update({
         metadata: {

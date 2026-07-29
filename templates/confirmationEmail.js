@@ -1,7 +1,7 @@
 // Client confirmation email — sent to the person who submitted the form.
 // Brand-trust touchpoint, rendered through the unified base (templates/baseEmail.js).
 
-const { renderEmail, T, FONT } = require('./baseEmail');
+const { renderEmail, T, FONT, S } = require('./baseEmail');
 
 const subjectDescriptions = {
   'AI Automation':        "We'll review your automation requirements and come prepared with ideas for your discovery call.",
@@ -22,7 +22,7 @@ function stepsTable() {
   const rows = STEPS.map((s, i) => `
     <tr>
       <td style="padding:16px 18px;width:44px;vertical-align:top;${i ? `border-top:1px solid ${T.hairline};` : ''}">
-        <div style="width:26px;height:26px;border-radius:50%;background:${T.accent};color:#fff;font-family:${FONT};font-size:12px;font-weight:700;text-align:center;line-height:26px;">${i + 1}</div>
+        <div style="width:26px;height:26px;border-radius:50%;background:${S.band};color:#fff;font-family:${FONT};font-size:12px;font-weight:700;text-align:center;line-height:26px;">${i + 1}</div>
       </td>
       <td style="padding:16px 18px 16px 0;${i ? `border-top:1px solid ${T.hairline};` : ''}">
         <p style="margin:0 0 2px;font-family:${FONT};font-size:14px;font-weight:600;color:${T.ink};">${s.title}</p>
@@ -40,6 +40,7 @@ function buildConfirmationEmail(data) {
 
   const html = renderEmail({
     preheader: "We've received your message — here's what happens next.",
+    eyebrow: 'Message received',
     heading: `We've received your message, ${firstName}.`,
     paragraphs: [desc],
     bodyHtml: stepsTable(),

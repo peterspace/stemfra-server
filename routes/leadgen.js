@@ -387,7 +387,7 @@ router.post('/call-with-ai', async (req, res) => {
   if (!leadgenCall.isConfigured()) {
     return res.status(503).json({ success: false, message: 'Outbound voice is not configured on the server.' });
   }
-  const { leadId } = req.body || {};
+  const { leadId, reason } = req.body || {};
   if (!leadId) return res.status(400).json({ success: false, message: 'leadId is required.' });
 
   const { data: lead, error } = await supabase
@@ -404,10 +404,11 @@ router.post('/call-with-ai', async (req, res) => {
   }
 
   try {
-    const { callSid, to } = await leadgenCall.placeAiCall(lead);
+    const reasonText = typeof reason === 'string' ? reason.trim().slice(0, 500) : '';
+    const { callSid, to } = await leadgenCall.placeAiCall(lead, { reason: reasonText || undefined });
     await supabase.from('activity_feed').insert([{
       entity_type: 'lead', entity_id: lead.id, action: 'lead_call_initiated',
-      details: { call_sid: callSid, to, company_name: lead.company_name || null, trigger: 'manual' },
+      details: { call_sid: callSid, to, company_name: lead.company_name || null, trigger: 'manual', ...(reasonText ? { reason: reasonText } : {}) },
       created_by: user.id,
     }]).then(() => {}, () => {});
     await supabase.from('leads').update({ last_activity_at: new Date().toISOString() }).eq('id', leadId);

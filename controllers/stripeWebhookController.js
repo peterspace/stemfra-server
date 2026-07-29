@@ -210,6 +210,13 @@ async function handleWebhook(req, res) {
               patch.build_paid_at = new Date().toISOString();
             }
             await supabase.from('subscriptions').update(patch).eq('id', row.id);
+            // Pay-and-publish (Stripe System-A path): the first invoice cleared →
+            // auto-publish the site if its checklist passes (best-effort; never
+            // blocks the webhook). Mirrors the Payoneer markPaid reactor.
+            try {
+              require('../lib/billing/publishOnPayment')
+                .maybeAutoPublishSite(s.metadata.site_id, { source: 'pay_and_publish_stripe' }).catch(() => {});
+            } catch { /* optional */ }
           }
         }
         break;

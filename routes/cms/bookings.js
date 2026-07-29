@@ -10,9 +10,13 @@ const supabase = require('../../config/supabase');
 const { requireCmsAuth, verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { sendCancellationEmails, sendRescheduleEmails, resendConfirmation } = require('../../lib/bookingEmails');
 const { sendNoShow } = require('../../lib/lifecycleEmails');
+const { adjustBooking } = require('../../controllers/cms/bookingsController');
 
 const router = express.Router();
 router.use(requireCmsAuth);
+
+// PATCH /api/cms/bookings/:bookingId/adjust — change delivered service/price/duration (task 60).
+router.patch('/:bookingId/adjust', adjustBooking);
 
 // POST /api/cms/bookings/notify { siteId, bookingId, event: 'cancelled'|'rescheduled', oldStartsAt? }
 router.post('/notify', async (req, res) => {

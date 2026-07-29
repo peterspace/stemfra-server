@@ -7,6 +7,7 @@ const { verifySiteOwnership, resolveContactId } = require('../../middleware/cmsA
 const billing = require('../../lib/billing');
 const { logSiteActivity } = require('../../lib/activity');
 const { streamInvoicePdf } = require('../../lib/invoicePdf');
+const { getCommissionBank } = require('../../lib/commission');
 
 const CONTACT_COLS = 'full_name, first_name, last_name, email, country, state, billing_profile';
 
@@ -30,13 +31,13 @@ async function getBilling(req, res) {
     .select('id, status, provider, build_amount_cents, monthly_amount_cents, currency, started_at, current_period_end, cancel_at_period_end, cancelled_at, metadata')
     .eq('site_id', siteId).maybeSingle();
 
-  let charges = [];
-  if (sub) {
-    const { data } = await supabase.from('billing_charges')
-      .select('id, kind, line_items, amount_cents, currency, status, due_date, paid_at, created_at')
-      .eq('subscription_id', sub.id).order('created_at', { ascending: false });
-    charges = data || [];
-  }
+  // Every charge for this site: commission + domain adjustments (subscription_id NULL)
+  // AND any subscription charges. Query by site_id so commission invoices show even
+  // when there is no subscription (the commission model has none).
+  const { data: chargeRows } = await supabase.from('billing_charges')
+    .select('id, kind, line_items, amount_cents, currency, status, due_date, period_start, period_end, paid_at, created_at, metadata')
+    .eq('site_id', siteId).order('created_at', { ascending: false });
+  const charges = chargeRows || [];
 
   const contactId = await resolveContactId(req.cmsUser.id);
   let contact = null;
@@ -53,7 +54,12 @@ async function getBilling(req, res) {
   // Active collection method drives the adaptive Payment-method panel.
   const provider = sub?.provider || (await billing.getActiveProvider());
 
-  return res.json({ subscription: sub || null, charges, contact, availablePlans, currentTier, canChangePlan, provider });
+  // Bank details for the Invoices "pay by bank transfer" copy panel (only when the
+  // owner has commission/adjustment invoices, which are paid by transfer).
+  const hasBankTransfer = charges.some((c) => c.kind === 'commission' || c.kind === 'adjustment');
+  const commissionBank = hasBankTransfer ? await getCommissionBank() : null;
+
+  return res.json({ subscription: sub || null, charges, contact, availablePlans, currentTier, canChangePlan, provider, commissionBank });
 }
 
 // POST /api/cms/billing/change-plan { siteId, tier }
@@ -171,7 +177,36 @@ async function invoicePdf(req, res) {
     const { data } = await supabase.from('contacts').select(CONTACT_COLS).eq('id', contactId).maybeSingle();
     contact = data || null;
   }
-  streamInvoicePdf(res, { charge, contact, billingProfile: contact?.billing_profile || {}, provider: charge.provider });
+  // Commission + domain-adjustment invoices are paid by bank transfer → include our
+  // Airwallex bank details on the PDF so the tenant knows exactly where to pay.
+  const bank = (charge.kind === 'commission' || charge.kind === 'adjustment') ? await getCommissionBank() : null;
+  streamInvoicePdf(res, { charge, contact, billingProfile: contact?.billing_profile || {}, provider: charge.provider, bank });
 }
 
-module.exports = { getBilling, updateBillingContact, changePlan, cancelSubscription, reactivateSubscription, invoicePdf };
+// POST /api/cms/billing/charges/:chargeId/receipt { receiptUrl }
+// Owner confirms an invoice payment by attaching a payment receipt (image/PDF uploaded
+// first via /api/cms/site-uploads/upload). Stored on the charge for staff source-of-funds
+// verification (Airwallex may ask); staff then mark it paid from the CRM. Status is NOT
+// changed here — staff verify → mark paid. Owner + ownership gated.
+async function submitReceipt(req, res) {
+  const { receiptUrl } = req.body || {};
+  if (!receiptUrl || typeof receiptUrl !== 'string') return res.status(400).json({ error: 'receiptUrl is required' });
+  const { data: charge } = await supabase.from('billing_charges')
+    .select('id, site_id, metadata, status').eq('id', req.params.chargeId).maybeSingle();
+  if (!charge) return res.status(404).json({ error: 'Invoice not found' });
+  const site = await verifySiteOwnership(req.cmsUser.id, charge.site_id);
+  if (!site) return res.status(403).json({ error: 'Not your invoice' });
+
+  const metadata = { ...(charge.metadata || {}), receipt_url: receiptUrl, receipt_uploaded_at: new Date().toISOString() };
+  const { data, error } = await supabase.from('billing_charges')
+    .update({ metadata, updated_at: new Date().toISOString() }).eq('id', charge.id)
+    .select('id, status, metadata').single();
+  if (error) return res.status(500).json({ error: error.message });
+  logSiteActivity({
+    siteId: charge.site_id, action: 'invoice_receipt_uploaded', actorName: req.cmsUser.email,
+    entityType: 'billing_charge', entityId: charge.id, details: { receipt_url: receiptUrl },
+  });
+  return res.json({ charge: data });
+}
+
+module.exports = { getBilling, updateBillingContact, changePlan, cancelSubscription, reactivateSubscription, invoicePdf, submitReceipt };
