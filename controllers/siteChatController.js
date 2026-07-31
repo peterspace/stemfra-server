@@ -104,6 +104,126 @@ async function captureLead(site, convId, lead) {
     console.error('[site-chat] lead notify failed:', e.message));
 }
 
+// Identify a signed-in member from the magic-link session the member portal
+// already issues. The widget sends its access token; we verify it server-side
+// (never trust a client-supplied email) and match the verified address to this
+// site's own customer row. Anonymous visitors simply resolve to null.
+async function resolveMember(siteId, token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    const user = data?.user;
+    if (error || !user?.email) return null;
+    const email = user.email.toLowerCase();
+    const { data: cust } = await supabase
+      .from('site_customers')
+      .select('id, first_name, last_name, email, phone, auth_user_id, metadata')
+      .eq('site_id', siteId)
+      .or(`auth_user_id.eq.${user.id},email.eq.${email}`)
+      .maybeSingle();
+    const name = cust ? [cust.first_name, cust.last_name].filter(Boolean).join(' ').trim() : '';
+    return {
+      customerId: cust?.id || null,
+      name: name || null,
+      email: cust?.email || email,
+      phone: cust?.phone || null,
+      suspended: cust?.metadata?.suspended === true,
+    };
+  } catch { return null; }
+}
+
+const ESCALATION_LABELS = {
+  refund: 'Refund request',
+  complaint: 'Complaint',
+  billing: 'Billing question',
+  other: 'Needs a human',
+};
+
+// Escalation — anything the assistant must NOT answer itself (refunds, complaints,
+// billing disputes). Deliberately lands in the SAME site_leads inbox the owner
+// already works, rather than a parallel store they'd have to learn: it inherits the
+// existing owner email + the lead_created bell notification for free. What marks it
+// apart is `source_page` (so it's visible at a glance in the inbox) and
+// metadata.kind='escalation' for anything that wants to filter later.
+async function captureEscalation(site, convId, esc, member) {
+  const reason = ESCALATION_LABELS[esc.reason] ? esc.reason : 'other';
+  const label = ESCALATION_LABELS[reason];
+
+  // A signed-in member never has to re-type what we already hold.
+  const email = member?.email
+    || (typeof esc.email === 'string' && EMAIL_RE.test(esc.email.trim()) ? esc.email.trim().toLowerCase() : null);
+  const phone = member?.phone
+    || (typeof esc.phone === 'string' && esc.phone.trim() ? esc.phone.trim() : null);
+  const name = member?.name
+    || (typeof esc.name === 'string' && esc.name.trim() ? esc.name.trim() : null);
+  if (!email && !phone) return; // nothing to reply to — the agent keeps asking
+
+  const summary = typeof esc.summary === 'string' && esc.summary.trim()
+    ? esc.summary.trim().slice(0, 2000) : label;
+  const who = member ? 'a signed-in member' : 'a website visitor';
+  const message = `${summary}\n\n— Raised in the website chat by ${who}. The assistant did not answer it; it needs a reply from the business.`;
+
+  const { data: existing } = await supabase
+    .from('site_leads').select('id')
+    .eq('site_id', site.id).eq('metadata->>conversation_id', convId).maybeSingle();
+
+  const row = {
+    name, email, phone,
+    subject: label,
+    message,
+    source_page: `Chat escalation · ${label}`,
+    metadata: {
+      source: 'website_chat', conversation_id: convId, captured_by: 'frontdesk',
+      kind: 'escalation', reason, urgent: true,
+      member_customer_id: member?.customerId || null,
+    },
+  };
+
+  if (existing) { await supabase.from('site_leads').update(row).eq('id', existing.id); return; }
+  const { error } = await supabase.from('site_leads').insert([{ site_id: site.id, status: 'new', ...row }]);
+  if (error) { console.error('[site-chat] escalation insert failed:', error.message); return; }
+
+  if (site.status === 'live') notifyOwnerOfEscalation(site, { label, name, email, phone, summary, member: !!member })
+    .catch(e => console.error('[site-chat] escalation notify failed:', e.message));
+}
+
+// Escalations reuse the chat-lead notification preference and template: an owner
+// who wants chat leads emailed certainly wants a refund request emailed. Only the
+// wording changes, so no new template or preference key is introduced.
+async function notifyOwnerOfEscalation(site, esc) {
+  if (!site.owner_contact_id) return;
+  const prefs = await getSiteNotifyPrefs(site.id);
+  if (!prefs.owner_chat_lead) return;
+  const { data: owner } = await supabase.from('contacts').select('email, full_name, auth_user_id').eq('id', site.owner_contact_id).single();
+  if (!owner?.email) return;
+  const dashboardUrl = await cmsMagicLink(owner.auth_user_id, '/leads');
+  const intent = `${esc.label}${esc.member ? ' (signed-in member)' : ''}`;
+  await sendMail({
+    fromName: 'STEMfra Sites',
+    to: owner.email,
+    subject: `Action needed: ${esc.label} from your website chat`,
+    text: [
+      `Someone raised something on your website that the chat assistant did not answer.`,
+      `It is waiting for a reply from you.`,
+      ``,
+      `Type: ${esc.label}`,
+      `From: ${esc.member ? 'a signed-in member' : 'a website visitor'}`,
+      `Name: ${esc.name || '(not given)'}`,
+      `Email: ${esc.email || '(not given)'}`,
+      `Phone: ${esc.phone || '(not given)'}`,
+      ``,
+      `What they said:`,
+      esc.summary,
+      ``,
+      `It is in your dashboard under Leads.`,
+    ].join('\n'),
+    html: emails.ownerChatLeadNotification({
+      name: esc.name, email: esc.email, phone: esc.phone,
+      intent, summary: esc.summary, dashboardUrl,
+    }),
+  });
+}
+
 async function notifyOwnerOfLead(site, lead) {
   if (!site.owner_contact_id) return;
   const prefs = await getSiteNotifyPrefs(site.id);
@@ -154,6 +274,7 @@ async function callFrontdesk({ convId, siteId, business, message, history, conte
     reply: data.reply ?? data.output ?? '',
     handoff: !!data.handoff,
     lead: data.lead && typeof data.lead === 'object' ? data.lead : null,
+    escalation: data.escalation && typeof data.escalation === 'object' ? data.escalation : null,
     booking: data.booking && typeof data.booking === 'object' ? data.booking : null,
     quickReplies: Array.isArray(data.quick_replies) ? data.quick_replies.filter(s => typeof s === 'string' && s.trim()).slice(0, 6) : [],
   };
@@ -162,7 +283,7 @@ async function callFrontdesk({ convId, siteId, business, message, history, conte
 // POST /api/site-chat/send  { siteId, conversationId?, message }
 async function send(req, res) {
   try {
-    const { siteId, conversationId, message } = req.body || {};
+    const { siteId, conversationId, message, memberToken } = req.body || {};
     if (!siteId || !message || !String(message).trim()) return res.status(400).json({ error: 'message is required.' });
 
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown';
@@ -203,6 +324,8 @@ async function send(req, res) {
     }
 
     const baseContext = await buildSiteContext(siteId);
+    // Who are we talking to? Verified server-side from the member's own session.
+    const member = await resolveMember(siteId, memberToken);
     const zone = baseContext.business?.time_zone || 'America/New_York';
     const today = DateTime.now().setZone(zone).toFormat("yyyy-MM-dd '('cccc')'");
     const business = site.company?.name || null;
@@ -210,6 +333,7 @@ async function send(req, res) {
 
     let reply = '';
     let lead = null;
+    let escalation = null;      // refund / complaint / billing — never answered by the agent
     let card = null;            // structured booking card (confirm / done / handoff)
     let quickReplies = [];      // tappable chips shown under the reply
     let pendingPayment = null;  // resolved booking awaiting an in-chat card payment
@@ -217,7 +341,9 @@ async function send(req, res) {
       // Turn 1 — answer / gather. The agent may emit a `booking` intent.
       let out = await callFrontdesk({
         convId, siteId, business, message: userMsg.content, history,
-        context: { ...baseContext, today },
+        context: { ...baseContext, today, member: member
+          ? { known: true, name: member.name, email: member.email, phone: member.phone }
+          : { known: false } },
       });
 
       // F3 — if the agent is working a booking, run the real booking tool and
@@ -237,13 +363,16 @@ async function send(req, res) {
         if (tool.note) {
           out = await callFrontdesk({
             convId, siteId, business, message: userMsg.content, history,
-            context: { ...baseContext, today, booking_system_note: tool.note },
+            context: { ...baseContext, today, booking_system_note: tool.note, member: member
+              ? { known: true, name: member.name, email: member.email, phone: member.phone }
+              : { known: false } },
           });
         }
       }
 
       reply = out.reply;
       lead = out.lead;
+      escalation = out.escalation;
       // Server-injected booking chips (exact times) win; else use the agent's chips.
       if (!quickReplies.length) quickReplies = out.quickReplies || [];
     } catch (e) {
@@ -260,6 +389,12 @@ async function send(req, res) {
     // F2 — if the agent gathered the visitor's details, capture a lead (best-effort,
     // never blocks or fails the reply).
     if (lead) captureLead(site, convId, lead).catch(e => console.error('[site-chat] captureLead error:', e.message));
+
+    // Escalation — a refund, complaint or billing dispute the assistant is told
+    // never to answer itself. Same best-effort discipline as leads: it must never
+    // block or fail the visitor's reply.
+    if (escalation) captureEscalation(site, convId, escalation, member)
+      .catch(e => console.error('[site-chat] captureEscalation error:', e.message));
 
     // A card with its own controls (action buttons or a payment form) supersedes
     // chips — avoid a stale/duplicate chip row under it.
