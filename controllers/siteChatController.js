@@ -74,7 +74,7 @@ async function captureLead(site, convId, lead) {
   const name = typeof lead.name === 'string' && lead.name.trim() ? lead.name.trim() : null;
   const intent = typeof lead.intent === 'string' && lead.intent.trim() ? lead.intent.trim().slice(0, 120) : 'Website chat enquiry';
   const summary = typeof lead.summary === 'string' && lead.summary.trim() ? lead.summary.trim() : intent;
-  const message = `${summary}\n\n— Captured by the website chat assistant.`;
+  const message = `${summary}\n\nCaptured by the website chat assistant.`;
 
   // Dedup by conversation: one lead row per chat, refreshed as details firm up.
   const { data: existing } = await supabase
@@ -162,7 +162,7 @@ async function captureEscalation(site, convId, esc, member) {
   const summary = typeof esc.summary === 'string' && esc.summary.trim()
     ? esc.summary.trim().slice(0, 2000) : label;
   const who = member ? 'a signed-in member' : 'a website visitor';
-  const message = `${summary}\n\n— Raised in the website chat by ${who}. The assistant did not answer it; it needs a reply from the business.`;
+  const message = `${summary}\n\nRaised in the website chat by ${who}. The assistant did not answer it; it needs a reply from the business.`;
 
   const { data: existing } = await supabase
     .from('site_leads').select('id')
