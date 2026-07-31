@@ -229,7 +229,7 @@ async function send(req, res) {
         // is inconsistent) doesn't lose it. New non-empty values win; `confirm` is
         // always taken fresh from this turn (never retained).
         bookingState = mergeBooking(bookingState, out.booking);
-        const tool = await runBookingTool({ site, booking: bookingState, zone });
+        const tool = await runBookingTool({ site, booking: bookingState, zone, userMessage: userMsg.content });
         if (tool.card) card = tool.card;
         if (tool.quickReplies?.length) quickReplies = tool.quickReplies;
         if (tool.pendingPayment) pendingPayment = tool.pendingPayment; // P3: awaiting card payment
