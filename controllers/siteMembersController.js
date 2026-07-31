@@ -106,45 +106,52 @@ async function billingPortal(req, res) {
  * A member cancels their OWN upcoming appointment. No refund (refunds stay
  * owner-decided); membership cancellation is owner-managed elsewhere.
  */
+/**
+ * Cancel core. Takes an ALREADY-VERIFIED member ({ id, email }) rather than a
+ * request, so the Front Desk chat can reuse it without a second HTTP hop and
+ * without re-implementing the ownership, status and past-date guards, or
+ * forgetting the audit row and the cancellation emails.
+ * @returns { ok, code?, message? }
+ */
+async function cancelBookingCore({ bookingId, member }) {
+  const user = member;
+  if (!user) return { ok: false, code: 401, message: 'Not signed in.' };
+  if (!bookingId) return { ok: false, code: 400, message: 'Missing bookingId.' };
+
+  const { data: b } = await supabase
+    .from('site_bookings').select('id, site_id, customer_id, starts_at, status').eq('id', bookingId).single();
+  if (!b) return { ok: false, code: 404, message: 'Booking not found.' };
+
+  const { data: cust } = await supabase
+    .from('site_customers').select('auth_user_id, email').eq('id', b.customer_id).single();
+  const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === (user.email || '').toLowerCase());
+  if (!owns) return { ok: false, code: 403, message: 'Not your booking.' };
+
+  if (b.status !== 'confirmed') return { ok: false, code: 400, message: 'This booking can no longer be cancelled.' };
+  if (new Date(b.starts_at).getTime() <= Date.now()) return { ok: false, code: 400, message: 'Past appointments cannot be cancelled.' };
+
+  await supabase.from('site_bookings').update({ status: 'cancelled' }).eq('id', b.id);
+  await logSiteActivity({
+    siteId: b.site_id, actorName: user.email,
+    action: 'booking_cancelled_by_member', entityType: 'site_booking', entityId: b.id,
+  });
+  sendCancellationEmails(b.id, { cancelledByBusiness: false }).catch(() => {});
+  return { ok: true, booking: b };
+}
+
 async function cancelBooking(req, res) {
   try {
     const user = await getMemberFromToken(req);
     if (!user) return res.status(401).json({ success: false, message: 'Not signed in.' });
-    const { bookingId } = req.body || {};
-    if (!bookingId) return res.status(400).json({ success: false, message: 'Missing bookingId.' });
-
-    const { data: b } = await supabase
-      .from('site_bookings').select('id, site_id, customer_id, starts_at, status').eq('id', bookingId).single();
-    if (!b) return res.status(404).json({ success: false, message: 'Booking not found.' });
-
-    // Ownership: the booking's customer must be this member.
-    const { data: cust } = await supabase
-      .from('site_customers').select('auth_user_id, email').eq('id', b.customer_id).single();
-    const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === user.email.toLowerCase());
-    if (!owns) return res.status(403).json({ success: false, message: 'Not your booking.' });
-
-    if (b.status !== 'confirmed') return res.status(400).json({ success: false, message: 'This booking can no longer be cancelled.' });
-    if (new Date(b.starts_at).getTime() <= Date.now()) return res.status(400).json({ success: false, message: 'Past appointments cannot be cancelled.' });
-
-    await supabase.from('site_bookings').update({ status: 'cancelled' }).eq('id', b.id);
-    await logSiteActivity({
-      siteId: b.site_id, actorName: user.email,
-      action: 'booking_cancelled_by_member', entityType: 'site_booking', entityId: b.id,
-    });
-    // N1: cancellation confirmation to the member + heads-up to the owner.
-    sendCancellationEmails(b.id, { cancelledByBusiness: false }).catch(() => {});
-    res.json({ success: true });
+    const r = await cancelBookingCore({ bookingId: (req.body || {}).bookingId, member: user });
+    if (!r.ok) return res.status(r.code || 500).json({ success: false, message: r.message });
+    return res.json({ success: true });
   } catch (err) {
     console.error('[siteMembers.cancelBooking]', err.message);
-    res.status(500).json({ success: false, message: 'Could not cancel.' });
+    return res.status(500).json({ success: false, message: 'Could not cancel.' });
   }
 }
 
-/**
- * POST /api/site-members/cancel-subscription  { subscriptionId }
- * A member cancels their OWN membership — always at period end (they keep access
- * through what they've paid for). Immediate cancellation stays an owner action.
- */
 async function cancelSubscription(req, res) {
   try {
     if (!stripe) return res.status(503).json({ success: false, message: 'Billing is not configured.' });
@@ -229,58 +236,65 @@ async function reactivateSubscription(req, res) {
  * A member moves their own upcoming appointment to a new day/time (same coach +
  * service). Re-checks the coach is free at the new slot before saving.
  */
+/** Reschedule core. Same contract and reasoning as cancelBookingCore. */
+async function rescheduleBookingCore({ bookingId, date, time, member }) {
+  const user = member;
+  if (!user) return { ok: false, code: 401, message: 'Not signed in.' };
+  if (!bookingId || !date || !time) return { ok: false, code: 400, message: 'Missing bookingId, date or time.' };
+
+  const { data: b } = await supabase
+    .from('site_bookings')
+    .select('id, site_id, customer_id, team_member_id, service_id, starts_at, status, duration_minutes')
+    .eq('id', bookingId).single();
+  if (!b) return { ok: false, code: 404, message: 'Booking not found.' };
+
+  const { data: cust } = await supabase
+    .from('site_customers').select('auth_user_id, email, metadata').eq('id', b.customer_id).single();
+  const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === (user.email || '').toLowerCase());
+  if (!owns) return { ok: false, code: 403, message: 'Not your booking.' };
+  if (cust.metadata?.suspended) return { ok: false, code: 403, message: 'This account is suspended. Please contact us.' };
+  if (b.status !== 'confirmed') return { ok: false, code: 400, message: 'This booking can no longer be changed.' };
+  if (new Date(b.starts_at).getTime() <= Date.now()) return { ok: false, code: 400, message: 'Past appointments cannot be rescheduled.' };
+
+  const { data: site } = await supabase.from('sites').select('time_zone').eq('id', b.site_id).single();
+  const zone = site?.time_zone || 'America/New_York';
+  const duration = b.duration_minutes || 60;
+  const start = DateTime.fromISO(`${date}T${time}`, { zone });
+  if (!start.isValid) return { ok: false, code: 400, message: 'Invalid date or time.' };
+  if (start.toMillis() <= Date.now()) return { ok: false, code: 400, message: 'Pick a future time.' };
+  const newStartISO = start.toUTC().toISO();
+  const newEndISO = start.plus({ minutes: duration }).toUTC().toISO();
+
+  const { data: clashes } = await supabase
+    .from('site_bookings').select('id')
+    .eq('site_id', b.site_id).eq('team_member_id', b.team_member_id).eq('status', 'confirmed')
+    .neq('id', b.id).lt('starts_at', newEndISO).gt('ends_at', newStartISO);
+  if (clashes && clashes.length) return { ok: false, code: 409, message: 'That time is no longer available. Pick another.' };
+
+  await supabase.from('site_bookings').update({
+    starts_at: newStartISO, ends_at: newEndISO,
+    reminder_24h_sent_at: null, reminder_2h_sent_at: null,
+  }).eq('id', b.id);
+  await logSiteActivity({
+    siteId: b.site_id, actorName: user.email,
+    action: 'booking_rescheduled_by_member', entityType: 'site_booking', entityId: b.id,
+    details: { new_starts_at: newStartISO },
+  });
+  sendRescheduleEmails(b.id, { oldStartsAtISO: b.starts_at }).catch(() => {});
+  return { ok: true, booking: b, startsAt: newStartISO };
+}
+
 async function rescheduleBooking(req, res) {
   try {
     const user = await getMemberFromToken(req);
     if (!user) return res.status(401).json({ success: false, message: 'Not signed in.' });
     const { bookingId, date, time } = req.body || {};
-    if (!bookingId || !date || !time) return res.status(400).json({ success: false, message: 'Missing bookingId, date or time.' });
-
-    const { data: b } = await supabase
-      .from('site_bookings')
-      .select('id, site_id, customer_id, team_member_id, service_id, starts_at, status, duration_minutes')
-      .eq('id', bookingId).single();
-    if (!b) return res.status(404).json({ success: false, message: 'Booking not found.' });
-
-    const { data: cust } = await supabase
-      .from('site_customers').select('auth_user_id, email, metadata').eq('id', b.customer_id).single();
-    const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === user.email.toLowerCase());
-    if (!owns) return res.status(403).json({ success: false, message: 'Not your booking.' });
-    if (cust.metadata?.suspended) return res.status(403).json({ success: false, message: 'This account is suspended. Please contact us.' });
-    if (b.status !== 'confirmed') return res.status(400).json({ success: false, message: 'This booking can no longer be changed.' });
-    if (new Date(b.starts_at).getTime() <= Date.now()) return res.status(400).json({ success: false, message: 'Past appointments cannot be rescheduled.' });
-
-    const { data: site } = await supabase.from('sites').select('time_zone').eq('id', b.site_id).single();
-    const zone = site?.time_zone || 'America/New_York';
-    const duration = b.duration_minutes || 60;
-    const start = DateTime.fromISO(`${date}T${time}`, { zone });
-    if (!start.isValid) return res.status(400).json({ success: false, message: 'Invalid date or time.' });
-    if (start.toMillis() <= Date.now()) return res.status(400).json({ success: false, message: 'Pick a future time.' });
-    const newStartISO = start.toUTC().toISO();
-    const newEndISO = start.plus({ minutes: duration }).toUTC().toISO();
-
-    // Conflict check: the coach must be free at the new window.
-    const { data: clashes } = await supabase
-      .from('site_bookings').select('id')
-      .eq('site_id', b.site_id).eq('team_member_id', b.team_member_id).eq('status', 'confirmed')
-      .neq('id', b.id).lt('starts_at', newEndISO).gt('ends_at', newStartISO);
-    if (clashes && clashes.length) return res.status(409).json({ success: false, message: 'That time is no longer available — pick another.' });
-
-    await supabase.from('site_bookings').update({
-      starts_at: newStartISO, ends_at: newEndISO,
-      reminder_24h_sent_at: null, reminder_2h_sent_at: null,
-    }).eq('id', b.id);
-    await logSiteActivity({
-      siteId: b.site_id, actorName: user.email,
-      action: 'booking_rescheduled_by_member', entityType: 'site_booking', entityId: b.id,
-      details: { new_starts_at: newStartISO },
-    });
-    // N1: new-time confirmation to the member (old time shown for clarity).
-    sendRescheduleEmails(b.id, { oldStartsAtISO: b.starts_at }).catch(() => {});
-    res.json({ success: true });
+    const r = await rescheduleBookingCore({ bookingId, date, time, member: user });
+    if (!r.ok) return res.status(r.code || 500).json({ success: false, message: r.message });
+    return res.json({ success: true });
   } catch (err) {
     console.error('[siteMembers.rescheduleBooking]', err.message);
-    res.status(500).json({ success: false, message: 'Could not reschedule.' });
+    return res.status(500).json({ success: false, message: 'Could not reschedule.' });
   }
 }
 
@@ -307,4 +321,4 @@ async function memberActivity(req, res) {
   }
 }
 
-module.exports = { claim, billingPortal, cancelBooking, cancelSubscription, reactivateSubscription, rescheduleBooking, memberActivity };
+module.exports = { claim, billingPortal, cancelBooking, cancelBookingCore, rescheduleBookingCore, cancelSubscription, reactivateSubscription, rescheduleBooking, memberActivity };

@@ -14,6 +14,7 @@ const emails = require('../templates/transactionalEmails');
 const { DateTime } = require('luxon');
 const { buildSiteContext } = require('../lib/stacyContext');
 const { buildListCard } = require('../lib/frontdeskLists');
+const { runManageTool } = require('../lib/frontdeskManage');
 const { runBookingTool } = require('../lib/frontdeskBooking');
 const { placeBooking, bookClassSession } = require('../controllers/bookingController');
 
@@ -125,6 +126,7 @@ async function resolveMember(siteId, token) {
     const name = cust ? [cust.first_name, cust.last_name].filter(Boolean).join(' ').trim() : '';
     return {
       customerId: cust?.id || null,
+      authUserId: user.id,
       name: name || null,
       email: cust?.email || email,
       phone: cust?.phone || null,
@@ -370,7 +372,25 @@ async function send(req, res) {
       // (when it produced a note) re-invoke once so the agent's reply is grounded
       // in real availability / a real confirmation. Capped at one extra round-trip.
       // The tool may also return a structured `card` and time `quickReplies`.
-      if (out.booking) {
+      // Changing an existing booking is a different tool: it needs a verified
+      // member, and its guards live with the member cores.
+      const wantsManage = out.booking && ['reschedule', 'cancel', 'change', 'move'].includes(
+        String(out.booking.intent || '').trim().toLowerCase());
+      if (wantsManage) {
+        bookingState = mergeBooking(bookingState, out.booking);
+        const m = await runManageTool({ site, member, intent: out.booking.intent, booking: bookingState, zone });
+        if (m.card) card = m.card;
+        if (m.quickReplies?.length) quickReplies = m.quickReplies;
+        if (m.card?.kind === 'booking_done') bookingState = null;
+        if (m.note) {
+          out = await callFrontdesk({
+            convId, siteId, business, message: userMsg.content, history,
+            context: { ...baseContext, today, booking_system_note: m.note, member: member
+              ? { known: true, name: member.name, email: member.email, phone: member.phone }
+              : { known: false } },
+          });
+        }
+      } else if (out.booking) {
         // Merge with the in-progress booking so a turn that drops a field (the model
         // is inconsistent) doesn't lose it. New non-empty values win; `confirm` is
         // always taken fresh from this turn (never retained).
