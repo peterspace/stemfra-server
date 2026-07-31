@@ -339,7 +339,7 @@ async function send(req, res) {
     // the renderer works before the n8n prompt has been pasted. Never in production.
     const devList = process.env.NODE_ENV !== 'production' && /^\/list\s+(\w+)$/i.exec(String(message).trim());
     if (devList) {
-      const demo = buildListCard(devList[1], baseContext);
+      const demo = await buildListCard(devList[1], baseContext, siteId);
       return res.json({
         reply: demo ? `Here is what we have.` : `Nothing to list for "${devList[1]}".`,
         conversationId: conversationId || null, card: demo, quick_replies: [],
@@ -453,7 +453,7 @@ async function send(req, res) {
     // The agent only names WHAT it was asked to list; the rows come from the site's
     // own data so they can't be invented. A booking card always wins the slot — the
     // visitor is mid-flow and doesn't need a menu on top of it.
-    if (!card && listSource) card = buildListCard(listSource, baseContext);
+    if (!card && listSource) card = await buildListCard(listSource, baseContext, siteId);
 
     // A card with its own controls (action buttons or a payment form) supersedes
     // chips — avoid a stale/duplicate chip row under it.
