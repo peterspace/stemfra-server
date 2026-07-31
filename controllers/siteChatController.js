@@ -13,6 +13,7 @@ const { getSiteNotifyPrefs } = require('../lib/notifyPrefs');
 const emails = require('../templates/transactionalEmails');
 const { DateTime } = require('luxon');
 const { buildSiteContext } = require('../lib/stacyContext');
+const { buildListCard } = require('../lib/frontdeskLists');
 const { runBookingTool } = require('../lib/frontdeskBooking');
 const { placeBooking, bookClassSession } = require('../controllers/bookingController');
 
@@ -275,6 +276,7 @@ async function callFrontdesk({ convId, siteId, business, message, history, conte
     handoff: !!data.handoff,
     lead: data.lead && typeof data.lead === 'object' ? data.lead : null,
     escalation: data.escalation && typeof data.escalation === 'object' ? data.escalation : null,
+    list: data.list && typeof data.list === 'object' && data.list.source ? String(data.list.source) : null,
     booking: data.booking && typeof data.booking === 'object' ? data.booking : null,
     quickReplies: Array.isArray(data.quick_replies) ? data.quick_replies.filter(s => typeof s === 'string' && s.trim()).slice(0, 6) : [],
   };
@@ -324,6 +326,19 @@ async function send(req, res) {
     }
 
     const baseContext = await buildSiteContext(siteId);
+
+    // DEV-only: "/list services" renders a list card straight from real data,
+    // bypassing the agent. Mirrors Stacy's "/demo" escape hatch — it lets the card
+    // be iterated on without a workflow round-trip, and lets a fresh session confirm
+    // the renderer works before the n8n prompt has been pasted. Never in production.
+    const devList = process.env.NODE_ENV !== 'production' && /^\/list\s+(\w+)$/i.exec(String(message).trim());
+    if (devList) {
+      const demo = buildListCard(devList[1], baseContext);
+      return res.json({
+        reply: demo ? `Here is what we have.` : `Nothing to list for "${devList[1]}".`,
+        conversationId: conversationId || null, card: demo, quick_replies: [],
+      });
+    }
     // Who are we talking to? Verified server-side from the member's own session.
     const member = await resolveMember(siteId, memberToken);
     const zone = baseContext.business?.time_zone || 'America/New_York';
@@ -334,6 +349,7 @@ async function send(req, res) {
     let reply = '';
     let lead = null;
     let escalation = null;      // refund / complaint / billing — never answered by the agent
+    let listSource = null;      // 'services' | 'classes' | 'team' | 'hours' — the agent classifies, we build
     let card = null;            // structured booking card (confirm / done / handoff)
     let quickReplies = [];      // tappable chips shown under the reply
     let pendingPayment = null;  // resolved booking awaiting an in-chat card payment
@@ -373,6 +389,7 @@ async function send(req, res) {
       reply = out.reply;
       lead = out.lead;
       escalation = out.escalation;
+      listSource = out.list;
       // Server-injected booking chips (exact times) win; else use the agent's chips.
       if (!quickReplies.length) quickReplies = out.quickReplies || [];
     } catch (e) {
@@ -395,6 +412,11 @@ async function send(req, res) {
     // block or fail the visitor's reply.
     if (escalation) captureEscalation(site, convId, escalation, member)
       .catch(e => console.error('[site-chat] captureEscalation error:', e.message));
+
+    // The agent only names WHAT it was asked to list; the rows come from the site's
+    // own data so they can't be invented. A booking card always wins the slot — the
+    // visitor is mid-flow and doesn't need a menu on top of it.
+    if (!card && listSource) card = buildListCard(listSource, baseContext);
 
     // A card with its own controls (action buttons or a payment form) supersedes
     // chips — avoid a stale/duplicate chip row under it.
