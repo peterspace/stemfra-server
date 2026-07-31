@@ -31,7 +31,7 @@ function config(_req, res) {
  * { ok:false, code, message, notReady } when the site can't take payments yet.
  * Shared by the public POST handler and the Front Desk in-chat payment flow.
  */
-async function createBookingIntent({ siteId, serviceId, customerEmail }) {
+async function createBookingIntent({ siteId, serviceId, customerEmail, productId }) {
   if (!stripe) return { ok: false, code: 503, message: 'Payments are not configured.', notReady: true };
   if (!siteId || !serviceId) return { ok: false, code: 400, message: 'Missing siteId or serviceId.' };
 
@@ -50,10 +50,23 @@ async function createBookingIntent({ siteId, serviceId, customerEmail }) {
     .from('site_services').select('id, name, price_cents, currency').eq('id', serviceId).eq('site_id', siteId).single();
   if (!svc) return { ok: false, code: 404, message: 'Service not found.' };
 
-  const amount = svc.price_cents || 0;
+  // Optional: charge a PRODUCT (e.g. a class pass) instead of the service's own
+  // price. The price is always re-read from the DB for the caller's own site, so
+  // no caller can inject an arbitrary amount. Server-side callers only —
+  // createIntent (the public wrapper) must never forward this.
+  let product = null;
+  if (productId) {
+    const { data } = await supabase
+      .from('site_products').select('id, name, price_cents, currency, is_active')
+      .eq('id', productId).eq('site_id', siteId).single();
+    if (!data || !data.is_active) return { ok: false, code: 404, message: 'Product not found.' };
+    product = data;
+  }
+
+  const amount = (product ? product.price_cents : svc.price_cents) || 0;
   if (amount <= 0) return { ok: true, free: true };
 
-  const currency = (svc.currency || 'usd').toLowerCase();
+  const currency = ((product ? product.currency : svc.currency) || 'usd').toLowerCase();
   const margin = Math.round((amount * APPLICATION_FEE_BPS) / 10000);
   const processingEstimate = Math.round((amount * PROCESSING_PCT_BPS) / 10000) + PROCESSING_FIXED_CENTS;
   const fee = margin + processingEstimate;
@@ -69,7 +82,7 @@ async function createBookingIntent({ siteId, serviceId, customerEmail }) {
     ...(fee > 0 ? { application_fee_amount: fee } : {}),
     transfer_data: { destination: acct.stripe_account_id },
     on_behalf_of: acct.stripe_account_id,
-    metadata: { site_id: siteId, service_id: serviceId },
+    metadata: { site_id: siteId, service_id: serviceId, ...(product ? { product_id: product.id } : {}) },
   });
 
   return { ok: true, clientSecret: intent.client_secret, paymentIntentId: intent.id, amount, currency, applicationFee: fee, platformMargin: margin };
