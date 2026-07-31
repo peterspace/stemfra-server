@@ -44,6 +44,14 @@ model** (`docs/COMMISSION_MODEL.md`)._
 5. **P10 case 42 "Remix" R2/R3** (AI theme composer engine) — R1 registry done; rest pending.
 6. **P10 case 1 remainder** — task videos + a "What's new" channel (guidance polish shipped).
 7. **VSL production** (P12 "Last") — deliberately last.
+8. **Front Desk widget — roll the Mindbody-parity rework to the other 5 verticals.**
+   Built + verified on **Lira Yoga (yoga) only** 2026-07-31. Per vertical: pass
+   `logoUrl` in the Layout, add the "Chat assistant" clause to the seed site's
+   privacy page (the widget footer links to the TENANT's policy), and check
+   `site_products.metadata.{classes,expires_days}` exist so pack rows show
+   "10 sessions · valid 6 months" instead of falling back to description text.
+   ⚠ Sites provisioned BEFORE the seed fix won't inherit the privacy clause —
+   backfill needed. **Full flag list: `stemfra_platform/docs/FRONTDESK.md` §9.**
 
 **⚠ DEPLOY/OPS GAPS found by the audit (silent breakage risk):**
 - **`PAYMENT_CREDENTIALS_KEK` is MISSING from `deploy.yml`** → the P12 direct-keys payment
