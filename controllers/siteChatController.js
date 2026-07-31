@@ -133,6 +133,10 @@ async function resolveMember(siteId, token) {
   } catch { return null; }
 }
 
+/** Can the business actually reply? Drives the one-turn re-ask above. */
+const hasEscalationContact = (esc) =>
+  !!((esc?.email && EMAIL_RE.test(String(esc.email).trim())) || (esc?.phone && String(esc.phone).trim()));
+
 const ESCALATION_LABELS = {
   refund: 'Refund request',
   complaint: 'Complaint',
@@ -384,6 +388,19 @@ async function send(req, res) {
               : { known: false } },
           });
         }
+      }
+
+      // An escalation we cannot ACT on is worse than none: the agent tells the
+      // visitor the team will get back to them, nothing is captured, and a refund
+      // complaint is silently lost. The prompt rule for this proved unreliable in
+      // testing (twice), so enforce it here. A focused note on a fresh turn is what
+      // makes the booking loop work, and it works for the same reason here.
+      if (out.escalation && !member && !hasEscalationContact(out.escalation) && !out.booking) {
+        out = await callFrontdesk({
+          convId, siteId, business, message: userMsg.content, history,
+          context: { ...baseContext, today, member: { known: false },
+            escalation_system_note: 'SYSTEM: you have NO way to contact this visitor, so nothing has been sent to anyone. Do NOT say you will pass it on, have the team look into it, or get back to them. In ONE or TWO short sentences: acknowledge what they raised, say you can get it to the team, and ask for their name and the best email or phone to reply to.' },
+        });
       }
 
       reply = out.reply;
