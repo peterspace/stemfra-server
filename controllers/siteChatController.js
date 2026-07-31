@@ -313,4 +313,35 @@ async function completeBooking(req, res) {
   }
 }
 
-module.exports = { send, completeBooking };
+/**
+ * POST /api/site-chat/rewind  { siteId, conversationId, keep }
+ * "Rewind to here" — truncate the persisted transcript to its first `keep`
+ * messages so the agent's memory genuinely matches what the visitor now sees.
+ * Without this the widget would only LOOK rewound while the agent still
+ * remembered the discarded turns. Same trust model as /send: anonymous, but
+ * scoped to the conversation's own site + agent.
+ */
+async function rewind(req, res) {
+  try {
+    const { siteId, conversationId, keep } = req.body || {};
+    const n = Number(keep);
+    if (!siteId || !conversationId || !Number.isInteger(n) || n < 0) {
+      return res.status(400).json({ error: 'siteId, conversationId and keep are required.' });
+    }
+    const { data: conv } = await supabase
+      .from('agent_conversations')
+      .select('id, messages')
+      .eq('id', conversationId).eq('site_id', siteId).eq('agent', 'frontdesk')
+      .maybeSingle();
+    if (!conv) return res.status(404).json({ error: 'Conversation not found.' });
+
+    const messages = (conv.messages || []).slice(0, n);
+    await supabase.from('agent_conversations').update({ messages }).eq('id', conversationId);
+    res.json({ ok: true, kept: messages.length });
+  } catch (err) {
+    console.error('[siteChat.rewind]', err.message);
+    res.status(500).json({ error: 'Could not rewind the conversation.' });
+  }
+}
+
+module.exports = { send, completeBooking, rewind };
