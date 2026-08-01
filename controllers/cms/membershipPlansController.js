@@ -68,7 +68,7 @@ async function createPlan(req, res) {
       billing_interval: interval,
       billing_interval_count: intervalCount,
       fulfillment_mode: fulfillmentMode,
-      external_url: externalUrl || null,
+      external_url: null,   // native booking only (2026-07-31)
       photo_url: photoUrl || null,
       slug: slugify(displayName),
       display_order: displayOrder,
@@ -105,7 +105,7 @@ async function updatePlan(req, res) {
     if (features !== undefined) patch.metadata = { ...(plan.metadata || {}), features };
     if (displayOrder !== undefined) patch.display_order = displayOrder;
     if (isActive !== undefined) patch.is_active = isActive;
-    if (externalUrl !== undefined) patch.external_url = externalUrl || null;
+    // external_url is deliberately NOT patchable: native booking only (2026-07-31).
 
     if (priceCents !== undefined && priceCents > 0 && priceCents !== plan.price_cents && plan.fulfillment_mode === 'native') {
       if (!stripe) return res.status(503).json({ success: false, message: 'Stripe not configured.' });
