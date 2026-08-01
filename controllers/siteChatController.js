@@ -139,6 +139,10 @@ async function resolveMember(siteId, token) {
 const hasEscalationContact = (esc) =>
   !!((esc?.email && EMAIL_RE.test(String(esc.email).trim())) || (esc?.phone && String(esc.phone).trim()));
 
+/** The "First time here" starter, and the ways visitors phrase it themselves.
+ *  Matched on the raw message because this fires before any tool classification. */
+const FIRST_VISIT_RE = /\b(first[- ]?(time|visit)|new (here|to)\b|never been|what should i expect|what to expect)\b/i;
+
 const ESCALATION_LABELS = {
   refund: 'Refund request',
   complaint: 'Complaint',
@@ -423,6 +427,20 @@ async function send(req, res) {
         });
       }
 
+      // "First time here" is a STARTER we put in front of the visitor, so an
+      // answer like "Welcome! How can I assist you today?" is our failure, not
+      // theirs: we invited the tap and gave them nothing to do with it. Same
+      // enforcement as the escalation case above, and for the same reason the
+      // prompt rule keeps losing to a long prompt. One extra turn, only when the
+      // agent genuinely produced nothing actionable.
+      if (FIRST_VISIT_RE.test(userMsg.content) && !out.booking && !out.list && !out.escalation) {
+        out = await callFrontdesk({
+          convId, siteId, business, message: userMsg.content, history,
+          context: { ...baseContext, today, member: member ? { known: true, name: member.name } : { known: false },
+            firstvisit_system_note: `SYSTEM: this visitor is NEW to ${business}. A friendly welcome alone is a dead end. In ONE or TWO short sentences tell them what a first visit here is actually like, using only what is in the site context (how booking works, what to bring or expect, parking or arrival notes if present). Then set list to {"source":"services"} so they can tap what they want. Do NOT list the services in your text and do NOT invent details that are not in the context.` },
+        });
+      }
+
       reply = out.reply;
       lead = out.lead;
       escalation = out.escalation;
@@ -454,6 +472,19 @@ async function send(req, res) {
     // own data so they can't be invented. A booking card always wins the slot — the
     // visitor is mid-flow and doesn't need a menu on top of it.
     if (!card && listSource) card = await buildListCard(listSource, baseContext, siteId);
+
+    // The card is built AFTER the agent has written its reply, so it can invite
+    // "tap any day for details" over rows that are not tappable — opening hours
+    // has nothing to open. Drop the invitation rather than leave a dead
+    // instruction on screen. Deliberately narrow: only a TRAILING tap sentence,
+    // only when NO row is actionable, and only if real text survives. Anything
+    // that doesn't match is left exactly as the agent wrote it.
+    if (card?.kind === 'list' && !(card.items || []).some((i) => i.value || i.href)) {
+      const trimmed = String(reply || '')
+        .replace(/(^|[.!?]\s+)[^.!?]*\b(tap|click|select)\b[^.!?]*[.!?]\s*$/i, '$1')
+        .trim();
+      if (trimmed) reply = trimmed;
+    }
 
     // A card with its own controls (action buttons or a payment form) supersedes
     // chips — avoid a stale/duplicate chip row under it.
