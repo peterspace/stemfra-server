@@ -53,6 +53,39 @@ model** (`docs/COMMISSION_MODEL.md`)._
    ⚠ Sites provisioned BEFORE the seed fix won't inherit the privacy clause —
    backfill needed. **Full flag list: `stemfra_platform/docs/FRONTDESK.md` §9.**
 
+9. **Front Desk sweep — COMPLETE 2026-08-01 across all 6 verticals** (4/4 starters
+   each + visual pass). Fixes committed: details form now requires name, email AND
+   phone, enforced server-side in `detailsCard()`/`hasContact` so BOTH the
+   appointment and class branches get it (`2d7986c`, `9da0e8d`); "First time here"
+   returns a real first-visit answer plus the services list instead of an empty
+   welcome, and a trailing "tap any day for details" is stripped when no row in the
+   card is tappable (`4e6470b`); message-avatar frame reduced to a hairline
+   (`6b97bf6`). **Still open from the sweep:**
+   - **Bookability data hygiene (NOT a bulk fix — needs per-vertical rules).** A
+     cross-site query found 11 live/previewing sites with services that are ACTIVE
+     but `bookable=false` (so they render as dead rows in the chat menu) and/or
+     `bookable=true` with ZERO team links (so they dead-end at availability).
+     ⚠ **Some of this is deliberate**: on crossfit (forge-and-bell, ironclad-athletics,
+     212-strength-co, blackfly-barbell, aurea) the 6 non-bookable rows are the group
+     PROGRAMS, intentionally kept out of the 1-on-1 wizard per the appointments-vs-
+     classes model in `stemfra_platform/CLAUDE.md`. And "bookable with no staff" is
+     fine for CLASS bookings, where the calendar comes from scheduled sessions rather
+     than staff availability (lila-studio's 5 are likely this). So the task is to
+     decide the rule per vertical, then fix only what is genuinely wrong.
+     **Already fixed: ellaris-spa only**, where it was an unambiguous within-site
+     inconsistency (6 massage modalities non-bookable while the site's other massages
+     were bookable with the same 4 therapists; plus "Couples Massage (at home)" marked
+     bookable with no staff). Now 17/17 bookable, min 4 staff. Revert by setting those
+     6 back to `bookable=false` and deleting their `site_team_service_links`.
+   - **The durable fix worth considering**: surface this in the CMS (warn when a
+     service is active but unbookable, or bookable with nothing behind it) so owners
+     see it, instead of relying on a sweep to catch it.
+   - **Doc-vs-DB drift, not bugs**: the salons fixture company is **"Maison Solène"**
+     and the massage one is **"Lull Massage"**, while the CLAUDE.md files still say
+     Maison Lune / Calm Roots. Pick the canonical name and fix the docs or the row.
+   - **Never exercised**: member reschedule/cancel through a real signed-in chat on
+     the member-portal verticals (crossfit/massage/spa).
+
 **⚠ DEPLOY/OPS GAPS found by the audit (silent breakage risk):**
 - **`PAYMENT_CREDENTIALS_KEK` is MISSING from `deploy.yml`** → the P12 direct-keys payment
   system is silently DISABLED in production even though the code shipped. Add the secret +
