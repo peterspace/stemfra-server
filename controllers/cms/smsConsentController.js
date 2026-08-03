@@ -20,17 +20,17 @@ const { parsePhoneNumber } = require('libphonenumber-js');
 const supabase = require('../../config/supabase');
 const { twilioClient, twilioFrom, publicBaseUrl } = require('../../config/twilio');
 
-const SMS_CONSENT_VERSION = 'v1';
+const SMS_CONSENT_VERSION = 'v2';
 const SMS_CONSENT_TEXT =
   'Text me Stemfra account alerts: new leads, new bookings, missed calls, and billing notices. '
-  + 'Message frequency varies, typically up to 10 messages per month. '
+  + 'Message frequency varies with your business activity. '
   + 'Message and data rates may apply. Reply STOP to opt out, HELP for help.';
 
 // The confirmation sent immediately after a web opt-in. Carriers look for the
 // brand name, what was subscribed to, frequency, rates, and both keywords.
 const OPT_IN_MESSAGE =
   'Stemfra: You are now subscribed to Stemfra account alerts (new leads, bookings, '
-  + 'missed calls, billing). Msg frequency varies, up to about 10 msgs/month. '
+  + 'missed calls, billing). Msg frequency varies. '
   + 'Msg & data rates may apply. Reply HELP for help, STOP to cancel.';
 
 const readPrefs = async (userId) => {

@@ -190,7 +190,7 @@ the public proof page, per the 30896 checklist:
 > their mobile number, and ticks a checkbox that is unchecked by default and
 > separate from terms acceptance. The checkbox reads: "Text me Stemfra account
 > alerts: new leads, new bookings, missed calls, and billing notices. Message
-> frequency varies, typically up to 10 messages per month. Message and data rates
+> frequency varies with your business activity. Message and data rates
 > may apply. Reply STOP to opt out, HELP for help." Consent is stored per account
 > with a timestamp and the exact wording agreed to, and is never bought, shared or
 > transferred. Because this page is behind a login, the full consent flow and
@@ -209,7 +209,7 @@ Populate the Opt-in MESSAGE, which is the confirmation sent right after a web
 opt-in and which reviewers look for:
 
 > Stemfra: You are now subscribed to Stemfra account alerts (new leads, bookings,
-> missed calls, billing). Msg frequency varies, up to about 10 msgs/month. Msg &
+> missed calls, billing). Msg frequency varies. Msg &
 > data rates may apply. Reply HELP for help, STOP to cancel.
 
 ⚠ Only claim this once the confirmation SMS is actually implemented. That send is
