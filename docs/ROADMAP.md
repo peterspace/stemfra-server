@@ -86,6 +86,31 @@ model** (`docs/COMMISSION_MODEL.md`)._
    - **Never exercised**: member reschedule/cancel through a real signed-in chat on
      the member-portal verticals (crossfit/massage/spa).
 
+10. **Reassign a booking to a different team member (Peter, 2026-08-03).** Real
+    scenario: a customer books Barber A, A calls in sick, the manager offers Barber
+    B, B does the cut. **The capability half-exists**: dragging an appointment
+    across staff columns in the Bookings calendar DAY view sets `newTeamMemberId`
+    and updates `site_bookings.team_member_id` (`BookingsCalendarPage.tsx`
+    `handleEventDrop`), and writes an `activity_feed` row. Attribution downstream is
+    correct, because the team member is a live FK (only the service NAME is
+    snapshotted). **Gaps:**
+    - No staff picker in `BookingDetailModal` — the place a manager actually looks.
+      Its pencil edits date/time only, so the feature is undiscoverable.
+    - Drag works in DAY view only, and drag is the wrong interaction for a manager
+      standing at the counter on a phone.
+    - `handleEventDrop` runs NO guard: it does not check the target is linked to
+      that service (`site_team_service_links`) and does not run the conflict check
+      (`useBookingConflicts` is wired to the reschedule dialog, not the drop). So a
+      service can be assigned to someone who does not offer it, or double-booked.
+    - It reuses the reschedule mutation, so a same-time swap needlessly resets
+      `reminder_24h_sent_at`/`reminder_2h_sent_at` and logs the reason as "Moved on
+      calendar", which is wrong for a swap where nothing moved.
+    - The Front Desk chat cannot do it (member reschedule/cancel exist; swap does not).
+    **Proposed:** a "Change barber" control in `BookingDetailModal` reusing
+    `useRescheduleBooking` with `newTeamMemberId` and the unchanged start time,
+    offering only qualified + free staff, reason "Staff reassigned", no reminder
+    reset. Apply the same qualification/conflict guard to the existing drag path.
+
 **⚠ DEPLOY/OPS GAPS found by the audit (silent breakage risk):**
 - **`PAYMENT_CREDENTIALS_KEK` is MISSING from `deploy.yml`** → the P12 direct-keys payment
   system is silently DISABLED in production even though the code shipped. Add the secret +
