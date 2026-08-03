@@ -111,18 +111,20 @@ model** (`docs/COMMISSION_MODEL.md`)._
     offering only qualified + free staff, reason "Staff reassigned", no reminder
     reset. Apply the same qualification/conflict guard to the existing drag path.
 
-**⚠ DEPLOY/OPS GAPS found by the audit (silent breakage risk):**
-- **`PAYMENT_CREDENTIALS_KEK` is MISSING from `deploy.yml`** → the P12 direct-keys payment
-  system is silently DISABLED in production even though the code shipped. Add the secret +
-  env line before any tenant uses card payments in prod.
-- **`COMMISSION_SCHEDULER_ENABLED` absent everywhere** — intentional pre-launch (manual
-  `/commission/run` works), but MUST be armed (deploy.yml) at launch or invoicing won't run.
-- **HUGE UNCOMMITTED SURFACE:** effectively ALL of P12+P13 is uncommitted — stemfra_server
-  72 dirty paths (incl. `lib/commission*.js`, `lib/paymentCredentials.js`, COMMISSION_MODEL/
-  P12_PLAN docs), stemfra_platform 74 (CMS billing/payments/promotions/staff-mode work),
-  stemfra-ops 14 (compliance packet + SetupCalls), stemfra_client 6 (commission pricing +
-  /fees + Terms/Refund), stemfra_business ~20. A VPS/Pages rebuild from `main` today would
-  ship NONE of it. **Commit pass = highest-priority housekeeping.**
+**DEPLOY/OPS GAPS (audit 2026-07-29; re-verified 2026-08-03):**
+- ✅ **`PAYMENT_CREDENTIALS_KEK` is now in `deploy.yml`** (line 136, from the GitHub
+  secret). Verified 2026-08-03. The P12 direct-keys payment system is no longer
+  silently disabled in prod.
+- ✅ **`COMMISSION_SCHEDULER_ENABLED=false` is now in `deploy.yml`** (line 137) —
+  still intentionally OFF pre-launch (manual `/commission/run` works). **Flip to
+  `true` at launch or invoicing will not run.** This is the one to remember.
+- ✅ **The uncommitted surface is CLOSED.** Committed 2026-07-29 and **pushed
+  2026-08-03** (server `b28363a`→`737ed5b`, platform `→3d3857d`, client
+  `→3fcc07b2`; ops and business had nothing outstanding). All repos are at zero
+  ahead, zero dirty, so a rebuild from `main` now ships everything.
+  ⚠ The push also put `stemfra.com/sms-consent` live for the first time; it had
+  been 404 in production the whole time the A2P arc was "done" locally. Worth
+  remembering as a class of bug: local-done is not shipped.
 - Per-tenant Stripe webhook (`/api/stripe/webhook/:siteId`) deliberately deferred
   (redirect-verify + sweeper covers one-time charges — see P12_PLAN); the stored per-site
   webhook secret is currently written but never read.
