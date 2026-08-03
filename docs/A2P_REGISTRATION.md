@@ -177,3 +177,55 @@ campaign pays the vetting fee again for nothing.
 ⚠ If `SMS_CONSENT_TEXT` changes, bump the version, re-shoot the screenshots on
 the public page, and resubmit. The stored record, the CMS screen, and the public
 proof page must all show the same sentence.
+
+### Ready-to-paste campaign fields (2026-08-03)
+
+**"How do end-users consent to receive messages?" (`message_flow`)** — replaces the
+rejected text. Names the URL, the consent action, frequency, both legal links, and
+the public proof page, per the 30896 checklist:
+
+> Stemfra account holders (owners and staff of businesses that use Stemfra) opt in
+> inside their own dashboard. After creating an account at https://stemfra.com, the
+> owner opens Profile > Notification settings at https://cms.stemfra.com, enters
+> their mobile number, and ticks a checkbox that is unchecked by default and
+> separate from terms acceptance. The checkbox reads: "Text me Stemfra account
+> alerts: new leads, new bookings, missed calls, and billing notices. Message
+> frequency varies, typically up to 10 messages per month. Message and data rates
+> may apply. Reply STOP to opt out, HELP for help." Consent is stored per account
+> with a timestamp and the exact wording agreed to, and is never bought, shared or
+> transferred. Because this page is behind a login, the full consent flow and
+> wording are published publicly for review at https://stemfra.com/sms-consent.
+> Privacy Policy: https://stemfra.com/privacy (states mobile numbers are never
+> shared or sold to third parties or affiliates for marketing, and includes message
+> frequency and message and data rates disclosures). Terms:
+> https://stemfra.com/terms. Owners opt out any time from the same setting or by
+> replying STOP.
+
+**End User Consent section — Opt-in Message is currently empty ("-").** Opt-out and
+Help keywords/messages are auto-managed by Twilio and are fine as-is. Opt-in
+KEYWORDS stay empty on purpose: ours is a website opt-in, not a text-to-join
+keyword, and inventing a keyword we do not support would be a fresh rejection.
+Populate the Opt-in MESSAGE, which is the confirmation sent right after a web
+opt-in and which reviewers look for:
+
+> Stemfra: You are now subscribed to Stemfra account alerts (new leads, bookings,
+> missed calls, billing). Msg frequency varies, up to about 10 msgs/month. Msg &
+> data rates may apply. Reply HELP for help, STOP to cancel.
+
+⚠ Only claim this once the confirmation SMS is actually implemented. That send is
+NOT built yet: the opt-in currently records consent without texting a confirmation.
+Either implement it before resubmitting or leave the field empty. Describing a
+confirmation that does not fire is the same class of mistake that caused the
+2026-08-03 rejection.
+
+### Done since the rejection
+
+- ✅ Owner SMS opt-in card in the CMS (commit `10b9d5b`).
+- ✅ Privacy policy now carries message frequency + "message and data rates may
+  apply" alongside the existing non-sharing statement, and links to /sms-consent.
+- ✅ Public proof page at **https://stemfra.com/sms-consent** (`SmsConsent.jsx`,
+  routed + prerendered + in sitemap.xml) reproducing the dashboard card and the
+  verbatim consent sentence, so a reviewer never needs an account.
+- ⬜ Paste the `message_flow` above into the campaign and resubmit the SAME
+  campaign (Fix Campaign / Edit Campaign, never Register a new one).
+- ⬜ Decide on the confirmation SMS before filling Opt-in Message.
