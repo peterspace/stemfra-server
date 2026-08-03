@@ -114,3 +114,66 @@ The Wave-2 SMS build starts then: `lib/notifySms.js`, owner phone +
 `sms_alerts_enabled` toggle + consent copy in CMS, optional staff phone on
 `site_team_members`, hooks beside the existing lead/booking notification
 emails, STOP webhook → flag off. Design: `docs/P12_PLAN.md` §4.
+
+---
+
+## 2026-08-03 — second rejection (error 30896) and the real cause
+
+Campaign `CM5a84819732921518015d491257ad78c5` (Low Volume Mixed, brand
+`BNf66814020b206698d2939440ffb9c34f`) was rejected again. Reviewer note:
+
+> Opt-In Error: The Opt-in link provided (https://cms.stemfra.com/) lacks purpose
+> details on types of messages that will be sent. [Need to share proof about the
+> account setting]
+
+**Root cause: the consent flow we described did not exist.** The submitted
+`message_flow` said SMS notifications were "presented as an opt-in toggle" in
+account settings. There was no such toggle in the CMS: the only `smsOptIn` in the
+codebase was in the customer IMPORT (a tenant's consent for THEIR customers).
+The reviewer went looking for it, could not find it, and asked for proof.
+Secondary cause: the opt-in URL we gave was the CMS **login page**, which a
+carrier reviewer cannot get past.
+
+### What Twilio's own doc requires (https://www.twilio.com/docs/api/errors/30896)
+
+- `message_flow` must name the URL, describe the consent action, state message
+  frequency, and include links to the privacy policy AND terms **inside that
+  field** (not only in the separate URL fields).
+- If the opt-in is behind a login, host **screenshots of the full consent flow**
+  at a public URL and reference it in `message_flow`.
+- The **privacy policy** must state mobile numbers are not shared with third
+  parties or affiliates for marketing, AND include message frequency AND
+  "message and data rates may apply".
+- Sample messages must name the brand and include opt-out language.
+
+### ⚠ Edit the campaign, do NOT create a new one
+
+The Twilio console sidebar suggests "Register a new A2P Campaign". The error doc
+says the opposite, and the doc is right: *"Edit the rejected campaign rather than
+deleting and recreating it… A vetting fee is assessed only once per campaign.
+Resubmitting the same campaign does not incur a new fee."* Creating a new
+campaign pays the vetting fee again for nothing.
+
+### Status
+
+- ✅ **Owner SMS opt-in built** (`stemfra_cms/src/components/SmsAlertsCard.tsx`,
+  shown on `/profile/notifications`). Unchecked by default, separate from terms
+  acceptance, all four disclosures beside the box. The exact sentence is the
+  versioned constant `SMS_CONSENT_TEXT` / `SMS_CONSENT_VERSION` in
+  `lib/notifications.ts`; consent is stored VERBATIM with a timestamp on
+  `cms_notification_prefs.prefs.sms`, so we can prove what an account agreed to.
+  Opting out keeps the original record and stamps `opted_out_at`.
+- ✅ Privacy policy already carries the non-sharing line (`Privacy.jsx`), and
+  Terms already carry rates + frequency.
+- ⬜ **Add to the privacy policy**: message frequency + "message and data rates
+  may apply" (currently in Terms only; the doc wants them in Privacy too).
+- ⬜ **Publish `stemfra.com/sms-consent`** with screenshots of the card above.
+- ⬜ **Rewrite `message_flow`** naming that URL, the checkbox wording, frequency,
+  and inline privacy/terms links; then edit + resubmit the SAME campaign.
+- ⚠ **Strategic**: this campaign covers messages to STEMFRA'S OWN account holders.
+  Sending SMS to tenants' end customers is messaging on behalf of third parties
+  and needs the ISV model (brand + campaign per tenant), not this campaign.
+
+⚠ If `SMS_CONSENT_TEXT` changes, bump the version, re-shoot the screenshots on
+the public page, and resubmit. The stored record, the CMS screen, and the public
+proof page must all show the same sentence.
