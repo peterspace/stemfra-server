@@ -44,14 +44,20 @@ model** (`docs/COMMISSION_MODEL.md`)._
 5. **P10 case 42 "Remix" R2/R3** (AI theme composer engine) — R1 registry done; rest pending.
 6. **P10 case 1 remainder** — task videos + a "What's new" channel (guidance polish shipped).
 7. **VSL production** (P12 "Last") — deliberately last.
-8. **Front Desk widget — roll the Mindbody-parity rework to the other 5 verticals.**
-   Built + verified on **Lira Yoga (yoga) only** 2026-07-31. Per vertical: pass
-   `logoUrl` in the Layout, add the "Chat assistant" clause to the seed site's
-   privacy page (the widget footer links to the TENANT's policy), and check
-   `site_products.metadata.{classes,expires_days}` exist so pack rows show
-   "10 sessions · valid 6 months" instead of falling back to description text.
-   ⚠ Sites provisioned BEFORE the seed fix won't inherit the privacy clause —
-   backfill needed. **Full flag list: `stemfra_platform/docs/FRONTDESK.md` §9.**
+8. ✅ **Front Desk widget rollout to all 6 verticals — DONE 2026-07-31.** This entry
+   was written 2026-07-29, two days before the rollout landed, and stayed stale.
+   **Re-verified independently 2026-08-03**, not taken from the doc's own claim:
+   `logoUrl` + `suggestions` passed in all 6 Layouts; `memberToken` in
+   crossfit/massage/spa (the only three with a member portal); the "Chat assistant"
+   privacy clause present on **18/18** live+previewing sites (SQL over
+   site_pages/site_sections); `metadata.classes` + `expires_days` on **3/3** active
+   class packs (only lila-studio sells them, so nothing else was in scope).
+   **Genuinely still open** (verification gaps, not rollout work) in
+   `stemfra_platform/docs/FRONTDESK.md` §9: the member path has never been exercised
+   through a live signed-in chat; multi-line slot cards never rendered (no site sets
+   locations); Shift+Enter and paste were reasoned, not demonstrated; and Lira Yoga
+   still carries 6 duplicate/stale service rows that make `/list services` show 12
+   rows where 6 are noise.
 
 9. **Front Desk sweep — COMPLETE 2026-08-01 across all 6 verticals** (4/4 starters
    each + visual pass). Fixes committed: details form now requires name, email AND
