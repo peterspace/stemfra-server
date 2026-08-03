@@ -163,13 +163,26 @@ campaign pays the vetting fee again for nothing.
   `lib/notifications.ts`; consent is stored VERBATIM with a timestamp on
   `cms_notification_prefs.prefs.sms`, so we can prove what an account agreed to.
   Opting out keeps the original record and stamps `opted_out_at`.
-- ✅ Privacy policy already carries the non-sharing line (`Privacy.jsx`), and
-  Terms already carry rates + frequency.
-- ⬜ **Add to the privacy policy**: message frequency + "message and data rates
-  may apply" (currently in Terms only; the doc wants them in Privacy too).
-- ⬜ **Publish `stemfra.com/sms-consent`** with screenshots of the card above.
-- ⬜ **Rewrite `message_flow`** naming that URL, the checkbox wording, frequency,
-  and inline privacy/terms links; then edit + resubmit the SAME campaign.
+- ✅ Privacy policy carries the non-sharing line, and Terms carry rates +
+  frequency.
+- ✅ **Privacy policy now also carries** message frequency + "message and data
+  rates may apply" + STOP/HELP, and links to `/sms-consent`. Verified live
+  2026-08-03: "We never share or sell your mobile number or SMS opt-in data with
+  third parties or affiliates for marketing or promotional purposes."
+- ✅ **`stemfra.com/sms-consent` PUBLISHED and live** (2026-08-03). Carries all
+  three dashboard screenshots (step 1 the page in context, step 2 the form at
+  rest with the box unchecked and the button disabled, step 3 number entered and
+  consent given) plus the verbatim consent sentence. Resolves at both
+  `/sms-consent` and `/sms-consent/`.
+  ⚠ It was **404 in production until 2026-08-03** because every commit in the arc
+  was unpushed. Re-verify the URL actually loads before each resubmission; a dead
+  opt-in link is a guaranteed rejection.
+- ✅ **Confirmation SMS implemented** (`OPT_IN_MESSAGE` in
+  `controllers/cms/smsConsentController.js`, sent best-effort on opt-in and
+  reported back as `confirmationSent`). The Opt-in Message field below can now be
+  filled honestly; see the note there.
+- ⬜ **Paste `message_flow`** (below) into the campaign and resubmit the SAME
+  campaign. This is the only remaining step.
 - ⚠ **Strategic**: this campaign covers messages to STEMFRA'S OWN account holders.
   Sending SMS to tenants' end customers is messaging on behalf of third parties
   and needs the ISV model (brand + campaign per tenant), not this campaign.
@@ -178,11 +191,33 @@ campaign pays the vetting fee again for nothing.
 the public page, and resubmit. The stored record, the CMS screen, and the public
 proof page must all show the same sentence.
 
+### Where the opt-in URL goes (there is NO separate field)
+
+Confusing on first look, and worth writing down: the **Edit A2P Campaign Details**
+modal has no "opt-in URL" input. Its fields are Message contents (checkboxes),
+**"How do end-users consent to receive messages?"**, Privacy Policy URL, Terms and
+Conditions URL, and the confirm checkbox.
+
+The opt-in URL goes **inside the "How do end-users consent to receive messages?"
+free-text box** (that is TCR's `message_flow`). That is also where the rejected
+link came from: the reviewer's "The Opt-in link provided (https://cms.stemfra.com/)
+lacks purpose" refers to a URL inside that prose, not to a dedicated field.
+
+⚠ That box currently holds the **rejected text**, which must be replaced wholesale,
+not appended to. It describes "an opt-in toggle" with the wording *"Receive SMS
+alerts for new leads and bookings…"* — a toggle that never existed, quoting a
+sentence the form has never shown. That mismatch IS error 30896. Select all, delete,
+paste the block below.
+
+The Privacy Policy URL and Terms and Conditions URL fields in the same modal are
+already correct (`https://stemfra.com/privacy`, `https://stemfra.com/terms`).
+
 ### Ready-to-paste campaign fields (2026-08-03)
 
 **"How do end-users consent to receive messages?" (`message_flow`)** — replaces the
-rejected text. Names the URL, the consent action, frequency, both legal links, and
-the public proof page, per the 30896 checklist:
+rejected text. 1,164 characters, inside the 40 to 2,048 limit. Names the URL, the
+consent action, frequency, both legal links, and the public proof page, per the
+30896 checklist:
 
 > Stemfra account holders (owners and staff of businesses that use Stemfra) opt in
 > inside their own dashboard. After creating an account at https://stemfra.com, the
@@ -212,20 +247,27 @@ opt-in and which reviewers look for:
 > missed calls, billing). Msg frequency varies. Msg &
 > data rates may apply. Reply HELP for help, STOP to cancel.
 
-⚠ Only claim this once the confirmation SMS is actually implemented. That send is
-NOT built yet: the opt-in currently records consent without texting a confirmation.
-Either implement it before resubmitting or leave the field empty. Describing a
-confirmation that does not fire is the same class of mistake that caused the
-2026-08-03 rejection.
+✅ **Safe to fill as of 2026-08-03.** This send IS implemented: `OPT_IN_MESSAGE` in
+`controllers/cms/smsConsentController.js` fires on opt-in (best-effort, surfaced to
+the CMS as `confirmationSent`), and the constant is byte-identical to the text
+above. Keep the two in step: if one changes, change the other and resubmit.
+The earlier warning here (that it was NOT built, and describing a confirmation that
+does not fire would repeat the 30896 mistake) no longer applies, but the principle
+does. Never describe behaviour the code does not have.
 
 ### Done since the rejection
 
-- ✅ Owner SMS opt-in card in the CMS (commit `10b9d5b`).
-- ✅ Privacy policy now carries message frequency + "message and data rates may
-  apply" alongside the existing non-sharing statement, and links to /sms-consent.
-- ✅ Public proof page at **https://stemfra.com/sms-consent** (`SmsConsent.jsx`,
-  routed + prerendered + in sitemap.xml) reproducing the dashboard card and the
-  verbatim consent sentence, so a reviewer never needs an account.
-- ⬜ Paste the `message_flow` above into the campaign and resubmit the SAME
-  campaign (Fix Campaign / Edit Campaign, never Register a new one).
-- ⬜ Decide on the confirmation SMS before filling Opt-in Message.
+- ✅ Owner SMS opt-in card in the CMS (commit `10b9d5b`), later moved onto the
+  shared `PhoneField` archetype (`3d3857d`) so it has a country selector, real
+  E.164 validation and an echo of the exact number that will be texted.
+- ✅ Privacy policy carries message frequency + "message and data rates may
+  apply" alongside the non-sharing statement, and links to /sms-consent.
+- ✅ Public proof page **live at https://stemfra.com/sms-consent** (verified in a
+  browser 2026-08-03, after the push that first deployed it) reproducing the
+  dashboard card and the verbatim consent sentence, so a reviewer never needs an
+  account. Screenshots re-shot to match the current form; `REV` cache-buster at 4.
+- ✅ Confirmation SMS implemented, so the Opt-in Message field can be filled.
+- ⬜ **ONLY REMAINING STEP:** paste the `message_flow` above into the campaign
+  (replacing the rejected text) and resubmit the SAME campaign via **Fix
+  Campaign**, never "Register a new A2P Campaign" (that re-charges the vetting
+  fee for nothing).
