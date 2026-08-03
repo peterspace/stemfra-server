@@ -227,7 +227,7 @@ CORS additions: dev origins `5178` (CRM), `5181`/`5182` (massage/spa templates).
 
 ## Verticals registry note (2026-07-04)
 
-`lib/verticalConfig.js`: **massage** added (wellness pillar; seed `calm-roots-massage`, a **generated UUID, not a sentinel**), **spa** deferred (built from massage later), **boutique_gyms removed** (retired). Lead-gen allow-list derives from it; the CRM dropdown carries massage + spa; **n8n synced 2026-07-10** (six-vertical prompt pasted by Peter — the 3-place sync rule now points at `n8n-workflows/leadgen-system-prompt.txt` as the paste source).
+`lib/verticalConfig.js`: **massage** added (wellness pillar; seed **`lull`** (renamed from `calm-roots-massage`, which is dead), a **generated UUID, not a sentinel**), **spa** deferred (built from massage later), **boutique_gyms removed** (retired). Lead-gen allow-list derives from it; the CRM dropdown carries massage + spa; **n8n synced 2026-07-10** (six-vertical prompt pasted by Peter — the 3-place sync rule now points at `n8n-workflows/leadgen-system-prompt.txt` as the paste source).
 
 ## Keeping Stacy (+ the publish checklist) in sync with CMS changes (2026-07-08)
 

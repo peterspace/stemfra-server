@@ -78,6 +78,15 @@ model** (`docs/COMMISSION_MODEL.md`)._
      fine for CLASS bookings, where the calendar comes from scheduled sessions rather
      than staff availability (lila-studio's 5 are likely this). So the task is to
      decide the rule per vertical, then fix only what is genuinely wrong.
+     **Queued for this task (found 2026-08-03):** `wildflower-yoga-pilates` →
+     **"Vinyasa Flow"** is `bookable=true` with `price_cents=0` and ZERO
+     `site_class_sessions`, so it renders priceless next to a `$30` row in the chat
+     list and dead-ends at availability if tapped. Surfaced when the site's 6 stale
+     rows were deactivated (FRONTDESK.md §9 #11). Deliberately NOT bundled with that
+     cleanup: this is a content call (seed sessions + a price, or deactivate), and it
+     is the same "bookable with nothing behind it" rule this task exists to decide.
+     ⚠ Note wildflower now shows only 2 services, one of them this broken row — check
+     it before using that site in a demo.
      **Already fixed: ellaris-spa only**, where it was an unambiguous within-site
      inconsistency (6 massage modalities non-bookable while the site's other massages
      were bookable with the same 4 therapists; plus "Couples Massage (at home)" marked
