@@ -156,8 +156,11 @@ model** (`docs/COMMISSION_MODEL.md`)._
     offering only qualified + free staff, reason "Staff reassigned", no reminder
     reset. Apply the same qualification/conflict guard to the existing drag path.
 
-12. **Clients page v2 — lifetime value + loyalty segments (Peter, 2026-08-04; NEXT
-    after the small items).** Today's Customers page is a directory (visits, last
+12. ✅ **Clients page v2 — SHIPPED 2026-08-04** (revenue column + sortable headers +
+    open numeric filters; loyalty SEGMENTS dropped by Peter's call — thresholds
+    don't transfer across verticals, the owner filters by number instead. A
+    per-client profile view + a dashboard Top-clients card remain optional
+    follow-ups). Original scope: Today's Customers page is a directory (visits, last
     visit, tags, notes, opt-outs, CSV, suspend) with NO revenue view. Build:
     per-client lifetime revenue (sum of paid `site_bookings.amount_cents` + the
     at-visit `metadata.collected` amounts) + visit cadence on the list and a
