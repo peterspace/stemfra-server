@@ -68,7 +68,18 @@ model** (`docs/COMMISSION_MODEL.md`)._
    still carries 6 duplicate/stale service rows that make `/list services` show 12
    rows where 6 are noise.
 
-9. **Front Desk sweep — COMPLETE 2026-08-01 across all 6 verticals** (4/4 starters
+9. ✅ **BOOKABILITY HYGIENE CLOSED 2026-08-04 (Peter approved all groups).** Data:
+   Group B — 30 priced massage/spa modalities flipped bookable + 96 staff links
+   (lull/reveline/umbra/vela/aurea, the ellaris verdict applied); Group C —
+   "Couples Massage (at home)" reclassified class→appointment + 16 links on all
+   6 wellness sites (it was dead-ending everywhere, ellaris included); Group D —
+   wildflower's Vinyasa Flow priced $24 + 16 daily 09:15 sessions seeded (lila's
+   shape). Post-fix sweep: the ONLY remaining findings are crossfit's 24 group
+   Programs = Group A, deliberate display-only. **Durable fix shipped:** Services
+   page bookability badges (amber "Display only" stated neutrally; red "No staff
+   linked" / "No upcoming sessions") — owners now see their own gaps; no more
+   sweeps. Verified live: forge shows exactly 6 amber, 0 red.
+   ─ Original record: **Front Desk sweep — COMPLETE 2026-08-01 across all 6 verticals** (4/4 starters
    each + visual pass). Fixes committed: details form now requires name, email AND
    phone, enforced server-side in `detailsCard()`/`hasContact` so BOTH the
    appointment and class branches get it (`2d7986c`, `9da0e8d`); "First time here"
@@ -174,8 +185,15 @@ model** (`docs/COMMISSION_MODEL.md`)._
     cell (avatar + name + email) linking to a per-user view page, status badges,
     a status filter dropdown, per-row actions. Sidebar already says "Clients".
 
-13. **Mapbox location maps (Peter, 2026-08-04 — replaces the keyless Google
-    embed, which cannot be styled).** Pattern + credentials come from unekride:
+13. ✅ **Mapbox location maps — CORE SHIPPED 2026-08-04** (LocationMap archetype:
+    dynamic-import mapbox-gl, address geocoding, --site-accent marker; wired into
+    BOTH map-showing variants — Default/streets + DarkPanel/dark — with the
+    Google-embed fallback kept, so no-token sites are untouched. Verified live on
+    argyle/Classic NYC. Token in each template's .env.local (gitignored).
+    ⚠ REMAINING — PETER ACTION for prod: add `VITE_MAPBOX_TOKEN` to each of the 6
+    Cloudflare Pages template projects' env (build-time var), else prod keeps the
+    Google embed fallback (harmless, just unstyled). Optional hardening: restrict
+    the token to *.stemfra.com + localhost in the Mapbox dashboard.) Original:** Pattern + credentials come from unekride:
     `unekride-customer-mobile/components/BookingMap.web.tsx` (mapbox-gl in the
     browser, PUBLIC token — safe to ship; style URLs streets-v12 / dark-v11 with
     a theme hot-swap). Token lives in
