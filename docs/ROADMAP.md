@@ -156,6 +156,45 @@ model** (`docs/COMMISSION_MODEL.md`)._
     offering only qualified + free staff, reason "Staff reassigned", no reminder
     reset. Apply the same qualification/conflict guard to the existing drag path.
 
+12. **Clients page v2 — lifetime value + loyalty segments (Peter, 2026-08-04; NEXT
+    after the small items).** Today's Customers page is a directory (visits, last
+    visit, tags, notes, opt-outs, CSV, suspend) with NO revenue view. Build:
+    per-client lifetime revenue (sum of paid `site_bookings.amount_cents` + the
+    at-visit `metadata.collected` amounts) + visit cadence on the list and a
+    per-client profile; derived segments VIP / regular / new / lapsed (spend +
+    recency); a "Top clients" dashboard card. The lifecycle emails (win-back,
+    birthday w/ discount) already ACT on loyalty — this adds the insight layer
+    that tells the owner who deserves the holiday bonus. **Design reference
+    (Peter): the Idometrics admin Users table** (`/Volumes/Peter Drive/peters
+    macbook air/Desktop/idometrics/May 2026 ido/ido-admin`, `app/(main)/users/`):
+    generic `columns` config with multi-field cells + custom renderers, a Profile
+    cell (avatar + name + email) linking to a per-user view page, status badges,
+    a status filter dropdown, per-row actions. Sidebar already says "Clients".
+
+13. **Mapbox location maps (Peter, 2026-08-04 — replaces the keyless Google
+    embed, which cannot be styled).** Pattern + credentials come from unekride:
+    `unekride-customer-mobile/components/BookingMap.web.tsx` (mapbox-gl in the
+    browser, PUBLIC token — safe to ship; style URLs streets-v12 / dark-v11 with
+    a theme hot-swap). Token lives in
+    `/Users/peterokeme/Documents/SAAS/unekride/unekride-customer-mobile/.env`
+    (`EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN`; there is NO unekride-server dir — the
+    mobile app is the only Mapbox consumer). Build: a Mapbox variant of
+    `LocationCard` themed via `--site-*` (light/dark style per theme register),
+    token as `VITE_MAPBOX_TOKEN` in the template apps, keep the current
+    placeholder-behind-iframe fallback pattern. No server work (public token).
+
+14. **Help Center: CMS how-to docs (Peter, 2026-08-04 — list to be agreed).**
+    First articles: "Manage your Team" + "Manage your Services" — add / edit /
+    reorder / photos / team-service linking / delete, every control on those
+    pages, barbershop as the worked example. Proposed full list for discussion
+    (mirrors what owners actually touch): Bookings calendar (statuses,
+    reschedule, mark collected) · Pages & sections editing + live preview ·
+    Media library · Promotions · Blog · Automated emails + review link ·
+    Front Desk on/off + what it does · Reports · Billing (invoice → receipt) ·
+    Clients page. Rule from the GBP articles: point at real product surfaces,
+    embed videos only where a third-party UI is the confusing part — our own
+    CMS should be documented with our own screenshots.
+
 **DEPLOY/OPS GAPS (audit 2026-07-29; re-verified 2026-08-03):**
 - ✅ **`PAYMENT_CREDENTIALS_KEK` is now in `deploy.yml`** (line 136, from the GitHub
   secret). Verified 2026-08-03. The P12 direct-keys payment system is no longer
