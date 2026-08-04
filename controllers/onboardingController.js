@@ -28,7 +28,7 @@ async function signup(req, res) {
     const {
       name, email, password, company, vertical, starterId, city, template,
       firstName, lastName, country, state, bookingProvider, paymentMethods, tier, goals, feesAccepted,
-      hasDomain, domain,
+      hasDomain, domain, hasStripe,
     } = req.body || {};
     const result = await onboardCustomer({
       name, email, password, company, vertical: vertical || null, starterId: starterId || null,
@@ -41,6 +41,7 @@ async function signup(req, res) {
       feesAccepted: !!feesAccepted,
       hasDomain: !!hasDomain,
       domain: typeof domain === 'string' ? domain : null,
+      hasStripe: ['yes', 'no', 'unsure'].includes(hasStripe) ? hasStripe : null,
     });
 
     res.json({
