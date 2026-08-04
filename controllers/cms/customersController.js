@@ -51,6 +51,32 @@ async function setSuspended(req, res) {
 
 // ─── Customer list / export / import (Task #25 — switcher toolkit) ───────────
 
+// Lifetime revenue per customer (ROADMAP task 12, Peter 2026-08-04). Same basis
+// as Reports v2: a booking counts once it is PAID online or the owner marked it
+// COLLECTED at the visit (metadata.collected) — pending/due money is not
+// "revenue from this client" yet. Deliberately NO fixed loyalty segments
+// (VIP/lapsed etc. — thresholds don't transfer across verticals); the owner
+// filters by a number instead. JS aggregation over one capped fetch, same
+// tradeoff as the site monitor: fine at tenant scale, move to SQL group-by at
+// platform scale.
+async function revenueByCustomer(siteId) {
+  const { data, error } = await supabase
+    .from('site_bookings')
+    .select('customer_id, amount_cents, payment_status, metadata')
+    .eq('site_id', siteId)
+    .gt('amount_cents', 0)
+    .limit(50000);
+  if (error) throw error;
+  const out = new Map();
+  for (const b of data || []) {
+    if (!b.customer_id) continue;
+    const counts = b.payment_status === 'paid' || b.metadata?.collected === true;
+    if (!counts) continue;
+    out.set(b.customer_id, (out.get(b.customer_id) || 0) + (b.amount_cents || 0));
+  }
+  return out;
+}
+
 // GET /api/cms/customers?siteId= — the site's customer book (newest-active first).
 async function listCustomers(req, res) {
   try {
@@ -67,6 +93,7 @@ async function listCustomers(req, res) {
       .order('created_at', { ascending: false })
       .limit(5000);
     if (error) throw error;
+    const revenue = await revenueByCustomer(siteId);
 
     const customers = (data || []).map((c) => ({
       id: c.id,
@@ -76,6 +103,7 @@ async function listCustomers(req, res) {
       emailOptOut: c.email_opt_out, smsOptIn: c.sms_opt_in,
       totalBookings: c.total_bookings, lastBookedAt: c.last_booked_at, createdAt: c.created_at,
       suspended: c.metadata?.suspended === true,
+      lifetimeRevenueCents: revenue.get(c.id) || 0,
     }));
     res.json({ success: true, customers });
   } catch (err) {
@@ -101,19 +129,21 @@ async function exportCustomers(req, res) {
 
     const { data, error } = await supabase
       .from('site_customers')
-      .select('first_name, last_name, email, phone, birthdate, tags, notes, email_opt_out, sms_opt_in, total_bookings, last_booked_at, created_at')
+      .select('id, first_name, last_name, email, phone, birthdate, tags, notes, email_opt_out, sms_opt_in, total_bookings, last_booked_at, created_at')
       .eq('site_id', siteId)
       .order('created_at', { ascending: false })
       .limit(50000);
     if (error) throw error;
+    const revenue = await revenueByCustomer(siteId);
 
-    const cols = ['First name', 'Last name', 'Email', 'Phone', 'Birthdate', 'Tags', 'Notes', 'Email opt-out', 'SMS opt-in', 'Total bookings', 'Last booked', 'Added'];
+    const cols = ['First name', 'Last name', 'Email', 'Phone', 'Birthdate', 'Tags', 'Notes', 'Email opt-out', 'SMS opt-in', 'Total bookings', 'Lifetime revenue', 'Last booked', 'Added'];
     const lines = [cols.join(',')];
     for (const c of data || []) {
       lines.push([
         c.first_name, c.last_name, c.email, c.phone, c.birthdate, c.tags, c.notes,
         c.email_opt_out ? 'yes' : 'no', c.sms_opt_in ? 'yes' : 'no',
-        c.total_bookings, c.last_booked_at ? String(c.last_booked_at).slice(0, 10) : '', String(c.created_at).slice(0, 10),
+        c.total_bookings, ((revenue.get(c.id) || 0) / 100).toFixed(2),
+        c.last_booked_at ? String(c.last_booked_at).slice(0, 10) : '', String(c.created_at).slice(0, 10),
       ].map(csvCell).join(','));
     }
     const fname = `${site.subdomain || 'customers'}-customers-${new Date().toISOString().slice(0, 10)}.csv`;
