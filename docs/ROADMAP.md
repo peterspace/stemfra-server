@@ -20,12 +20,12 @@ model** (`docs/COMMISSION_MODEL.md`)._
 2. **Task 56 — Public Docs / Help Center: ✅ BUILT 2026-07-29, PUSHED 2026-08-03.**
    Live in `stemfra_client` at `/docs` + `/docs/:category` + `/docs/:category/:slug`.
    Structured-block content in `src/app/docs/data/{gettingStarted,domains,payments,
-   bookings,billing,account}.js` (6 categories / **24** articles — was 25 until the external-booking article was removed with the link-out reversal) + `index.js` registry;
+   bookings,billing,account}.js` (6 categories / **26** articles — 25 → 24 with the link-out reversal, +2 GBP/review-link articles 2026-08-04) + `index.js` registry;
    components in `src/app/docs/` (DocsLayout/Sidebar/Toc/Blocks/Hub/Category/Article),
    all on WHITE canvas (Peter's call). Wired into routes.js (+ PRERENDER_PATHS via
    `docsPaths()`), seo.js (`seoForDocs`), Footer ("Help Center" link) + FAQ cross-link.
    Truth rules held (no tiers/SMS/auto-debit/voice; commission framing throughout).
-   Verified: `npm run build` prerenders 48 routes (31 docs after the article removal; the 48 total held because the non-docs count is 17) + sitemap; browser walk
+   Verified: `npm run build` prerenders 50 routes (33 docs as of 2026-08-04; was 48/31) + sitemap; browser walk
    of hub + Stripe article (images/table/callout/TOC render); all 10 internal links
    resolve; `grep -R "—" src/app/docs` clean. Spec: `stemfra_client/docs/DOCS_CENTER_SPEC.md`.
    ✅ Follow-up DONE (2026-07-29, committed not pushed): `stemfra_client/src/app/pages/
@@ -640,7 +640,7 @@ New tasks:
 56. **Public Docs / Help Center** — ✅ DONE 2026-07-29, pushed 2026-08-03 (see
     the top-status block for the file map + verification + the FAQ/STRIPE_ONBOARDING
     follow-up). Shipped as a structured-block help center at `stemfra.com/docs` on a
-    WHITE canvas: 6 categories / **24** articles (Getting started · Domains · Payments &
+    WHITE canvas: 6 categories / **26** articles (Getting started · Domains · Payments &
     Stripe · Bookings · Billing & commission · Account; was 25 until the external-booking
     article was removed), each article with per-section sources, prerendered + in the
     sitemap, linked from the Footer + FAQ. Truth rules held (no tiers/SMS/auto-debit/voice).
