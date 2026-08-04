@@ -217,22 +217,24 @@ router.get('/auth-reset-password', (_req, res) => send(res, authEmails.resetPass
 router.get('/auth-change-email', (_req, res) => send(res, authEmails.changeEmail().html));
 
 // ─── System-A billing (Stemfra brand) ────────────────────────────────────────
+// Samples mirror the LIVE model (commission invoicing by bank transfer). An
+// earlier version showed the retired tier pricing + Payoneer copy, so previews
+// no longer matched what production sends.
 router.get('/platform-invoice', (_req, res) => send(res, tx.platformInvoice({
   businessName: 'Argyle & Sons', greetingName: 'Marcus',
-  rows: [{ label: 'Website setup (one-time)', value: '$1,000.00' }, { label: 'Growth plan — first month', value: '$199.00' }],
-  amountLabel: '$1,199.00', dueLabel: 'July 20, 2025',
-  paymentInstructions: 'Use Settle invoice above to pay securely via Payoneer — card or bank transfer. Should you prefer another method, simply reply to this email.',
-  dashboardUrl: 'https://cms.stemfra.com/billing',
-  payUrl: 'https://pay.payoneer.com/request/demo-a1b2c3d4',
+  rows: [{ label: '5% commission on bookings ($2,140.00)', value: '$107.00' }],
+  amountLabel: '$107.00', dueLabel: 'July 20, 2025',
+  paymentInstructions: 'Pay by bank transfer using the account details on the attached invoice, with the invoice number as your payment reference. Once sent, upload your transfer receipt in your dashboard under Billing, Invoices, so we can match your payment quickly. Prefer another method or need a hand? Just reply to this email.',
+  dashboardUrl: 'https://cms.stemfra.com/billing/invoices',
   invoiceRef: 'a1b2c3d4',
 })));
 
 router.get('/platform-dunning', (_req, res) => send(res, tx.platformDunning({
   businessName: 'Argyle & Sons', greetingName: 'Marcus',
-  rows: [{ label: 'Growth plan — Jul 2025', value: '$199.00' }],
-  amountLabel: '$199.00', dueLabel: 'July 6, 2025', daysOverdue: 7,
-  paymentInstructions: 'You’ll receive a secure Payoneer payment request at this email — open it to pay by card or bank transfer. Prefer another method? Just reply and we’ll arrange it.',
-  dashboardUrl: 'https://cms.stemfra.com/billing', invoiceRef: 'a1b2c3d4',
+  rows: [{ label: '5% commission on bookings — Jun 2025', value: '$107.00' }],
+  amountLabel: '$107.00', dueLabel: 'July 6, 2025', daysOverdue: 7,
+  paymentInstructions: 'Pay by bank transfer using the account details on the attached invoice, with the invoice number as your payment reference. Once sent, upload your transfer receipt in your dashboard under Billing, Invoices, so we can match your payment quickly. Prefer another method or need a hand? Just reply to this email.',
+  dashboardUrl: 'https://cms.stemfra.com/billing/invoices', invoiceRef: 'a1b2c3d4',
 })));
 
 router.get('/platform-receipt', (_req, res) => send(res, tx.platformReceipt({

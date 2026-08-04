@@ -177,9 +177,10 @@ async function invoicePdf(req, res) {
     const { data } = await supabase.from('contacts').select(CONTACT_COLS).eq('id', contactId).maybeSingle();
     contact = data || null;
   }
-  // Commission + domain-adjustment invoices are paid by bank transfer → include our
-  // Airwallex bank details on the PDF so the tenant knows exactly where to pay.
-  const bank = (charge.kind === 'commission' || charge.kind === 'adjustment') ? await getCommissionBank() : null;
+  // EVERY unpaid invoice is paid by bank transfer (2026-08-04, was gated to
+  // commission/adjustment) → include our Airwallex bank details so the tenant
+  // knows exactly where to pay. Matches the emailed attachment.
+  const bank = charge.status !== 'paid' ? await getCommissionBank().catch(() => null) : null;
   streamInvoicePdf(res, { charge, contact, billingProfile: contact?.billing_profile || {}, provider: charge.provider, bank });
 }
 

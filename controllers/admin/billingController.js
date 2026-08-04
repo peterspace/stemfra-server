@@ -80,7 +80,8 @@ async function invoicePdf(req, res) {
     const { data } = await supabase.from('contacts').select('*').eq('id', site.owner_contact_id).maybeSingle();
     contact = data || null;
   }
-  const bank = (charge.kind === 'commission' || charge.kind === 'adjustment') ? await getCommissionBank() : null;
+  // Widened 2026-08-04 to every unpaid charge — keep in step with the CMS path.
+  const bank = charge.status !== 'paid' ? await getCommissionBank().catch(() => null) : null;
   streamInvoicePdf(res, { charge, contact, billingProfile: contact?.billing_profile || {}, provider: charge.provider, bank });
 }
 

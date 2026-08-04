@@ -135,6 +135,11 @@ jobs:
             STRIPE_SUBSCRIPTION_APP_FEE_PCT=4.5
             PAYMENT_CREDENTIALS_KEK=${{ secrets.PAYMENT_CREDENTIALS_KEK }}
             COMMISSION_SCHEDULER_ENABLED=true
+            # Public pk. token served to the template apps via /api/public-config.
+            # GitHub push protection cannot tell a public pk. token from a secret
+            # one, so the value lives in a repo Actions secret like every other
+            # credential (value: same token as unekride-customer-mobile/.env).
+            MAPBOX_PUBLIC_TOKEN=${{ secrets.MAPBOX_PUBLIC_TOKEN }}
             CMS_URL=https://cms.stemfra.com
             PLATFORM_BILLING_RETURN_URL=https://cms.stemfra.com
             DOMAIN_REGISTRAR=porkbun

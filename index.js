@@ -130,6 +130,8 @@ app.use('/api/starters',   require('./routes/starters'));   // public Starter ca
 app.use('/api/marketing',  require('./routes/marketing'));  // public marketing-site reads (hero mockups)
 app.use('/api/insights', insightsRoutes);
 app.use('/api/plans',    require('./routes/plans'));   // public pricing catalog (single source)
+const publicConfigRouter = require('./routes/publicConfig');
+app.use('/api/public-config', publicConfigRouter);
 app.use('/api/business', require('./routes/business')); // stemfra_business app: AI drafting copilot (staff-only)
 app.use('/api/twilio',        twilioRoutes);
 app.use('/api/user-settings', userSettingsRoutes);
