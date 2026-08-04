@@ -84,6 +84,15 @@ dedicated account manager vs Payoneer's slow support). The `billing_charges` led
 
 ## 3. Domain — the customer's responsibility, Stemfra fronts $0
 
+> ⚠ **2026-08-04 audit note — this section disagrees with its own heading and with
+> ROADMAP P13.** The heading says "fronts $0"; §3(a) below says "we front the cost,
+> capped ~$15"; ROADMAP P13 + task 57 say **collect-first / never front** (blocked on
+> a payment rail). ROADMAP is the later, prioritized source — treat COLLECT-FIRST as
+> the standing policy. Note the code implements neither cleanly yet: the existing
+> owner register path is front-then-bill AND gated on `subscriptions.status='active'`,
+> which no commission-era tenant has, so it is inert for new tenants (details in
+> ROADMAP task 57).
+
 - **Free `*.stemfra.com` subdomain** (default) · **BYO connect-only** (point DNS; no
   transfer, no 60-day wait) · **buy-through-us** · or **self-serve at Cloudflare Registrar
   (at-cost) / Porkbun**.
@@ -122,6 +131,10 @@ dedicated account manager vs Payoneer's slow support). The `billing_charges` led
   design/infra notes kept in case we revive a subscription/hybrid later.
 
 ## 6. Public Docs / Help Center — new first-class item
+
+> ✅ Shipped 2026-07-29 (ROADMAP task 56) with **6** categories, not the 7 planned
+> below — "CMS how-tos" and "SMS & notifications" were not built, "Bookings &
+> payments" split into two. The list below is the planning-era sketch.
 
 - Markdown-driven, searchable, at `stemfra.com/docs`. Categories: Getting started ·
   Domains (connect/buy/transfer) · CMS how-tos · Bookings & payments · SMS &
@@ -309,8 +322,11 @@ Cross-checked against `ROADMAP.md` P0–P12. Grouped by status.
 - **P10** build order 40 → 38 → 39 → 43+45 → 37 → 42-R1 → 41: 40 staff-mode-in-CMS ·
   38 CMS theme studio + plans display · 39 promo banners/popups · 37 CMS ease-of-use ·
   42 Remix composer · 41 CMS mobile. (43/45 email+domain-zone largely done via Case 7/11.)
-- **P12 Wave 2** pay-and-publish automation · **Case 2 tenant email redesign** ·
-  switcher messaging. (Setup-call booking = DONE.)
+- ~~P12 Wave 2 pay-and-publish automation · Case 2 tenant email redesign · switcher
+  messaging~~ ✅ **all three were already built when this was written** (2026-08-04
+  audit): `lib/billing/publishOnPayment.js` (pay-and-publish), `tenantDocument()` in
+  `templates/baseEmail.js` (Case 2), switcher handling in the CRM LeadCard/LeadModal.
+  (Setup-call booking = DONE.)
 - **P12 Wave 3** tenant blog completeness (massage/spa finish, per-theme audit) ·
   Square adapter (on demand).
 - **P13** new: 56 Docs · 57 domain policy · 58 commission engine · 59 CRM performance
@@ -323,10 +339,17 @@ Cross-checked against `ROADMAP.md` P0–P12. Grouped by status.
 - **P11.49 tenant Voice (Phase 3)** & the P12 Wave-3 voice line — **RETIRED** (Front
   Desk chat covers tenants; Stemfra keeps internal Mark). **P11.50 Phase 4** = lower
   priority (internal voice only).
-- **P12 Wave 1 direct per-site Stripe keys (System B)** — **SUPERSEDED for online
-  payments** by the marketplace connected-account split (we must route online payments
-  through our PayFac to collect the 5%). Direct-key code goes **dormant** (like Connect
-  did), not deleted; revisit only if a tenant must keep their own processor.
+- ~~P12 Wave 1 direct per-site Stripe keys — SUPERSEDED by the marketplace
+  connected-account split; code goes dormant~~ ⚠ **WRONG — corrected 2026-08-04.**
+  This bullet was written against the marketplace plan that §2 of THIS SAME DOC
+  killed the same day (Harry Raj call: ~$20-25k/mo, shelved). With the marketplace
+  gone, **direct per-site Stripe keys are the LIVE tenant-payment path**, not
+  dormant: `lib/paymentCredentials.js` + `getStripeForSite` + the CMS
+  `DirectStripeCard` + 5 template checkout consumers, with
+  `PAYMENT_CREDENTIALS_KEK` in deploy.yml. Card money flows to the tenant's own
+  Stripe; the 5% is metered and invoiced separately (§2) — no PayFac needed to
+  collect it. An audit found this stale bullet had already misled one session into
+  doubting whether a payments fix addressed a real state.
 - **P12 VSL (Last)** — unchanged, still last; funnel messaging shifts subscription →
   commission.
 

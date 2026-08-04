@@ -1,5 +1,22 @@
 # P12 — Payments Pivot + Acquisition Funnel (agreed plan)
 
+> ⚠ **READ WITH THE P13 PIVOT IN MIND (banner added by the 2026-08-04 audit).**
+> This doc predates the 2026-07-27 commission pivot (`COMMISSION_MODEL.md`) and was
+> never revised except for the §2 link-out reversal note. Four things below are no
+> longer true:
+> 1. **Revenue framing** — §1's "Stemfra's revenue is the subscription, never a
+>    payment rake" is dead: the model is now free site + flat 5% commission, and the
+>    subscription is retired. The direct-keys ARCHITECTURE survives unchanged (card
+>    money still goes straight to the tenant's Stripe; the 5% is invoiced separately).
+> 2. **Per-tenant webhooks** (§1.4, `/api/stripe/webhook/:siteId`) were **never
+>    built** — deliberately deferred; redirect-verify + the sweeper cover it. The
+>    per-site stored webhook secret is written but never read.
+> 3. **The external-booking-URL option** was built then **REMOVED 2026-07-29**
+>    (native booking only — see §2's own note).
+> 4. **Voice Phase 3 (tenant voice)** was **RETIRED 2026-07-27** by P13, and
+>    **Payoneer is dormant** — §3's "Payoneer request link" in pay-and-publish
+>    emails no longer applies (Airwallex manual invoicing is the collection path).
+
 _Agreed 2026-07-22 (Peter + Claude, full discussion in-session). This is the
 system-of-record for the P12 arc: the Stripe direct-keys pivot, the
 VSL→setup-call→pay-and-publish funnel, owner SMS alerts, voice-agent

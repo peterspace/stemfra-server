@@ -38,7 +38,9 @@ const FONT = "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-seri
 // Approved via the /dev design study: chocolate bands, icon-over-wordmark
 // lockup, light 300-weight display type, tracked-out uppercase micro-labels,
 // hairline rows, one big "amount" moment, square chocolate + ghost buttons.
-// TENANT mode is untouched (its redesign is Case 2, pending).
+// TENANT mode was redesigned too (Case 2 — tenantDocument() below, selected by
+// renderEmail). An earlier version of this comment said Case 2 was pending; the
+// implementation landed and the comment lagged, which sent an audit chasing it.
 const S = {
   canvas: '#f6f6f4',    // page background
   card: '#ffffff',

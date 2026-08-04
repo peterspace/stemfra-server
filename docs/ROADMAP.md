@@ -17,15 +17,15 @@ model** (`docs/COMMISSION_MODEL.md`)._
    CRM `/site-monitor` (`pages/SiteMonitor.jsx` + `useSiteMonitor`): window presets +
    custom range, "Inactive > 1 year" filter, sort, totals strip, freshness tints, manual
    Nudge (mailto) + open-site. No automatic dormancy actions, by design.
-2. **Task 56 — Public Docs / Help Center: ✅ BUILT 2026-07-29 (committed, not pushed).**
+2. **Task 56 — Public Docs / Help Center: ✅ BUILT 2026-07-29, PUSHED 2026-08-03.**
    Live in `stemfra_client` at `/docs` + `/docs/:category` + `/docs/:category/:slug`.
    Structured-block content in `src/app/docs/data/{gettingStarted,domains,payments,
-   bookings,billing,account}.js` (6 categories / 25 articles) + `index.js` registry;
+   bookings,billing,account}.js` (6 categories / **24** articles — was 25 until the external-booking article was removed with the link-out reversal) + `index.js` registry;
    components in `src/app/docs/` (DocsLayout/Sidebar/Toc/Blocks/Hub/Category/Article),
    all on WHITE canvas (Peter's call). Wired into routes.js (+ PRERENDER_PATHS via
    `docsPaths()`), seo.js (`seoForDocs`), Footer ("Help Center" link) + FAQ cross-link.
    Truth rules held (no tiers/SMS/auto-debit/voice; commission framing throughout).
-   Verified: `npm run build` prerenders 48 routes (32 docs) + sitemap; browser walk
+   Verified: `npm run build` prerenders 48 routes (31 docs after the article removal; the 48 total held because the non-docs count is 17) + sitemap; browser walk
    of hub + Stripe article (images/table/callout/TOC render); all 10 internal links
    resolve; `grep -R "—" src/app/docs` clean. Spec: `stemfra_client/docs/DOCS_CENTER_SPEC.md`.
    ✅ Follow-up DONE (2026-07-29, committed not pushed): `stemfra_client/src/app/pages/
@@ -39,6 +39,15 @@ model** (`docs/COMMISSION_MODEL.md`)._
    Settings → Domain card + staff to act on post-signup. Subdomain default + BYO connect
    + CMS search/buy UI were already DONE. **Remaining: collect-first buy-through-us only**
    (waits on a payment rail).
+   ⚠ **2026-08-04 audit — two code-vs-policy gaps in the existing register path**
+   (`routes/cms/siteDomain.js` register): (a) it implements FRONT-THEN-BILL (register
+   at Porkbun, then a `billing_charges` invoice) while the P13 policy here says
+   collect-first/never-front — the shelved variant is the one wired; (b) its gate
+   checks `subscriptions.status='active'`, which NO commission-era tenant has
+   (subscriptions are retired), so owner self-serve domain buying is effectively
+   dead-gated for every new tenant. Both resolve together when collect-first lands
+   on a payment rail; until then the path is inert for new tenants, which is safe
+   but worth knowing before demoing it.
 4. **P12 Wave 2 Task 9 — owner/staff SMS alerts** — gated on A2P vetting (v2 submitted
    2026-07-26).
 5. **P10 case 42 "Remix" R2/R3** (AI theme composer engine) — R1 registry done; rest pending.
@@ -95,13 +104,29 @@ model** (`docs/COMMISSION_MODEL.md`)._
    - **The durable fix worth considering**: surface this in the CMS (warn when a
      service is active but unbookable, or bookable with nothing behind it) so owners
      see it, instead of relying on a sweep to catch it.
-   - **Doc-vs-DB drift, not bugs**: the salons fixture company is **"Maison Solène"**
-     and the massage one is **"Lull Massage"**, while the CLAUDE.md files still say
-     Maison Lune / Calm Roots. Pick the canonical name and fix the docs or the row.
+   - ✅ **Doc-vs-DB drift FIXED 2026-08-03**: the canonical mapping now lives in
+     `stemfra_platform/CLAUDE.md` ("SUBDOMAIN ≠ BRAND NAME" table) + the massage/spa
+     reference. Rule: identify fixtures by SUBDOMAIN (maison-lune = Maison Solène,
+     lila-studio = Lira Yoga, `lull` = Lull Massage; the whole wellness demo fleet
+     was renamed — calm-roots-massage/zen-haven/reverie-massage/respira-spa/lumora-spa
+     are all DEAD subdomains).
    - **Never exercised**: member reschedule/cancel through a real signed-in chat on
      the member-portal verticals (crossfit/massage/spa).
 
-10. **Reassign a booking to a different team member (Peter, 2026-08-03).** Real
+10. **Tier-system residue (found by the 2026-08-04 audit — the P13 "retire the tier
+    system" task is only ~80% executed).** Pricing page is collapsed and the CMS
+    change-plan UI is gone, but: `routes/plans.js` still returns a tier-shaped
+    catalog; CRM `OfferEditor.jsx` (route `billing/plans`) still edits per-tier
+    offers; `stemfra_cms/src/pages/SignupPage.tsx:70` still defaults
+    `tier = params.get('plan') || 'growth'` and posts it into onboarding; and
+    `Pricing.jsx:36` carries its own TODO ("Task 2 collapses the catalog itself").
+    Dead code alongside it: `useChangePlan` in `stemfra_cms/src/lib/billing.ts`
+    (zero callers) and `SMSModal.jsx`/`SMSThread.jsx` in stemfra-ops (deprecated
+    since the ConversationPanel cutover, never deleted). None of this breaks
+    anything today — signup ignores the tier downstream — but it is exactly the
+    kind of half-retired surface that produces contradictory docs.
+
+11. **Reassign a booking to a different team member (Peter, 2026-08-03).** Real
     scenario: a customer books Barber A, A calls in sick, the manager offers Barber
     B, B does the cut. **The capability half-exists**: dragging an appointment
     across staff columns in the Bookings calendar DAY view sets `newTeamMemberId`
@@ -281,7 +306,7 @@ Remaining (lower, item 14): demo_sites table + SUBJECT_TO_SERVICE/KNOWN_TEMPLATE
 ## P5 — Hardening + platform roadmap
 18. Voice hardening — Twilio signature validation + WS auth.
 19. Per-role RLS data hardening (stemfra-ops) — role-scoped policies vs blanket `is_stemfra_staff()`.
-20. Stacy **S3 (act)** + **S4**.
+20. Stacy ~~S3 (act)~~ ✅ S3 DONE (clone action, 2026-07-01 — see server CLAUDE.md) + **S4** (RAG + insights, still open).
 21. **Ledger** agent (Agent 6).
 22. Dynamic CORS (query live custom domains) — deferred.
 
@@ -322,6 +347,11 @@ this session; 25–27 still pending._
     new amount. No mid-cycle proration under manual Payoneer — Stripe will add real
     proration when it's the active provider. CMS: `useChangePlan` + `ChangePlanCard`
     (confirm step). Verified: routes 401-gated, CMS `tsc --noEmit` clean.
+    ⚠ **2026-08-04 audit: the UI half of this no longer exists.** `ChangePlanCard`
+    was removed with the tier retirement (P13 — no tiers to change between);
+    `useChangePlan` survives in `stemfra_cms/src/lib/billing.ts` with ZERO callers
+    (dead code, cleanup candidate). The entry stays ✅ as history; do not go looking
+    for the card.
 26. ✅ **Site deletion + lifecycle cleanup — DONE (2026-06-29).** Policy (Peter):
     **both** staff + owner can delete · **90-day** grace · **block on unpaid +
     cancel sub** · export deferred to v2. Built: schema (`sites.deleted_at`/
@@ -489,8 +519,11 @@ call (actions, escalation, dispositions, multichannel, analytics, compliance).
 48. ✅ **Phase 2 — support abilities** (DONE 2026-07-22): caller-ID→account identification, account context via
     Stacy's `buildSiteContext`, safe action tools (password-reset email, support ticket,
     callback) via the Front Desk server-orchestrated tool-loop pattern.
-49. **Phase 3 — tenant voice** ("never miss a call", the remaining roadmap agent): per-site
-    numbers, Front Desk brain + `runBookingTool` over the voice relay, owner opt-in. Spec first.
+49. ~~Phase 3 — tenant voice~~ **RETIRED 2026-07-27 by the P13 pivot** (see the
+    "Confirmed 2026-07-27" block below: tenant Voice dropped on cost; Front Desk chat
+    covers tenants; Stemfra keeps its own "Mark"). The retirement was announced there
+    but this line was never struck — a 2026-08-04 audit found three places still
+    treating Phase 3 as live (here, Wave 3, the P12 arc header). Struck now.
 50. **Phase 4 — scale**: CRM call analytics (measure the 40–70% resolution benchmark),
     DNC/TCPA machinery before colder outbound, premium voice, load testing.
 
@@ -503,14 +536,17 @@ deleted) — unblocks deposits-at-booking NOW, independent of Stemfra's own Stri
 verification; the Kai-Stone-style funnel (VSL → 45-min setup call on OUR OWN
 booking system → pay-and-publish); ONE SMS program only (Stemfra → owners+staff
 with the customer's contact details — NO tenant→end-customer SMS); Mindbody hard
-line with an external-booking-URL escape hatch. **Resequencing: Voice Phase 3/4
-(P11 items 49–50) now run AFTER P12 Waves 1–2; Phase 3 scope grows to include
-browser-voice (Stacy call tier B). VSL production is deliberately LAST.**_
+line ~~with an external-booking-URL escape hatch~~ (escape hatch REMOVED 2026-07-29
+— native booking only, see the top block). **Resequencing note is historical: Voice
+Phase 3 was RETIRED 2026-07-27 (P13), so "Phase 3 scope grows to include
+browser-voice" no longer applies. VSL production is still deliberately LAST.**_
 
 51. **Wave 1** — payments pivot build (`site_payment_credentials` + AES-256-GCM,
-    `getStripeForSite`, redirect-verify Checkout, per-tenant webhooks
-    `/api/stripe/webhook/:siteId`, CMS/onboarding key capture, external-booking-URL
-    option) · Mark Phase 1.5 (call-reason modal + activity-feed-enriched context)
+    `getStripeForSite`, redirect-verify Checkout, ~~per-tenant webhooks
+    `/api/stripe/webhook/:siteId`~~ (deferred — never built; the flat webhook + sweeper
+    covers it, see the deploy-gaps block), CMS/onboarding key capture,
+    ~~external-booking-URL option~~ (built then REMOVED 2026-07-29 — native only))
+    · Mark Phase 1.5 (call-reason modal + activity-feed-enriched context)
     · Stacy "Prefer to talk?" tier A · **Peter: submit A2P registration** (lead time).
 52. **Wave 2** — setup-call booking on the internal Stemfra site (dogfood; reminder
     sweeper free) · pay-and-publish automation (billing_charges paid + checklist →
@@ -595,14 +631,18 @@ non-external-dependency items can start now._
   owner/staff-INITIATED deletion only.)
 
 New tasks:
-56. **Public Docs / Help Center** — ✅ DONE 2026-07-29 (committed, not pushed; see
+56. **Public Docs / Help Center** — ✅ DONE 2026-07-29, pushed 2026-08-03 (see
     the top-status block for the file map + verification + the FAQ/STRIPE_ONBOARDING
     follow-up). Shipped as a structured-block help center at `stemfra.com/docs` on a
-    WHITE canvas: 6 categories / 25 articles (Getting started · Domains · Payments &
-    Stripe · Bookings · Billing & commission · Account), each article with per-section
-    sources, prerendered + in the sitemap, linked from the Footer + FAQ. Truth rules
-    held (no tiers/SMS/auto-debit/voice). Search + feedback widget intentionally
-    skipped for v1 (spec §3). Still ties into P10 case-1 task videos when those land.
+    WHITE canvas: 6 categories / **24** articles (Getting started · Domains · Payments &
+    Stripe · Bookings · Billing & commission · Account; was 25 until the external-booking
+    article was removed), each article with per-section sources, prerendered + in the
+    sitemap, linked from the Footer + FAQ. Truth rules held (no tiers/SMS/auto-debit/voice).
+    ⚠ 2026-08-04 audit correction: "Search + feedback widget intentionally skipped" is
+    FALSE — `DocsSearch.jsx` shipped (wired into DocsHeader), and a full docs AI
+    assistant shipped too (`DocsAssistantLauncher/Panel.jsx` + `docsAssistantStore.js`,
+    mounted in DocsLayout) that no doc had recorded. Feedback widget alone is unshipped.
+    Still ties into P10 case-1 task videos when those land.
 57. **Domain policy build** — free-subdomain default + BYO connect + the onboarding
     "have a domain?" question + buy-through-us COLLECT-FIRST. Tiers 1+2 (subdomain +
     BYO) need no external approval — build now; collect-first buy waits on a card/
