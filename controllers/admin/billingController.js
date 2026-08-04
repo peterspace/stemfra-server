@@ -222,9 +222,12 @@ async function runCommission(req, res) {
       return res.status(400).json({ success: false, message: 'period must be YYYY-MM.' });
     }
     const dryRun = b.dryRun === true;
+    // includeDemo: rehearse the full invoicing loop on is_starter sites — the
+    // scheduled monthly run always excludes them (see meterAllSitesForPeriod).
+    const includeDemo = b.includeDemo === true;
     const results = b.siteId
       ? [await meterSiteCommission(b.siteId, period, { dryRun })]
-      : await meterAllSitesForPeriod(period, { dryRun });
+      : await meterAllSitesForPeriod(period, { dryRun, includeDemo });
     const totalCommissionCents = results.reduce((s, r) => s + (r.amountCents || 0), 0);
     return res.json({ success: true, period, dryRun, count: results.length, totalCommissionCents, results });
   } catch (e) {

@@ -40,7 +40,7 @@ Peter's Gemini research chat, and the existing System A/B billing docs
    lead/booking details INCLUDING the customer's phone number, so the owner
    follows up personally. One brand, one campaign, one program.
 5. **Wave order** — as recommended below; payments pivot moves AHEAD of Voice
-   Phase 3 (resequencing P11).
+   Phase 3 (resequencing P11). [Phase 3 later RETIRED outright — see the banner.]
 
 ---
 
@@ -174,10 +174,12 @@ lead/booking notification paths next to the emails; STOP/HELP handling
   dispositions there**, so Mark genuinely remembers prior calls — plus the
   outreach email thread and recent notes, compacted (~1.5–2K tokens). Context
   is assembled before the call is placed; zero latency cost.
-- **Resequencing:** Voice **Phase 3 (tenant voice) now comes AFTER P12 Waves
+- ~~Resequencing:~~ ❌ **Voice Phase 3 is RETIRED outright (final 2026-08-04)** —
+  the resequencing below is void, kept only as the record of the 2026-07-22 plan:
+  ~~Voice Phase 3 (tenant voice) now comes AFTER P12 Waves
   1–2** (payments + funnel first — revenue feature beats differentiator).
-  Phase 3's scope now explicitly includes **browser-voice** (see §6 tier B).
-  Phase 4 unchanged, after Phase 3.
+  ~~Phase 3's scope now explicitly includes browser-voice (see §6 tier B).
+  Phase 4 unchanged, after Phase 3.~~ [All void — Phase 3 retired.]
 
 ## 6. Stacy call icon
 
@@ -186,12 +188,9 @@ lead/booking notification paths next to the emails; STOP/HELP handling
   showing the existing Stemfra voice number. Phase 2 already identifies owners
   by caller ID, greets by name, gives account context, and can reset
   passwords / open tickets.
-- **Tier B (inside Voice Phase 3):** in-browser call button — Twilio Voice JS
-  SDK in the CMS → TwiML App → the SAME ConversationRelay brain. Identity
-  from the CMS login (stronger than caller ID) → full Stacy-grade context.
-  Token endpoint already exists (`/api/twilio/token`). Building B is building
-  a slice of Phase 3's per-tenant relay routing.
-- **Tier C (Phases 3/4):** full "Stacy speaks" with CMS action tools.
+- ~~Tier B (inside Voice Phase 3): in-browser call button~~ ❌ RETIRED with
+  Phase 3 (final 2026-08-04 — no tenant voice, ever).
+- ~~Tier C (Phases 3/4): full "Stacy speaks" with CMS action tools.~~ ❌ Same.
 
 ## 7. Blog
 
@@ -221,7 +220,7 @@ lead/booking notification paths next to the emails; STOP/HELP handling
 | 2 | **Case 2** tenant email redesign (pre-existing pending task) | M | Claude |
 | 2 | Switcher messaging (marketing angle + A13 upgrade + CRM tag) | S | Claude |
 | **3** | Tenant blog completeness (massage/spa finish + per-theme audit + rollout decision) | M | Claude |
-| 3 | **Voice Phase 3** — tenant voice incl. browser-voice/Stacy tier B (spec first) | L | Claude |
+| 3 | ~~Voice Phase 3 — tenant voice~~ ❌ RETIRED (final 2026-08-04 — Mark stays Stemfra-internal only) | — | — |
 | 3 | Square adapter (on first real demand) · GoCardless trigger noted | M | demand-driven |
 | **4** | **Voice Phase 4** — analytics, DNC/TCPA, premium voice | M | Claude |
 | **Last** | **VSL production** — Peter's voice over demo-site screen-share; Claude scripts/hosts/wires/tracks | S | **Peter** + Claude |
@@ -464,7 +463,6 @@ The "Remaining Wave 2" line above is STALE. Current state:
 - **Only genuinely-remaining Wave 2 item: Task 9** (owner/team SMS alerts) —
   A2P-gated (Peter's Twilio-console action = Task 4).
 
-Consequence: the Voice roadmap's Phase-3 gate ("after P12 Waves 1–2") is
-satisfied (modulo the A2P-gated SMS piece). Phase 3 itself was deferred
-2026-07-23 (spec-first when picked up; dedicated Twilio number per tenant per
-Peter — recorded in `stemfra_server/docs/VOICE_AGENT.md`).
+~~Consequence: the Voice roadmap's Phase-3 gate is satisfied…~~ Void — Phase 3
+was first deferred 2026-07-23, then RETIRED outright (P13, made final 2026-08-04:
+no tenant voice agent, ever; Mark stays Stemfra-internal). See VOICE_AGENT.md.

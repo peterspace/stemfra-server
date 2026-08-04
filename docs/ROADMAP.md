@@ -113,18 +113,23 @@ model** (`docs/COMMISSION_MODEL.md`)._
    - **Never exercised**: member reschedule/cancel through a real signed-in chat on
      the member-portal verticals (crossfit/massage/spa).
 
-10. **Tier-system residue (found by the 2026-08-04 audit — the P13 "retire the tier
-    system" task is only ~80% executed).** Pricing page is collapsed and the CMS
-    change-plan UI is gone, but: `routes/plans.js` still returns a tier-shaped
-    catalog; CRM `OfferEditor.jsx` (route `billing/plans`) still edits per-tier
-    offers; `stemfra_cms/src/pages/SignupPage.tsx:70` still defaults
-    `tier = params.get('plan') || 'growth'` and posts it into onboarding; and
-    `Pricing.jsx:36` carries its own TODO ("Task 2 collapses the catalog itself").
-    Dead code alongside it: `useChangePlan` in `stemfra_cms/src/lib/billing.ts`
-    (zero callers) and `SMSModal.jsx`/`SMSThread.jsx` in stemfra-ops (deprecated
-    since the ConversationPanel cutover, never deleted). None of this breaks
-    anything today — signup ignores the tier downstream — but it is exactly the
-    kind of half-retired surface that produces contradictory docs.
+10. ✅ **Tier-system residue — CLEANED 2026-08-04 (the parts that were residue).**
+    Done: SignupPage no longer records a fabricated `tier: 'growth'` on every
+    commission-era signup (nothing links `?plan=` any more — verified before
+    cutting; the server still accepts-and-nulls the field for back-compat);
+    dead `useChangePlan` + `PlanOption` + the unused availablePlans/currentTier/
+    canChangePlan fields removed from `stemfra_cms/src/lib/billing.ts` (CMS
+    typecheck clean); `SMSModal.jsx`/`SMSThread.jsx` DELETED from stemfra-ops
+    (zero imports; ops build clean; ConversationPanel comments updated).
+    ⚠ **Deliberately KEPT — this is the important finding:** the tier-shaped
+    `/api/plans` catalog and the CRM `OfferEditor` are NOT residue. They are the
+    live implementation of "everyone gets everything": `Pricing.jsx` and the CMS
+    BillingPage render the UNION of live features across the catalog tiers, and
+    OfferEditor is the no-deploy switch for feature statuses (live/gated/soon).
+    Deleting them would remove real capability. The only remaining cosmetic item
+    is `Pricing.jsx:36`'s own TODO (reshape the catalog from tiers to a flat
+    feature list — a 4-consumer refactor with zero behavior change; do it only
+    when touching the catalog anyway).
 
 11. **Reassign a booking to a different team member (Peter, 2026-08-03).** Real
     scenario: a customer books Barber A, A calls in sick, the manager offers Barber
@@ -553,9 +558,10 @@ browser-voice" no longer applies. VSL production is still deliberately LAST.**_
     auto-publish → domain step) · owner+staff SMS alerts (post-A2P-approval) ·
     **Case 2 tenant email redesign** (pre-existing) · switcher messaging (A13 upgrade).
 53. **Wave 3** — tenant blog completeness (massage+spa finish, per-theme audit,
-    rollout decision) · **Voice Phase 3** (tenant voice + browser-voice, spec first)
+    rollout decision) · ~~Voice Phase 3 (tenant voice + browser-voice)~~ ❌ RETIRED (Peter, final 2026-08-04: no tenant voice agent, ever — Mark stays Stemfra-internal only; struck everywhere to prevent the mistake recurring)
     · Square adapter on first real demand (GoCardless trigger noted).
-54. **Wave 4** — **Voice Phase 4** (analytics, DNC/TCPA, premium voice).
+54. **Wave 4** — **Voice Phase 4** (analytics, DNC/TCPA, premium voice — scoped to
+    Stemfra's OWN agent "Mark" only; the tenant half died with Phase 3).
 55. **Last** — VSL production (Peter's voice over a demo-site screen-share; script
     `docs/SALES_SCRIPT_TEMPLATES.md` §1; Cloudinary hosting, `{{vsl_link}}` template
     variable, click tracking, Mark call-flow mention).

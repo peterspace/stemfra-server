@@ -154,17 +154,21 @@ zero latency cost.
     spoken), open a support ticket (site_activity + support@ email), request a
     call-back. Confirm-before-act, like Stacy's clone action.
 
-### Phase 3 — Tenant voice (the roadmap's remaining agent: "never miss a call")
-_⚠ RESEQUENCED 2026-07-22 (P12): Phase 3 runs AFTER P12 Waves 1–2 (payments
-pivot + funnel — see `docs/P12_PLAN.md`). Scope now explicitly includes
-**browser-voice** (Stacy call tier B): Twilio Voice JS SDK in the CMS → TwiML
-App → this same ConversationRelay, with identity from the CMS login (stronger
-than caller ID) → full Stacy-grade context. No new phone number required._
+### ~~Phase 3 — Tenant voice~~ ❌ RETIRED (Peter, final 2026-08-04: no tenant voice agent, ever — Mark stays Stemfra-internal only; struck everywhere to prevent the mistake recurring)
+_First retired 2026-07-27 by the P13 pivot (cost; Front Desk CHAT covers tenants),
+made final and unconditional by Peter 2026-08-04. Do NOT spec, build, or resequence
+this — an audit found three docs still treating it as live after the retirement,
+which is exactly how a dead plan gets rebuilt. The section below is kept struck-out
+as the historical scope record only._
+
+~~RESEQUENCED 2026-07-22 (P12): Phase 3 runs AFTER P12 Waves 1–2. Scope included
+browser-voice (Stacy call tier B): Twilio Voice JS SDK in the CMS → TwiML App →
+this same ConversationRelay, with identity from the CMS login._
 13. Per-site phone numbers; resolve the SITE from the dialed number.
     **DECISION 2026-07-23 (Peter): dedicated Twilio number per opt-in tenant**
     (not shared-number routing) — provision one number per site at opt-in,
     resolve the site directly from the dialed `To`. Accept ~$1–2/mo per number +
-    a provisioning step. (Phase 3 itself deferred 2026-07-23 — spec-first when picked up.)
+    a provisioning step. (Moot since the 2026-08-04 final retirement — recorded for history.)
 14. Reuse the Front Desk brain over the voice relay: `buildSiteContext` grounding
     + `runBookingTool` — book free services on the phone; priced services get an
     SMS'd booking link. Tenant persona/branding; owner opt-in via CMS setting
@@ -179,8 +183,9 @@ than caller ID) → full Stacy-grade context. No new phone number required._
 18. Premium voice (TTS options/cloning), load testing, sampled AI-QA reviews.
 
 _Rule of thumb for sequencing: Phases 0–1 sharpen the SALES agent we already
-have; Phase 2 makes support calls honest and useful; Phase 3 is a proper project
-(spec first) and the platform differentiator; Phase 4 rides on real volume._
+have; Phase 2 makes support calls honest and useful; ~~Phase 3~~ (retired — no
+tenant voice, ever); Phase 4 (Mark-internal analytics/compliance) rides on real
+volume._
 
 
 ## Changelog
