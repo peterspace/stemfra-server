@@ -6,6 +6,7 @@ const supabase = require('../../config/supabase');
 const { stripe } = require('../../config/stripe');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { logSiteActivity } = require('../../lib/activity');
+const { sendReviewRequestManual } = require('../../lib/lifecycleEmails');
 
 /** POST /api/cms/customers/:id/suspend  { suspend: boolean } */
 async function setSuspended(req, res) {
@@ -46,6 +47,33 @@ async function setSuspended(req, res) {
   } catch (err) {
     console.error('[customers.setSuspended]', err.message);
     res.status(500).json({ success: false, message: 'Could not update member.' });
+  }
+}
+
+/** POST /api/cms/customers/:id/send-review — owner manually sends the review
+ *  request email to one client (Clients page kebab). Ownership-checked; the
+ *  sender itself enforces opt-out + requires a visit + the configured link. */
+async function sendReviewEmail(req, res) {
+  try {
+    const { id } = req.params;
+    const { data: cust } = await supabase
+      .from('site_customers').select('id, site_id, email').eq('id', id).single();
+    if (!cust) return res.status(404).json({ success: false, message: 'Client not found.' });
+    const site = await verifySiteOwnership(req.cmsUser.id, cust.site_id);
+    if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
+
+    const r = await sendReviewRequestManual(id);
+    if (!r.ok) return res.status(400).json({ success: false, message: r.error });
+
+    await logSiteActivity({
+      siteId: cust.site_id, actorName: req.cmsUser?.email,
+      action: 'review_request_sent_manual',
+      entityType: 'site_customer', entityId: id, entityName: cust.email,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[customers.sendReview]', err.message);
+    res.status(500).json({ success: false, message: 'Could not send the review request.' });
   }
 }
 
@@ -320,4 +348,4 @@ async function importCustomers(req, res) {
   }
 }
 
-module.exports = { setSuspended, listCustomers, exportCustomers, importPreview, importCustomers };
+module.exports = { setSuspended, sendReviewEmail, listCustomers, exportCustomers, importPreview, importCustomers };
