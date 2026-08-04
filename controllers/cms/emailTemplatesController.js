@@ -56,9 +56,8 @@ const VARIANTS = {
   }),
   review_request: (b) => emails.reviewRequest({
     ...brandArgs(b), firstName: S.firstName, serviceName: S.serviceName,
-    // Sample multi-platform links so the preview shows the primary button + the
-    // "also review us on …" line (Task #24). Real links come from Settings.
-    reviewLinks: { google: b.businessUrl, yelp: b.businessUrl, trustpilot: b.businessUrl },
+    // Google-only sample link (2026-08-04). Real link comes from Settings.
+    reviewLinks: { google: b.businessUrl },
     bookingUrl: b.businessUrl,
   }),
   win_back: (b) => emails.winBack({

@@ -19,7 +19,10 @@ const discountLine = (percent, lead) =>
 // `reviewLinks` map and falls back to the legacy single `reviewUrl` (= Google).
 function orderedReviewPlatforms(reviewLinks, reviewUrl) {
   const links = reviewLinks || (reviewUrl ? { google: reviewUrl } : {});
-  return [['Google', links.google], ['Yelp', links.yelp], ['Trustpilot', links.trustpilot]]
+  // Google only (2026-08-04): Yelp/Trustpilot rows removed. The array shape
+  // stays so the primary-button + secondary-line template logic is untouched
+  // (secondary is now always empty and its block never renders).
+  return [['Google', links.google]]
     .filter(([, url]) => typeof url === 'string' && url.trim())
     .map(([label, url]) => ({ label, url: url.trim() }));
 }
