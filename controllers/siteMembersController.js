@@ -19,6 +19,22 @@ async function getMemberFromToken(req) {
   return data.user;
 }
 
+// Pay-at-venue subs have no Stripe subscription behind them.
+const isVenueSub = (sub) => sub.collection_mode === 'venue' || !sub.stripe_subscription_id;
+
+// Best-effort owner bell when a member self-cancels (the "no front desk" value —
+// the owner should know to expect the member to lapse). Never throws.
+async function notifyOwnerMemberCancelled(sub, memberEmail) {
+  try {
+    await supabase.from('cms_notifications').insert([{
+      site_id: sub.site_id, type: 'member_cancelled', category: 'operations',
+      title: 'A member cancelled their membership',
+      body: `${memberEmail || 'A member'} cancelled at the end of their current period.`,
+      href: '/memberships', metadata: { subscription_id: sub.id },
+    }]);
+  } catch (e) { console.warn('[siteMembers] owner cancel notification failed:', e.message); }
+}
+
 /**
  * POST /api/site-members/claim  { siteId }
  * Links the signed-in member to their site_customers record by verified email
@@ -154,26 +170,30 @@ async function cancelBooking(req, res) {
 
 async function cancelSubscription(req, res) {
   try {
-    if (!stripe) return res.status(503).json({ success: false, message: 'Billing is not configured.' });
     const user = await getMemberFromToken(req);
     if (!user) return res.status(401).json({ success: false, message: 'Not signed in.' });
     const { subscriptionId, reasons, feedback } = req.body || {};
     if (!subscriptionId) return res.status(400).json({ success: false, message: 'Missing subscriptionId.' });
 
     const { data: sub } = await supabase
-      .from('site_subscriptions').select('id, site_id, customer_id, stripe_subscription_id, status, metadata').eq('id', subscriptionId).single();
+      .from('site_subscriptions').select('id, site_id, customer_id, collection_mode, stripe_subscription_id, status, cancel_at_period_end, metadata').eq('id', subscriptionId).single();
     if (!sub) return res.status(404).json({ success: false, message: 'Subscription not found.' });
 
     const { data: cust } = await supabase
       .from('site_customers').select('auth_user_id, email').eq('id', sub.customer_id).single();
     const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === user.email.toLowerCase());
     if (!owns) return res.status(403).json({ success: false, message: 'Not your membership.' });
-    if (!sub.stripe_subscription_id || sub.status === 'cancelled') return res.status(400).json({ success: false, message: 'This membership cannot be cancelled.' });
+
+    const venue = isVenueSub(sub);
+    // Ended/pending subs can't be self-cancelled from the portal.
+    if (['cancelled', 'expired', 'pending'].includes(sub.status)) return res.status(400).json({ success: false, message: 'This membership cannot be cancelled.' });
+    if (!venue && !stripe) return res.status(503).json({ success: false, message: 'Billing is not configured.' });
 
     const cleanReasons = Array.isArray(reasons) ? reasons.filter(r => typeof r === 'string').slice(0, 10) : [];
     const cleanFeedback = (typeof feedback === 'string' ? feedback : '').trim().slice(0, 1000) || null;
 
-    await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: true });
+    // Venue: DB-only (no billing to stop). Stripe: mirror to Stripe first.
+    if (!venue) await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: true });
     await supabase.from('site_subscriptions').update({
       cancel_at_period_end: true,
       metadata: { ...(sub.metadata || {}), cancel_reasons: cleanReasons, cancel_feedback: cleanFeedback, cancelled_by_member_at: new Date().toISOString() },
@@ -183,6 +203,7 @@ async function cancelSubscription(req, res) {
       action: 'subscription_cancelled_by_member', entityType: 'site_subscription', entityId: sub.id,
       details: { reasons: cleanReasons, feedback: cleanFeedback },
     });
+    if (venue) await notifyOwnerMemberCancelled(sub, user.email); // owner has no Stripe/webhook signal for venue subs
     res.json({ success: true });
   } catch (err) {
     console.error('[siteMembers.cancelSubscription]', err.message);
@@ -198,25 +219,28 @@ async function cancelSubscription(req, res) {
  */
 async function reactivateSubscription(req, res) {
   try {
-    if (!stripe) return res.status(503).json({ success: false, message: 'Billing is not configured.' });
     const user = await getMemberFromToken(req);
     if (!user) return res.status(401).json({ success: false, message: 'Not signed in.' });
     const { subscriptionId } = req.body || {};
     if (!subscriptionId) return res.status(400).json({ success: false, message: 'Missing subscriptionId.' });
 
     const { data: sub } = await supabase
-      .from('site_subscriptions').select('id, site_id, customer_id, stripe_subscription_id, status, metadata').eq('id', subscriptionId).single();
+      .from('site_subscriptions').select('id, site_id, customer_id, collection_mode, stripe_subscription_id, status, metadata').eq('id', subscriptionId).single();
     if (!sub) return res.status(404).json({ success: false, message: 'Subscription not found.' });
 
     const { data: cust } = await supabase
       .from('site_customers').select('auth_user_id, email').eq('id', sub.customer_id).single();
     const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === user.email.toLowerCase());
     if (!owns) return res.status(403).json({ success: false, message: 'Not your membership.' });
-    if (!sub.stripe_subscription_id || sub.status === 'cancelled') {
+
+    const venue = isVenueSub(sub);
+    // Only an active (not fully ended) membership can be un-cancelled.
+    if (['cancelled', 'expired', 'pending'].includes(sub.status)) {
       return res.status(400).json({ success: false, message: 'This membership has ended — please re-subscribe.' });
     }
+    if (!venue && !stripe) return res.status(503).json({ success: false, message: 'Billing is not configured.' });
 
-    await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: false });
+    if (!venue) await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: false });
     const md = { ...(sub.metadata || {}) };
     delete md.cancel_reasons; delete md.cancel_feedback; delete md.cancelled_by_member_at;
     await supabase.from('site_subscriptions').update({ cancel_at_period_end: false, metadata: md }).eq('id', sub.id);
