@@ -766,3 +766,22 @@ New tasks:
   drop-ins/packs prepaid). → mostly ONLINE + memberships → captured automatically by the meter.
 - Net: the **unified** commission basis (online + at-visit-collected + memberships + orders) is
   correct — beauty leans offline-marked-collected, fitness leans online/recurring.
+
+## P14 — Memberships & pay-at-venue (NEW, 2026-08-05 — plan agreed, executor arc)
+
+**Plan doc (the source of truth for this arc): [`MEMBERSHIPS_PAY_AT_VENUE_PLAN.md`](MEMBERSHIPS_PAY_AT_VENUE_PLAN.md).**
+Decisions in COMMISSION_MODEL §2b (2026-08-05, Peter): online payments SUSPENDED
+(pipeline dormant, kept for future deposits), no Stripe-level fees ever, 5% via
+invoice only; memberships = sign-up online / chat → agreement + payment at the
+venue → owner confirms in the CMS (the confirmation advances the period AND is
+the commissionable event). Research basis: membership checkout was stranded on
+un-migrated Connect (non-functional in prod), 1 of 6 templates had a purchase
+surface, zero membership↔booking linkage, meter used an MRR estimate.
+Phases: A signup+activation (server/CMS/crossfit) · B monthly Renewals
+confirm-all + meter on collected cash · C Front Desk chat signup (n8n paste via
+Peter) · D booking online-payment kill-switch + CMS quiet state + zero fees ·
+E member lifecycle (portal v2 with renew-by/visits/payments, renewal reminder
+sweeper T-7/T-0 + 14d grace, owner digest, yoga surface + member area).
+Out of scope: credits/entitlement ledger, Stripe repairs, deposits, massage/spa
+real-plan tiers, the Display-only UX rework (separate task). Executor: Opus 4.8
+per ADVISOR_STRATEGY; commits only, NO push without Peter.
