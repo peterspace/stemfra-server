@@ -1103,4 +1103,6 @@ module.exports = {
   // Task #21 — multi-service basket payments (cores used by sitePaymentsController
   // + the checkout sweeper).
   placeBookingGroup, finalizeGroupPayment,
+  // P14 — reused by the membership signup flow (one suspended-aware customer upsert).
+  upsertBookingCustomer,
 };

@@ -347,4 +347,36 @@ fixtures cleaned. Commits only; no push without Peter.)_
 - **CMS typecheck clean** (`tsc --noEmit -p stemfra_cms/tsconfig.json`, exit 0).
 - Committed (no push): platform (types) + server (this plan doc). Migration is
   applied to the remote DB directly (Supabase MCP), not a repo file.
-- **Next: A2** (server signup endpoint).
+
+### 2026-08-05 — A2 (server signup endpoint) DONE
+
+- **`createMembershipSignup` core + `POST /api/site-memberships/signup`**
+  (`controllers/siteMembershipsController.js`): validates site (public passes
+  live/previewing) + plan active + membership; reuses
+  `bookingController.upsertBookingCustomer` (now exported) for the suspended-aware
+  customer upsert; idempotent (an open venue sub — pending/active/renewal_due —
+  for the same site+product+customer is returned, no dup); per-IP+site in-memory
+  rate limit (10/min, newsletter convention); inserts
+  `{status:'pending', collection_mode:'venue', amount_cents: plan.price_cents,
+  application_fee_percent: null}`; audits `membership_signup` via
+  `logSiteActivity`. The core is exported so Front Desk (C1) calls it directly,
+  not via HTTP. The legacy `/checkout` route stays mounted, uncalled by new UI.
+- **Owner bell notification**: the existing `site_subscriptions` INSERT trigger
+  `notif_on_site_subscription` was made **status-aware** (migration
+  `notif_membership_signup_status_aware`) — a `pending` row now reads "New
+  membership signup / …Confirm once they pay at the venue." (legacy active-insert
+  wording preserved). Fires automatically on signup; no server-side insert needed.
+- **Owner email** (best-effort, LIVE only, gated on the new `owner_membership`
+  notify-pref default-on): new Stemfra-branded builder
+  `ownerMembershipSignup` in `transactionalEmails.js` + `/dev/preview/owner-
+  membership-signup`. `notifyPrefs.js` gained `owner_membership`.
+  ⚠ i18n gotcha: `site_products.name` is jsonb `{en}` — added an `en()` coercion
+  so the plan name renders as a string (not "[object Object]") in the email,
+  activity entity_name, and the response.
+- **Verified live** (:4000, forge-and-bell): signup → `success` + planName string;
+  repeat → `alreadySignedUp:true` (idempotent); bad email → 400. DB: 2 pending
+  venue subs (correct amount, null app fee, no period), `site_activity`
+  `membership_signup` rows, bell notifications with the pay-at-venue wording.
+  Owner email render confirmed at /dev/preview (screenshot). **Fixtures cleaned**
+  (subs + customers + audits + bells deleted).
+- Committed (no push). **Next: A3** (CMS Memberships page rework + Activate).

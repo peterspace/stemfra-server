@@ -130,6 +130,11 @@ router.get('/owner-new-booking', (_req, res) => send(res, tx.ownerBookingNotific
   serviceName: 'Classic Cut & Hot Towel', dateLabel: 'Friday, July 17', timeLabel: '2:30 PM',
 })));
 
+router.get('/owner-membership-signup', (_req, res) => send(res, tx.ownerMembershipSignup({
+  customerName: 'Nora Vale', customerEmail: 'nora@example.com', customerPhone: '(212) 555-0175',
+  planName: '1-Year Unlimited', priceLabel: '$175.00',
+})));
+
 router.get('/visit-confirmation', (_req, res) => send(res, tx.visitConfirmation({
   businessName: 'Maison Lune', dateLabel: 'Friday, July 17',
   items: [

@@ -247,6 +247,30 @@ function ownerChatLeadNotification({ name, email, phone, intent, summary, dashbo
   });
 }
 
+// Membership signup (pay-at-venue). Stemfra → site owner. The customer signed up
+// online; the owner signs the agreement + collects payment in person, then
+// confirms it in the CMS. Not a Stripe charge, so the copy says "confirm at the
+// venue", never "paid".
+function ownerMembershipSignup({ customerName, customerEmail, customerPhone, planName, priceLabel, dashboardUrl }) {
+  const who = customerName || 'A customer';
+  return renderEmail({
+    preheader: `${who} signed up for ${planName || 'a membership'}.`,
+    eyebrow: 'New membership signup',
+    heading: 'A new membership signup',
+    paragraphs: [`${who} signed up for a membership on your website. Sign the agreement and take payment at your next visit, then mark it collected in your CMS:`],
+    rows: [
+      { label: 'Customer', value: customerName || '(no name)' },
+      customerEmail ? { label: 'Email', value: customerEmail } : null,
+      customerPhone ? { label: 'Phone', value: customerPhone } : null,
+      { label: 'Plan', value: planName || '(membership)' },
+      priceLabel ? { label: 'Price', value: priceLabel } : null,
+    ],
+    cta: { label: 'Open your Memberships', url: dashboardUrl || `${CMS_URL}/memberships` },
+    note: 'Nothing was charged online. Confirm the payment in your CMS once you collect it at the venue.',
+    reason: "You're receiving this because a customer signed up for a membership on your Stemfra website. You can turn these emails off in your CMS settings.",
+  });
+}
+
 // ─── Lifecycle (N4): tenant → visitor ─────────────────────────────────────────
 
 // First-visit follow-up — ~a day after a customer's first appointment. Warm
@@ -529,6 +553,7 @@ module.exports = {
   visitConfirmation,
   ownerLeadNotification,
   ownerChatLeadNotification,
+  ownerMembershipSignup,
   firstVisitFollowup,
   winBack,
   reviewRequest,
