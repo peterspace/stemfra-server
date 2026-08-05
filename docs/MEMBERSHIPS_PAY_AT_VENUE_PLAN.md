@@ -383,7 +383,28 @@ fixtures cleaned. Commits only; no push without Peter.)_
   (subs + customers + audits + bells deleted).
 - Committed (no push). **Next: A3** (CMS Memberships page rework + Activate).
 
-### 2026-08-05 — A3 server half DONE (CMS UI half next)
+### 2026-08-05 — A3 CMS UI DONE (A3 complete)
+
+- `MembershipsPage.tsx`: new **"Pending signups"** section (status='pending') with
+  per-row **Activate** (dialog: amount defaults to plan price + editable, method,
+  note) and **Decline**. "Subscribers" → **"Members"** (excludes pending).
+  **Refund hidden for venue subs** (collection_mode='venue'); status pills gained
+  pending/renewal_due/expired; **"Native" plan badge dropped**. Activity feed
+  labels for membership_signup/activated/declined/payment_confirmed.
+- `lib/memberships.ts`: subscriber query now carries `collection_mode`,
+  `created_at`, member `phone`, plan `price_cents`/`billing_interval`;
+  `activateSubReq`/`declineSubReq` added. CMS typecheck clean.
+- **Verified live** on forge-and-bell through the real CMS: seeded a signup →
+  appeared in Pending → Activate ($155, cash) → moved to Members as active, Sep-5
+  period, payment row (method cash, confirmed_by owner), "Activated membership ·
+  collected $155" in the activity feed. The legacy Stripe test subs correctly
+  still show Refund (they are collection_mode='stripe'). Fixture cleaned.
+- **A3 COMPLETE.** Note: the owner-side venue cancel/pause/resume branch (part of
+  A5) landed here too. **A5 remainder** = the MEMBER-facing
+  `siteMembersController.js` cancel/reactivate/billing-portal venue branch (not
+  yet touched). **Next: A4** (crossfit Join), then A5 remainder + A6.
+
+### 2026-08-05 — A3 server half DONE
 
 - **Plans are plain DB rows** (`membershipPlansController.js`): removed all Stripe
   Product/Price creation from create/update/delete. Price change patches
