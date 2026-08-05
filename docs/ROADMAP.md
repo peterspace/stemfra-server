@@ -142,7 +142,25 @@ model** (`docs/COMMISSION_MODEL.md`)._
     feature list — a 4-consumer refactor with zero behavior change; do it only
     when touching the catalog anyway).
 
-11. **Reassign a booking to a different team member (Peter, 2026-08-03).** Real
+11. ✅ **Reassign a booking to a different team member — SHIPPED 2026-08-05**
+    (verified live on forge-and-bell). Built exactly as proposed below: a "Change"
+    control next to "with {staff}" in `BookingDetailModal` (confirmed + future +
+    assigned bookings only) opens `ChangeStaffDialog` — qualified staff only
+    (via `site_team_service_links`), anyone already booked at that time shown
+    greyed out "Busy at this time"; `validateStaffAssignment` re-checks at save.
+    A same-time swap keeps the reminder stamps (`useRescheduleBooking` gained
+    `timeChanged` gating) and audits as `staff_reassigned`; the customer still
+    gets the update email. The calendar drag path (`handleEventDrop`) now runs
+    the same guard (qualification on cross-column drops + conflict always) and
+    labels a pure column swap "Staff reassigned"/"Appointment reassigned".
+    **Bonus fix:** the reschedule audit had NEVER landed — it wrote to the CRM's
+    `activity_feed`, whose entity_type CHECK rejects `site_booking` (the
+    [[feedback_audit_use_site_activity]] trap), and owners have no INSERT policy
+    on `site_activity` anyway. New `POST /api/cms/activity` (allowlisted actions,
+    ownership-checked, service-role `logSiteActivity`) + client
+    `logBookingActivity` in `bookingNotify.ts`; reschedule/reassign audits now
+    actually persist. Front Desk chat swap remains a possible follow-up.
+    Original scope: Real
     scenario: a customer books Barber A, A calls in sick, the manager offers Barber
     B, B does the cut. **The capability half-exists**: dragging an appointment
     across staff columns in the Bookings calendar DAY view sets `newTeamMemberId`
