@@ -492,3 +492,55 @@ fixtures + an includeDemo side-effect booking reverted. Policy added to
 claim-update guard used `.not('metadata->collected','eq',true)` which excludes the
 ABSENT-key case (PostgREST `NOT(null=true)` is null), so the write never fired;
 switched to the same `.or(...is.null...)` filter as the SELECT.
+
+### 2026-08-05 — B1 (CMS Renewals confirm-all) DONE
+
+- **Server:** `POST /api/cms/subscriptions/confirm-payments` (`confirmPayments` +
+  `confirmOnePayment` in `subscriptionsController.js`, route mounted BEFORE `/:id/*`
+  so 'confirm-payments' isn't read as an :id). Body `{siteId, items:[{subscriptionId,
+  amountCents?, method?, note?}]}`. Per item: venue + status 'active' guard →
+  `period_start = sub.current_period_end` → `site_subscription_payments` insert →
+  advance `current_period_end` one interval (`addInterval`). **Idempotency = the
+  unique (subscription_id, period_start) guard:** advance ONLY when the insert lands;
+  a re-confirm hits 23505 and is skipped, never double-renews. Audits
+  `membership_payment_confirmed`; emails the member a `membershipRenewed`
+  ("Payment received") receipt — a NEW builder (E2 reuses it).
+- **CMS:** new **Renewals** section on `MembershipsPage` — month picker (default
+  current), venue subs with `current_period_end` in/before the viewed month (active,
+  not paused/canceling), amber "Payment due"(·overdue) flag, all-checked checkboxes
+  with per-row uncheck, one **Confirm all collected** button → `confirmPaymentsReq`.
+- **Verified end-to-end** on forge-and-bell with a seeded $175/mo venue sub due
+  2026-08-01: endpoint advanced the period 08-01→09-01 + wrote one payment row +
+  logged the audit; a re-confirm returned confirmed:0/skipped with the period held;
+  and the live CMS Renewals view rendered the row, confirmed it (POST 200), and
+  refreshed to the empty state with the member's renewal date advanced. Fixtures
+  cleaned. Committed (server + platform), no push.
+
+### 2026-08-05 — B2 (meter → cash basis, §1d) DONE + advisor-cleared
+
+- **`lib/commissionMeter.js`:** membership stream switched from `model.membershipMrrCents`
+  (run-rate) to `membershipCashCollected()` = `SUM(site_subscription_payments.amount_cents)`
+  confirmed in the window. Line-item key `membership_runrate_cents` →
+  `membership_collected_cents`. Reports still surface MRR as info only.
+- **⚠ Advisor checkpoint (per plan):** posted the before/after basis for forge-and-bell
+  Aug 2026 (OLD $325 MRR → $16.25 · NEW $0 cash → $0). **Verdict GO**, and the advisor
+  caught a real break my rename left: `lib/invoicePdf.js` still read
+  `membership_runrate_cents`, which would silently DROP the memberships line from
+  invoices whose stored `line_items` carry either key. **Fixed:** invoicePdf reads
+  `membership_collected_cents ?? membership_runrate_cents` (the fallback is load-bearing
+  because `billing_charges.line_items` is stored data — historical rows keep the old key).
+- **Rationale (advisor-validated):** cash basis follows the confirmation month (late
+  payments land cleanly); the run-rate over-counted; legacy Stripe subs already pay the
+  Connect application fee, so metering them too would double-charge — they write no
+  payment rows, so cash basis excludes them correctly (no real "Stripe sub without an app
+  fee" path exists: the kill switch + parked pipeline prevent new ones). Accepted design
+  risk noted: an owner who never opens Renewals under-reports venue cash (no membership
+  auto-collect — a lapsed period may genuinely be unpaid; E2 `renewal_due`/E3 digest/B3
+  "$X due" are the pressure levers).
+- **Rehearsal (green):** dry-run meter forge-and-bell 2026-08 → gmv $0, commission $0,
+  line item carries `membership_collected_cents:0`, no stale key; the historical June
+  commission row (old `membership_runrate_cents:32500`) still itemizes its
+  `memberships ($325.00) → $16.25` line via the fallback (verified through the real
+  `commissionItems`). Temp scripts removed. COMMISSION_MODEL §7b annotated with a §1d
+  pointer. Committed (meter + PDF fix together), no push. **Next: B3** (Reports v2
+  collected/due lines + PDF/DOCX).

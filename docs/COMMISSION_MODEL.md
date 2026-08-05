@@ -226,10 +226,15 @@ against a live seed site (forge-and-bell): $325/mo membership + $190 June online
   (`{rate:0.05, basis:'all', currency:'USD'}`), get/set, no deploy to change.
 - **`lib/commissionMeter.js`** — `meterSiteCommission(siteId, 'YYYY-MM')` +
   `meterAllSitesForPeriod`. Unified GMV = `buildModel` (online bookings + at-visit
-  collected + membership run-rate) + `site_orders` paid in period → 5% → one
+  collected) + **membership cash confirmed** + `site_orders` paid in period → 5% → one
   `billing_charges` row (`kind:'commission'`, `status:'due'`, `provider:'pending'`),
   idempotent per (site, period_start). `reportsController.buildModel` is now exported so
-  the meter is a faithful extension of the owner Reports.
+  the booking figures are a faithful extension of the owner Reports.
+  > **P14 update (2026-08-05, §1d):** the membership stream changed from the MRR
+  > run-rate to a CASH basis — `SUM(site_subscription_payments.amount_cents)` confirmed
+  > in the window (see §2b). The line-item key is now `membership_collected_cents`;
+  > `lib/invoicePdf.js` reads it with a `?? membership_runrate_cents` fallback so
+  > pre-P14 stored commission rows still itemize. Reports still SHOW MRR as info only.
 - **Admin trigger** — `POST /api/admin/billing/commission/run` `{period?,siteId?,dryRun?}`
   (PLATFORM_ADMIN) → `runCommission` in `billingController`. Commission rows already surface
   in `GET /api/admin/billing/charges`.
