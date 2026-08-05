@@ -386,6 +386,27 @@ fixtures cleaned. Commits only; no push without Peter.)_
   (subs + customers + audits + bells deleted).
 - Committed (no push). **Next: A3** (CMS Memberships page rework + Activate).
 
+### 2026-08-05 — A4 (crossfit Join) DONE + status standardization
+
+- **A4 crossfit Join:** `stemfra_crossfit/lib/memberships.ts` — `joinMembership`
+  (POST `/signup`) replaces `startMembershipCheckout` (Stripe redirect).
+  `MembershipsPage.tsx` — CTA "Subscribe" → "Join"; a **JoinDialog** (name/email/
+  phone, prefilled from a signed-in member via `claimAccount`) records the pending
+  venue signup; success banner "You're on the list … come by the box to sign your
+  agreement and start". Dropped the Stripe `?membership=success` panel + native/
+  external branching. `PricingTiers` archetype loading label "Redirecting…" →
+  "Joining…". Verified live (:5176): Join → dialog → pending venue sub ($175) +
+  banner; fixture cleaned. Crossfit typecheck clean.
+- **Status value standardized to `cancelled`** (Peter): the A3 `canceled` writes
+  in `cms/subscriptionsController` + `admin/operationsController`, the member reads
+  in `siteMembersController`, and the System B **Stripe webhook** now all use /
+  normalize to `cancelled` (matching System A + the dominant 94:14 codebase
+  spelling). No data migration (0 rows held `canceled`). The `canceled_at` COLUMN
+  keeps Stripe's spelling; Twilio call-status `canceled` untouched. §1a updated.
+- **A4 COMPLETE. Next: A5 remainder** (member-facing `siteMembersController`
+  cancel/reactivate/billing-portal venue branch) + **A6** (Stacy context), then
+  Phase B.
+
 ### 2026-08-05 — A3 CMS UI DONE (A3 complete)
 
 - `MembershipsPage.tsx`: new **"Pending signups"** section (status='pending') with
