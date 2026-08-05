@@ -16,6 +16,7 @@ const { startSiteDeletionSweeper } = require('./lib/siteDeletionSweeper');
 const { startBookingReminderSweeper } = require('./lib/bookingReminderSweeper');
 const { startLifecycleSweeper } = require('./lib/lifecycleSweeper');
 const { startBookingCheckoutSweeper } = require('./lib/bookingCheckoutSweeper');
+const { startBookingAutoCollectSweeper } = require('./lib/bookingAutoCollectSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
@@ -219,4 +220,8 @@ server.listen(PORT, () => {
   // Commission (P13): meter the just-closed month → billing_charges kind='commission'.
   // Gated OFF (COMMISSION_SCHEDULER_ENABLED=true to arm); manual /commission/run meanwhile.
   startCommissionScheduler();
+  // Anti-under-reporting (2026-08-05): a priced confirmed/completed booking not
+  // marked collected within 24h of its scheduled time is auto-marked collected
+  // (enters the commission basis). Skips demo sites → inert until a real tenant.
+  startBookingAutoCollectSweeper();
 });

@@ -380,3 +380,20 @@ fixtures cleaned. Commits only; no push without Peter.)_
   Owner email render confirmed at /dev/preview (screenshot). **Fixtures cleaned**
   (subs + customers + audits + bells deleted).
 - Committed (no push). **Next: A3** (CMS Memberships page rework + Activate).
+
+### 2026-08-05 — OUT-OF-PLAN (Peter): booking auto-collect rule DONE
+
+Not part of the P14 phases; added mid-session at Peter's request. Full record in
+**COMMISSION_MODEL.md §2c**. A background sweeper
+(`lib/bookingAutoCollectSweeper.js`) auto-marks a priced, confirmed/completed,
+unpaid booking `metadata.collected=true` once it is 24h past its scheduled time
+and still unmarked, so passive under-reporting can't dodge the 5%. Sets
+`collected` (not `paid`); the no-show/cancel status gate is the escape hatch so it
+never over-bills; skips demo sites (inert pre-launch). Registered in index.js;
+`BOOKING_AUTOCOLLECT_ENABLED=false` disables. Verified live on forge-and-bell
+across all 5 cases (eligible flips; no-show/free/recent/already-collected skip);
+fixtures + an includeDemo side-effect booking reverted. Policy added to
+`stemfra_client` Terms §5 + Fees §2. **Bug caught + fixed during the walk:** the
+claim-update guard used `.not('metadata->collected','eq',true)` which excludes the
+ABSENT-key case (PostgREST `NOT(null=true)` is null), so the write never fired;
+switched to the same `.or(...is.null...)` filter as the SELECT.

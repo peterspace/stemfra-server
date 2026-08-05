@@ -102,6 +102,36 @@ pay in person. So:
   the commissionable event. The old Connect membership checkout is NOT migrated; it is
   parked with the rest of the Stripe pipeline.
 
+## 2c. Auto-collect: booking not marked collected within 24h → auto-recorded (DECIDED 2026-08-05, Peter)
+
+Pay-at-venue makes the commission basis owner-reported (a booking counts only when the
+owner marks it collected — `metadata.collected=true`, the `atVisitCollectedCents` bucket
+in `reportsController.buildModel`). To stop passive under-reporting (a tenant simply
+never marking bookings collected to dodge the 5%), a background rule auto-records them:
+
+- **The rule:** a booking for a **priced** service (`amount_cents > 0`), still
+  **confirmed/completed**, **not paid online** (`payment_status='none'`), and **not
+  marked collected**, that is **more than 24h past its scheduled `starts_at`**, is
+  auto-set `metadata.collected=true` (+ `auto_collected=true`, `collected_at`). It then
+  counts toward that month's commission exactly like a manual "Mark as collected".
+- **Sets `collected`, NOT `payment_status='paid'`** — under pay-at-venue there was no
+  online charge; `collected` is the correct pay-at-venue flag and feeds the same
+  commission bucket. Setting `paid` would falsely imply a Stripe payment.
+- **The escape hatch is intact (never over-bills):** `buildModel` only classifies an
+  at-visit booking when status is confirmed/completed, so marking a booking **no-show or
+  cancelled drops it from commission even after auto-collect**. A booking that did not
+  happen is never billed. Free ($0) bookings and online-paid/refunded bookings are
+  excluded by the rule's own filters.
+- **Implementation:** `lib/bookingAutoCollectSweeper.js` (every 6h; `unref`; skips
+  demo/`is_starter` sites like the meter, so it is INERT pre-launch and activates for
+  the first real tenant; `BOOKING_AUTOCOLLECT_ENABLED=false` disables; `sweepOnce`
+  supports `{dryRun}` + `{includeDemo}`). Audits `booking_auto_collected` to
+  `site_activity`; NO owner bell (a backfill could flip many at once; Reports shows the
+  collected revenue and the policy explains it). Registered in index.js after the
+  commission scheduler.
+- **Policy:** stated in the public **Fees & Payments Policy** (`stemfra_client`
+  `pages/Fees.jsx` §2) + **Terms** §5 ("Recording your sales").
+
 ## 3. Domain — the customer's responsibility, Stemfra fronts $0
 
 > ⚠ **2026-08-04 audit note — this section disagrees with its own heading and with
