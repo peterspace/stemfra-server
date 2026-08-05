@@ -386,6 +386,26 @@ fixtures cleaned. Commits only; no push without Peter.)_
   (subs + customers + audits + bells deleted).
 - Committed (no push). **Next: A3** (CMS Memberships page rework + Activate).
 
+### 2026-08-05 — A5 + A6 DONE → PHASE A COMPLETE
+
+- **A5 (member self-service venue branch):** `siteMembersController`
+  `cancelSubscription` + `reactivateSubscription` now branch on `isVenueSub` —
+  venue subs do a DB-only `cancel_at_period_end` flip + churn-reason metadata +
+  audit, NO Stripe call (legacy Stripe path unchanged). A venue self-cancel also
+  fires an owner bell (`member_cancelled`, category operations) since there's no
+  Stripe/webhook signal. `billingPortal` already 400s cleanly for venue subs (no
+  change; the E1 client hides the button anyway). Verified end-to-end with a REAL
+  member JWT (admin.createUser + signInWithPassword) on forge-and-bell: cancel →
+  cape=true + reasons + owner notif, no Stripe; reactivate → reversed. Cleaned up.
+- **A6 (agent context):** `lib/stacyContext.js buildSiteContext` gained a
+  `memberships` block — active plans (name/price/interval/description) +
+  active_members / pending_signups / renewal_due counts. Front Desk can list
+  plans to a visitor; Stacy can report member counts. Verified (4 plans, 2 active).
+- **✅ PHASE A COMPLETE (A1–A6).** Next: **Phase B** — B1 CMS "Renewals" confirm-
+  all view + `POST /api/cms/subscriptions/confirm-payments`; B2 meter switch to
+  collected cash (⚠ ADVISOR CHECKPOINT: post before/after basis for one site
+  before landing); B3 Reports v2 collected/due lines.
+
 ### 2026-08-05 — A4 (crossfit Join) DONE + status standardization
 
 - **A4 crossfit Join:** `stemfra_crossfit/lib/memberships.ts` — `joinMembership`
