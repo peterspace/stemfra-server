@@ -82,6 +82,26 @@ is retired) — the `lib/billing/payoneer.js` adapter stays for fallback, not de
 dedicated account manager vs Payoneer's slow support). The `billing_charges` ledger +
 `lib/billing/` layer are **repurposed** for commission invoicing.
 
+## 2b. Online payments SUSPENDED, pay-at-venue is the model (DECIDED 2026-08-05, Peter)
+
+Field reality (Peter + partner): local businesses' customers overwhelmingly pay at the
+place of service (multiple POS providers, card/cash/QR/transfer); barbers/salons ask at
+most a ~10% deposit in festive periods; gyms/yoga sign physical agreements first, then
+pay in person. So:
+
+- **Stripe online payments are SUSPENDED in the booking flow** (all verticals) for the
+  first clients. The direct-keys pipeline stays built and dormant, NOT deleted — it
+  returns later as an optional add-on (e.g. festive deposits). Simplifies onboarding.
+- **Stripe Connect functionality suspended** likewise (it was already dormant/legacy).
+- **NO Stripe-level commission anywhere** (no application fees). Stemfra's 5% is
+  collected ONLY via the monthly commission invoice — kills the 4.5% app-fee +
+  5% meter double-dip that existed on the old Connect membership path.
+- **Memberships become sign-up-then-pay-at-venue**: the site/Front Desk chat captures
+  the signup (pending), the business signs the agreement + collects payment in person,
+  the owner confirms in the CMS ("mark as collected" pattern) — that confirmation is
+  the commissionable event. The old Connect membership checkout is NOT migrated; it is
+  parked with the rest of the Stripe pipeline.
+
 ## 3. Domain — the customer's responsibility, Stemfra fronts $0
 
 > ⚠ **2026-08-04 audit note — this section disagrees with its own heading and with
