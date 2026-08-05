@@ -228,6 +228,28 @@ function membershipActivated({ businessName, businessLogoUrl, businessEmail, bus
   });
 }
 
+// Renewal payment confirmed at the venue (owner marked it collected in the CMS
+// Renewals view). A receipt, not a charge: honest "payment received" copy.
+function membershipRenewed({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, planName, priceLabel, nextRenewalLabel }) {
+  return renderEmail({
+    brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
+    preheader: `Payment received for your ${planName || 'membership'}.`,
+    heading: 'Payment received.',
+    paragraphs: [
+      ...(firstName ? [`Hi ${firstName},`] : []),
+      `Thanks. We've recorded your membership payment at ${businessName}:`,
+    ],
+    rows: [
+      { label: 'Plan', value: planName || 'Membership' },
+      priceLabel ? { label: 'Amount', value: priceLabel } : null,
+      nextRenewalLabel ? { label: 'Next renewal', value: nextRenewalLabel, bold: true } : null,
+    ],
+    note: `You renew in person at ${businessName}. We'll remind you before your next renewal date.`,
+    security: tenantSecurityLine(businessName, businessEmail),
+    reason: `You're receiving this because you have a membership with ${businessName}.`,
+  });
+}
+
 // ─── Stemfra → site owner ─────────────────────────────────────────────────────
 
 // Contact-form lead landed on their site.
@@ -577,6 +599,7 @@ module.exports = {
   ownerChatLeadNotification,
   ownerMembershipSignup,
   membershipActivated,
+  membershipRenewed,
   firstVisitFollowup,
   winBack,
   reviewRequest,

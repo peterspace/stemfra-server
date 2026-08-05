@@ -168,6 +168,88 @@ async function cancelSubscription(req, res) {
   }
 }
 
+// ── Confirm collected renewal payments (monthly "Renewals" confirm-all) ──
+// Body: { siteId, items: [{ subscriptionId, amountCents?, method?, note? }] }.
+// Per item: write a payment row for the period that is renewing (period_start =
+// the sub's CURRENT current_period_end), then advance current_period_end one
+// interval. The unique (subscription_id, period_start) guard makes a double-fire
+// idempotent — we only advance when the payment INSERT actually landed, so a
+// re-confirm hits the guard and skips the advance instead of double-renewing.
+async function confirmOnePayment(req, siteId, item) {
+  const subId = item?.subscriptionId;
+  if (!subId) return { subscriptionId: null, error: 'Missing subscriptionId.' };
+
+  const { data: sub } = await supabase
+    .from('site_subscriptions').select('*').eq('id', subId).maybeSingle();
+  if (!sub || sub.site_id !== siteId) return { subscriptionId: subId, error: 'Not found.' };
+  if (!isVenue(sub)) return { subscriptionId: subId, error: 'Billed online.' };
+  // E2 adds 'renewal_due'; until then only 'active' subs are ever due here.
+  if (sub.status !== 'active') return { subscriptionId: subId, error: `status=${sub.status}` };
+  if (!sub.current_period_end) return { subscriptionId: subId, error: 'No period to renew.' };
+
+  const { data: plan } = await supabase
+    .from('site_products')
+    .select('name, price_cents, currency, billing_interval, billing_interval_count')
+    .eq('id', sub.product_id).maybeSingle();
+
+  const amountCents = Number.isInteger(item?.amountCents)
+    ? item.amountCents
+    : (sub.amount_cents ?? plan?.price_cents ?? 0);
+  if (!amountCents || amountCents <= 0) return { subscriptionId: subId, error: 'No amount.' };
+
+  const periodStart = sub.current_period_end;
+  const periodEnd = addInterval(periodStart, plan?.billing_interval || 'month', plan?.billing_interval_count || 1);
+
+  // Claim the period first. A conflict (23505 on the unique guard) = already
+  // confirmed for this period → do NOT advance again.
+  const { error: insErr } = await supabase.from('site_subscription_payments').insert([{
+    site_id: siteId, subscription_id: subId,
+    period_start: periodStart, period_end: periodEnd,
+    amount_cents: amountCents, confirmed_by: req.cmsUser?.email || null,
+    method: item?.method || null,
+    metadata: item?.note ? { note: String(item.note).slice(0, 500) } : {},
+  }]);
+  if (insErr) {
+    if (insErr.code === '23505') return { subscriptionId: subId, skipped: 'already confirmed for this period' };
+    return { subscriptionId: subId, error: insErr.message };
+  }
+
+  // Payment landed → advance the period (and restore 'active' once E2 sets renewal_due).
+  await supabase.from('site_subscriptions')
+    .update({ status: 'active', current_period_end: periodEnd, amount_cents: amountCents })
+    .eq('id', subId);
+
+  await logSub(req, sub, 'membership_payment_confirmed', { amount_cents: amountCents, period_end: periodEnd });
+  await memberEmail(
+    { ...sub, amount_cents: amountCents },
+    (bits) => emails.membershipRenewed({
+      ...bits, planName: en(plan?.name), priceLabel: moneyLabel(amountCents, plan?.currency),
+      nextRenewalLabel: new Date(periodEnd).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    }),
+    'Payment received',
+  );
+  return { subscriptionId: subId, confirmed: true, periodEnd };
+}
+
+async function confirmPayments(req, res) {
+  try {
+    const siteId = req.body?.siteId;
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!siteId) return res.status(400).json({ success: false, message: 'Missing siteId.' });
+    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
+    if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
+    if (!items.length) return res.status(400).json({ success: false, message: 'No memberships selected.' });
+    if (items.length > 500) return res.status(400).json({ success: false, message: 'Too many at once.' });
+
+    const results = [];
+    for (const it of items) results.push(await confirmOnePayment(req, siteId, it));
+    res.json({ success: true, confirmed: results.filter((r) => r.confirmed).length, results });
+  } catch (err) {
+    console.error('[subscriptions.confirmPayments]', err.message);
+    res.status(500).json({ success: false, message: 'Could not confirm payments.' });
+  }
+}
+
 async function pauseSubscription(req, res) {
   try {
     const sub = await loadOwned(req, res); if (!sub) return;
@@ -203,4 +285,4 @@ async function resumeSubscription(req, res) {
   }
 }
 
-module.exports = { activateSubscription, declineSubscription, cancelSubscription, pauseSubscription, resumeSubscription };
+module.exports = { activateSubscription, declineSubscription, confirmPayments, cancelSubscription, pauseSubscription, resumeSubscription };
