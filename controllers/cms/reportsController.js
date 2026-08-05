@@ -46,7 +46,7 @@ function monthlyCents(amount, interval, count) {
 }
 
 // Active recurring membership run-rate (MRR) + active member count. This is a
-// snapshot, NOT period-summed booking revenue — reported as its own line.
+// snapshot, NOT period-summed booking revenue — reported as its own INFO line.
 async function loadMembershipMrr(siteId) {
   const { data } = await supabase
     .from('site_subscriptions')
@@ -58,6 +58,35 @@ async function loadMembershipMrr(siteId) {
     mrr += monthlyCents(s.amount_cents, s.plan?.billing_interval, s.plan?.billing_interval_count || 1);
   }
   return { membershipMrrCents: mrr, membershipCount: (data || []).length };
+}
+
+// Pay-at-venue membership cash (P14 §1d): what was CONFIRMED collected in the
+// window (exact — from immutable site_subscription_payments rows) vs what is still
+// DUE (venue memberships whose period has lapsed on/before the window end and not
+// been confirmed — a current outstanding-renewals snapshot; the same set the CMS
+// Renewals view lists). The due amount defaults to the sub's amount, else plan price.
+async function loadMembershipCash(siteId, fromIso, toIso) {
+  const [{ data: pays }, { data: dueSubs }] = await Promise.all([
+    supabase.from('site_subscription_payments')
+      .select('amount_cents')
+      .eq('site_id', siteId).gte('confirmed_at', fromIso).lte('confirmed_at', toIso).limit(100000),
+    supabase.from('site_subscriptions')
+      .select('amount_cents, metadata, cancel_at_period_end, plan:site_products(price_cents)')
+      .eq('site_id', siteId).eq('collection_mode', 'venue').eq('status', 'active')
+      .lte('current_period_end', toIso).limit(100000),
+  ]);
+  let collectedCents = 0;
+  for (const p of pays || []) collectedCents += p.amount_cents || 0;
+  let dueCents = 0, dueCount = 0;
+  for (const s of dueSubs || []) {
+    if (s.cancel_at_period_end || s.metadata?.paused) continue;
+    dueCents += (s.amount_cents ?? s.plan?.price_cents ?? 0);
+    dueCount++;
+  }
+  return {
+    membershipCollectedCents: collectedCents, membershipCollectedCount: (pays || []).length,
+    membershipDueCents: dueCents, membershipDueCount: dueCount,
+  };
 }
 
 // Classify a booking's revenue (basis = appointment date / starts_at):
@@ -76,10 +105,11 @@ const HOW_PAID = { online: 'Online (card)', atVisit: 'At visit (in person)', ref
 
 // One model that powers the on-screen report AND every export.
 async function buildModel(siteId, fromIso, toIso) {
-  const [{ data: site }, bookings, memberships] = await Promise.all([
+  const [{ data: site }, bookings, memberships, membershipCash] = await Promise.all([
     supabase.from('sites').select('subdomain, company:companies(name)').eq('id', siteId).maybeSingle(),
     loadBookings(siteId, fromIso, toIso),
     loadMembershipMrr(siteId),
+    loadMembershipCash(siteId, fromIso, toIso),
   ]);
 
   let onlineCents = 0, atVisitCents = 0, refundedCents = 0, onlineCount = 0, atVisitCount = 0;
@@ -142,6 +172,8 @@ async function buildModel(siteId, fromIso, toIso) {
     onlineCents, atVisitCents, refundedCents, onlineCount, atVisitCount,
     atVisitCollectedCents, atVisitDueCents,
     membershipMrrCents: memberships.membershipMrrCents, membershipCount: memberships.membershipCount,
+    membershipCollectedCents: membershipCash.membershipCollectedCents, membershipCollectedCount: membershipCash.membershipCollectedCount,
+    membershipDueCents: membershipCash.membershipDueCents, membershipDueCount: membershipCash.membershipDueCount,
     topServices: [...svc.values()].sort((a, b) => b.cents - a.cents).slice(0, 8),
     byMonth: [...months.values()].sort((a, b) => a.month.localeCompare(b.month)),
     customers: { new: newCustomers, returning: returningCustomers, total: custIds.size },
@@ -167,6 +199,8 @@ async function getReport(req, res) {
       refundedCents: m.refundedCents, onlineCount: m.onlineCount, atVisitCount: m.atVisitCount,
       atVisitCollectedCents: m.atVisitCollectedCents, atVisitDueCents: m.atVisitDueCents,
       membershipMrrCents: m.membershipMrrCents, membershipCount: m.membershipCount,
+      membershipCollectedCents: m.membershipCollectedCents, membershipCollectedCount: m.membershipCollectedCount,
+      membershipDueCents: m.membershipDueCents, membershipDueCount: m.membershipDueCount,
       topServices: m.topServices, byMonth: m.byMonth, customers: m.customers,
       transactions: m.transactions.slice(0, DISPLAY_CAP),
       transactionsTotal: m.transactions.length,

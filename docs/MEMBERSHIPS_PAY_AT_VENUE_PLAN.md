@@ -542,5 +542,28 @@ switched to the same `.or(...is.null...)` filter as the SELECT.
   commission row (old `membership_runrate_cents:32500`) still itemizes its
   `memberships ($325.00) → $16.25` line via the fallback (verified through the real
   `commissionItems`). Temp scripts removed. COMMISSION_MODEL §7b annotated with a §1d
-  pointer. Committed (meter + PDF fix together), no push. **Next: B3** (Reports v2
-  collected/due lines + PDF/DOCX).
+  pointer. Committed (meter + PDF fix together), no push.
+
+### 2026-08-05 — B3 (Reports v2: collected + due) DONE
+
+- **`reportsController.buildModel`:** new `loadMembershipCash(siteId, from, to)` →
+  `membershipCollectedCents`/`Count` (exact, from `site_subscription_payments`
+  confirmed in the window) + `membershipDueCents`/`Count` (venue active subs whose
+  `current_period_end` has lapsed on/before the window end, not canceling/paused —
+  a current outstanding-renewals snapshot, the same set the Renewals view lists;
+  amount = sub amount, else plan price). Surfaced in the `getReport` JSON. The MRR
+  figure is KEPT but demoted to an info line ("forward estimate, not collected").
+- **Three render targets updated:** CMS `ReportsPage` (a "Memberships collected" row
+  = collected $ + "$X due from N members" amber annotation, MRR as a small note
+  below), `lib/reportPdf.js`, `lib/reportDocx.js` (collected + due + run-rate lines).
+  `useReports.ts` Report type extended; CMS typechecks clean.
+- **Verified** on forge-and-bell (seeded 1 payment confirmed Aug + 1 due venue sub):
+  report JSON returned collected 20000/1 + due 17500/1 + MRR 50000/3; PDF (114KB,
+  valid) + DOCX (valid zip) both exported 200. CMS Reports page rendered
+  "Memberships collected · $200 · $175 due from 1 member" + the run-rate note.
+  Fixtures cleaned (forge back to 2 legacy subs, 0 payment rows). Committed
+  (server + platform), no push.
+
+**Phase B COMPLETE** (B1 confirm-all · B2 cash-basis meter · B3 Reports v2). Next
+per the plan: Phase C (Front Desk chat membership signup), D (booking online-payment
+kill-switch), E (member lifecycle: renewal reminders/portal v2/yoga surface).
