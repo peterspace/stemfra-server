@@ -69,11 +69,14 @@ bottom of this file + ROADMAP P14 as tasks land._
   14-day grace window. Member keeps access/status display.
 - `expired` — grace passed unconfirmed. Terminal unless owner reactivates by
   confirming a payment (periods restart from confirmation date).
-- `canceled` — member or owner cancelled (`canceled_at` stamped;
+- `cancelled` — member or owner cancelled (`canceled_at` COLUMN stamped — the
+  column keeps Stripe's spelling; only the status VALUE is standardized;
   `cancel_at_period_end` honored: stays `active` until period end, then
-  `canceled`, no reminders). **NOTE (A3, 2026-08-05): spelled `canceled`**
-  (American / Stripe / existing-DB spelling), not the `cancelled` this doc first
-  used — aligned so venue + legacy rows and the CMS share one status vocabulary.
+  `cancelled`, no reminders). **NOTE (2026-08-05, Peter): the status VALUE is
+  `cancelled` (British) everywhere** — the codebase-dominant spelling (94:14).
+  System A + the Stripe webhook's `mapSubStatus` already normalize Stripe's
+  `canceled` → `cancelled`; the System B webhook + venue paths now do too, so all
+  subscription rows share ONE vocabulary. (A3 briefly wrote `canceled`; corrected.)
 
 `renewal_due` and `expired` are DERIVED + STAMPED by the sweeper (E2), not by
 readers: readers trust `status`.

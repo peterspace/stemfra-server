@@ -168,7 +168,7 @@ async function cancelSubscription(req, res) {
       .from('site_customers').select('auth_user_id, email').eq('id', sub.customer_id).single();
     const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === user.email.toLowerCase());
     if (!owns) return res.status(403).json({ success: false, message: 'Not your membership.' });
-    if (!sub.stripe_subscription_id || sub.status === 'canceled') return res.status(400).json({ success: false, message: 'This membership cannot be cancelled.' });
+    if (!sub.stripe_subscription_id || sub.status === 'cancelled') return res.status(400).json({ success: false, message: 'This membership cannot be cancelled.' });
 
     const cleanReasons = Array.isArray(reasons) ? reasons.filter(r => typeof r === 'string').slice(0, 10) : [];
     const cleanFeedback = (typeof feedback === 'string' ? feedback : '').trim().slice(0, 1000) || null;
@@ -212,7 +212,7 @@ async function reactivateSubscription(req, res) {
       .from('site_customers').select('auth_user_id, email').eq('id', sub.customer_id).single();
     const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === user.email.toLowerCase());
     if (!owns) return res.status(403).json({ success: false, message: 'Not your membership.' });
-    if (!sub.stripe_subscription_id || sub.status === 'canceled') {
+    if (!sub.stripe_subscription_id || sub.status === 'cancelled') {
       return res.status(400).json({ success: false, message: 'This membership has ended — please re-subscribe.' });
     }
 

@@ -3,17 +3,18 @@
 // P14 (pay-at-venue): most subscriptions are collection_mode='venue' — there is
 // NO Stripe subscription behind them. Those are managed with DB-only writes:
 //   - activate  : pending → active (owner confirms the first payment at the venue)
-//   - decline   : pending → canceled
-//   - cancel    : active → canceled (now) / cancel_at_period_end (period end)
+//   - decline   : pending → cancelled
+//   - cancel    : active → cancelled (now) / cancel_at_period_end (period end)
 //   - pause/resume : metadata.paused flag (no billing to pause)
 // Legacy collection_mode='stripe' rows (the dormant Connect path) still drive
 // Stripe. Refunds for venue subs are out of band (no CMS refund button — money
 // moved at the venue).
 //
-// NOTE (2026-08-05): the status vocabulary aligns to the EXISTING codebase +
-// Stripe spelling 'canceled' (not the plan doc's 'cancelled'), so venue + legacy
-// rows and the CMS share one spelling. Plan §1a updated to match.
-// Single-var supabase require per convention.
+// Status value is 'cancelled' (British) everywhere — the codebase-dominant
+// spelling; System A + the Stripe webhook's mapSubStatus already normalize
+// Stripe's 'canceled' to it, so all subscription rows share ONE vocabulary.
+// (The site_subscriptions.canceled_at COLUMN keeps Stripe's spelling; only the
+// status VALUE is standardized.) Single-var supabase require per convention.
 const supabase = require('../../config/supabase');
 const { stripe } = require('../../config/stripe');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
@@ -128,7 +129,7 @@ async function declineSubscription(req, res) {
     const sub = await loadOwned(req, res); if (!sub) return;
     if (sub.status !== 'pending') return res.status(400).json({ success: false, message: 'Only a pending signup can be declined.' });
     await supabase.from('site_subscriptions')
-      .update({ status: 'canceled', canceled_at: new Date().toISOString() }).eq('id', sub.id);
+      .update({ status: 'cancelled', canceled_at: new Date().toISOString() }).eq('id', sub.id);
     await logSub(req, sub, 'membership_declined', null);
     res.json({ success: true });
   } catch (err) {
@@ -145,7 +146,7 @@ async function cancelSubscription(req, res) {
       // DB-only: no billing to stop.
       if (mode === 'now') {
         await supabase.from('site_subscriptions')
-          .update({ status: 'canceled', canceled_at: new Date().toISOString(), cancel_at_period_end: false }).eq('id', sub.id);
+          .update({ status: 'cancelled', canceled_at: new Date().toISOString(), cancel_at_period_end: false }).eq('id', sub.id);
       } else {
         await supabase.from('site_subscriptions').update({ cancel_at_period_end: true }).eq('id', sub.id);
       }
@@ -154,7 +155,7 @@ async function cancelSubscription(req, res) {
       if (mode === 'now') {
         await stripe.subscriptions.cancel(sub.stripe_subscription_id);
         await supabase.from('site_subscriptions')
-          .update({ status: 'canceled', canceled_at: new Date().toISOString(), cancel_at_period_end: false }).eq('id', sub.id);
+          .update({ status: 'cancelled', canceled_at: new Date().toISOString(), cancel_at_period_end: false }).eq('id', sub.id);
       } else {
         await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: true });
         await supabase.from('site_subscriptions').update({ cancel_at_period_end: true }).eq('id', sub.id);

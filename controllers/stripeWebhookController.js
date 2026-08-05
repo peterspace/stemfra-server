@@ -237,9 +237,11 @@ async function handleWebhook(req, res) {
             cancelled_at: tsToIso(sub.canceled_at),
           }).eq('stripe_subscription_id', sub.id);
         } else if (sub.metadata?.kind === 'site_membership') {
-          // System B — site_subscriptions.status stores the raw Stripe status.
+          // System B — site_subscriptions.status stores the raw Stripe status,
+          // except Stripe's 'canceled' is normalized to our 'cancelled' so the
+          // status vocabulary matches System A + the venue path.
           await supabase.from('site_subscriptions').update({
-            status: deleted ? 'canceled' : sub.status,
+            status: deleted ? 'cancelled' : (sub.status === 'canceled' ? 'cancelled' : sub.status),
             current_period_end: subPeriodEnd(sub),
             cancel_at_period_end: !!sub.cancel_at_period_end,
             canceled_at: tsToIso(sub.canceled_at),
