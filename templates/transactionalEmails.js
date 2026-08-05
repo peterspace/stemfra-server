@@ -12,7 +12,7 @@ const { renderEmail, quoteBlock, discountBlock, escapeHtml } = require('./baseEm
 // A lifecycle discount line, phrased per email. `discountPercent` is a positive
 // number when the owner enabled a discount for that email (CMS Emails page).
 const discountLine = (percent, lead) =>
-  (percent > 0 ? discountBlock(`${lead} — enjoy ${percent}% off your next visit. Just mention this email when you book.`) : '');
+  (percent > 0 ? discountBlock(`${lead}: enjoy ${percent}% off your next visit. Just mention this email when you book.`) : '');
 
 // Task #24 — resolve a site's review platforms into an ORDERED list (Google first
 // — it's worth ~10× the others for a local business). Accepts the new
@@ -66,9 +66,9 @@ const STEMFRA_SECURITY = `If you didn't initiate this, contact our support team 
 function bookingConfirmation({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, overrideHeading, overrideSubheading, firstName, serviceName, dateLabel, timeLabel, durationLabel }) {
   return renderEmail({
     brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
-    preheader: `${dateLabel} at ${timeLabel} — see you then.`,
+    preheader: `${dateLabel} at ${timeLabel}. See you then.`,
     heading: overrideHeading || (firstName ? `You're booked, ${firstName}.` : "You're booked."),
-    paragraphs: [overrideSubheading || 'Your appointment is confirmed — here are the details:'],
+    paragraphs: [overrideSubheading || 'Your appointment is confirmed. Here are the details:'],
     rows: [
       { label: 'Service', value: serviceName },
       { label: 'Date', value: dateLabel },
@@ -85,9 +85,9 @@ function bookingConfirmation({ businessName, businessLogoUrl, businessEmail, bus
 function classConfirmation({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, serviceName, dateLabel, timeLabel }) {
   return renderEmail({
     brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
-    preheader: `${dateLabel} at ${timeLabel} — see you in class.`,
+    preheader: `${dateLabel} at ${timeLabel}. See you in class.`,
     heading: "You're booked in.",
-    paragraphs: ['Your spot is confirmed — here are the details:'],
+    paragraphs: ['Your spot is confirmed. Here are the details:'],
     rows: [
       { label: 'Class', value: serviceName },
       { label: 'Date', value: dateLabel },
@@ -144,9 +144,10 @@ function bookingCancelled({ businessName, businessLogoUrl, businessEmail, busine
     preheader: `Your ${dateLabel} booking has been cancelled.`,
     heading: 'Your booking has been cancelled.',
     paragraphs: [
+      ...(firstName && !cancelledByBusiness ? [`Hi ${firstName},`] : []),
       cancelledByBusiness
-        ? `${businessName} had to cancel the following booking — sorry about the change of plans:`
-        : `${firstName ? `Hi ${firstName} — this` : 'This'} confirms your cancellation:`,
+        ? `${businessName} had to cancel the following booking. Sorry about the change of plans:`
+        : 'This confirms your cancellation:',
     ],
     rows: [
       { label: 'Service', value: serviceName },
@@ -165,7 +166,10 @@ function bookingRescheduled({ businessName, businessLogoUrl, businessEmail, busi
     brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
     preheader: `New time: ${dateLabel} at ${timeLabel}.`,
     heading: 'Your booking has a new time.',
-    paragraphs: [`${firstName ? `Hi ${firstName} — your` : 'Your'} booking has been rescheduled. The new details:`],
+    paragraphs: [
+      ...(firstName ? [`Hi ${firstName},`] : []),
+      'Your booking has been rescheduled. The new details:',
+    ],
     rows: [
       { label: 'Service', value: serviceName },
       { label: 'New date', value: dateLabel, bold: true },
@@ -219,7 +223,7 @@ function ownerLeadNotification({ name, email, phone, subject, message, dashboard
     ],
     bodyHtml: message ? quoteBlock(message, 'Message') : '',
     cta: { label: 'Open your Leads inbox', url: dashboardUrl || `${CMS_URL}/leads` },
-    note: 'Fast replies win customers — most enquiries go to whoever answers first.',
+    note: 'Fast replies win customers. Most enquiries go to whoever answers first.',
     reason: "You're receiving this because your Stemfra website collected a new lead.",
   });
 }
@@ -250,15 +254,15 @@ function ownerChatLeadNotification({ name, email, phone, intent, summary, dashbo
 function firstVisitFollowup({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, serviceName, bookingUrl, unsubscribeUrl, discountPercent }) {
   return renderEmail({
     brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
-    preheader: `Thanks for visiting ${businessName} — we'd love to see you again.`,
+    preheader: `Thanks for visiting ${businessName}. We'd love to see you again.`,
     heading: firstName ? `Thanks for coming in, ${firstName}.` : 'Thanks for coming in.',
     paragraphs: [
       `We hope you enjoyed your ${serviceName ? serviceName.toLowerCase() : 'visit'} at ${businessName}.`,
-      "It was great having you — whenever you're ready for your next visit, we'd love to welcome you back.",
+      "It was great having you. Whenever you're ready for your next visit, we'd love to welcome you back.",
     ],
     bodyHtml: discountLine(discountPercent, 'A little thank-you for your first visit'),
     cta: bookingUrl ? { label: 'Book your next visit', url: bookingUrl } : undefined,
-    note: `Questions or feedback? Just reply to this email — ${businessName} reads every one.`,
+    note: `Questions or feedback? Just reply to this email. ${businessName} reads every one.`,
     reason: `You're receiving this because you recently visited ${businessName}.`,
     unsubscribeUrl,
   });
@@ -294,10 +298,10 @@ function reviewRequest({ businessName, businessLogoUrl, businessEmail, businessU
     preheader: `How was your visit to ${businessName}? We'd love your feedback.`,
     heading: firstName ? `How was your visit, ${firstName}?` : 'How was your visit?',
     paragraphs: [
-      `Thanks again for choosing ${businessName}${serviceName ? ` for your ${serviceName.toLowerCase()}` : ''} — we hope it was everything you wanted.`,
+      `Thanks again for choosing ${businessName}${serviceName ? ` for your ${serviceName.toLowerCase()}` : ''}. We hope it was everything you wanted.`,
       primary
-        ? "If you have a moment, a quick review means the world to a small business like ours — and it helps others find us."
-        : "We'd love to hear how it went. Just reply to this email and let us know — good or bad, we read every note.",
+        ? "If you have a moment, a quick review means the world to a small business like ours, and it helps others find us."
+        : "We'd love to hear how it went. Just reply to this email and let us know. Good or bad, we read every note.",
     ],
     bodyHtml: discountLine(discountPercent, 'A thank-you for your feedback') + reviewLinksBlock(secondary, businessAccent),
     cta: primary
@@ -319,11 +323,11 @@ function birthdayGreeting({ businessName, businessLogoUrl, businessUrl, business
     heading: firstName ? `Happy birthday, ${firstName}!` : 'Happy birthday!',
     paragraphs: [
       `Everyone at ${businessName} is wishing you a wonderful birthday.`,
-      "We'd love to help you treat yourself — book a visit whenever you're ready.",
+      "We'd love to help you treat yourself. Book a visit whenever you're ready.",
     ],
     bodyHtml: discountLine(discountPercent, 'Your birthday gift'),
     cta: bookingUrl ? { label: 'Book a visit', url: bookingUrl } : undefined,
-    note: 'Warm wishes from all of us — hope to see you soon.',
+    note: 'Warm wishes from all of us. Hope to see you soon.',
     reason: `You're receiving this because you're a customer of ${businessName}.`,
     unsubscribeUrl,
   });
@@ -337,12 +341,12 @@ function anniversaryGreeting({ businessName, businessLogoUrl, businessUrl, busin
     preheader: `It's been a year since your first visit to ${businessName}.`,
     heading: firstName ? `Happy anniversary, ${firstName}!` : 'Happy anniversary!',
     paragraphs: [
-      `It's been a year since your first visit to ${businessName} — thank you for being part of our community.`,
+      `It's been a year since your first visit to ${businessName}. Thank you for being part of our community.`,
       "We've loved having you, and we're looking forward to many more visits ahead.",
     ],
     bodyHtml: discountLine(discountPercent, 'To celebrate a year together'),
     cta: bookingUrl ? { label: 'Book your next visit', url: bookingUrl } : undefined,
-    note: `Thanks for a wonderful year — from all of us at ${businessName}.`,
+    note: `Thanks for a wonderful year, from all of us at ${businessName}.`,
     reason: `You're receiving this because you first visited ${businessName} a year ago.`,
     unsubscribeUrl,
   });
@@ -353,14 +357,14 @@ function anniversaryGreeting({ businessName, businessLogoUrl, businessUrl, busin
 function noShowFollowup({ businessName, businessLogoUrl, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, serviceName, dateLabel, bookingUrl, unsubscribeUrl }) {
   return renderEmail({
     brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
-    preheader: `We missed you at ${businessName} — let's find a new time.`,
+    preheader: `We missed you at ${businessName}. Let's find a new time.`,
     heading: firstName ? `Sorry we missed you, ${firstName}.` : 'Sorry we missed you.',
     paragraphs: [
       `We had you down for ${serviceName ? serviceName.toLowerCase() : 'a visit'}${dateLabel ? ` on ${dateLabel}` : ''}, but didn't get to see you.`,
-      "No worries at all — life happens. Whenever you're ready, we'd love to get you back in.",
+      "No worries at all. Life happens. Whenever you're ready, we'd love to get you back in.",
     ],
     cta: bookingUrl ? { label: 'Rebook your visit', url: bookingUrl } : undefined,
-    note: `Questions? Just reply to this email — ${businessName} is happy to help.`,
+    note: `Questions? Just reply to this email. ${businessName} is happy to help.`,
     reason: `You're receiving this because you had a booking with ${businessName}.`,
     unsubscribeUrl,
   });
@@ -378,7 +382,7 @@ function noShowFollowup({ businessName, businessLogoUrl, businessUrl, businessAc
 function platformInvoice({ businessName, greetingName, amountLabel, dueLabel, paymentInstructions, dashboardUrl, payUrl, invoiceRef }) {
   const dash = dashboardUrl || `${CMS_URL}/billing`;
   return renderEmail({
-    preheader: `Your Stemfra invoice — ${amountLabel}${dueLabel ? `, due ${dueLabel}` : ''}.`,
+    preheader: `Your Stemfra invoice: ${amountLabel}${dueLabel ? `, due ${dueLabel}` : ''}.`,
     eyebrow: 'Your invoice',
     heading: `Hi ${greetingName || 'there'},`,
     paragraphs: ['Thank you for entrusting us with your care. The full invoice accompanies this email as a PDF; a summary follows below.'],
@@ -406,7 +410,7 @@ function platformDunning({ businessName, greetingName, amountLabel, dueLabel, da
     eyebrow: 'Payment reminder',
     heading: `Hi ${greetingName || 'there'},`,
     paragraphs: [
-      `A gentle reminder that your Stemfra invoice${businessName ? ` for ${businessName}` : ''} remains unpaid${dueLabel ? ` — it was due ${dueLabel}` : ''}${daysOverdue ? ` (${daysOverdue} day${daysOverdue === 1 ? '' : 's'} ago)` : ''}. It accompanies this email again as a PDF.`,
+      `A gentle reminder that your Stemfra invoice${businessName ? ` for ${businessName}` : ''} remains unpaid${dueLabel ? `. It was due ${dueLabel}` : ''}${daysOverdue ? ` (${daysOverdue} day${daysOverdue === 1 ? '' : 's'} ago)` : ''}. It accompanies this email again as a PDF.`,
       'Please settle it to keep your website online and avoid any interruption.',
     ],
     rows: [
@@ -426,7 +430,7 @@ function platformDunning({ businessName, greetingName, amountLabel, dueLabel, da
 
 function platformReceipt({ businessName, amountLabel, paidLabel, dashboardUrl, invoiceRef }) {
   return renderEmail({
-    preheader: `Payment received — ${amountLabel}. Thank you.`,
+    preheader: `Payment received: ${amountLabel}. Thank you.`,
     eyebrow: 'Payment received',
     heading: 'Thank you.',
     paragraphs: [`We have received your payment${businessName ? ` for ${businessName}` : ''}. Your receipt accompanies this email as a PDF.`],
@@ -453,7 +457,7 @@ function staffHandoffNotification({ siteLabel, ownerEmail, message, reply }) {
     heading: 'A CMS owner asked for a human',
     paragraphs: [`Site: ${siteLabel}`, `Owner: ${ownerEmail || 'unknown'}`],
     bodyHtml: quoteBlock(message, 'What they said') + (reply ? quoteBlock(reply, 'Stacy replied') : ''),
-    note: 'Reply-to is set to the owner — just hit reply to follow up.',
+    note: 'Reply-to is set to the owner. Just hit reply to follow up.',
     reason: 'Stacy handoff notification for Stemfra staff.',
   });
 }
@@ -462,16 +466,16 @@ function staffHandoffNotification({ siteLabel, ownerEmail, message, reply }) {
 // follow-up"). Reply-to is Mark's outreach inbox (the reply sweeper watches it).
 function voiceRecapEmail({ firstName, planDiscussed, summary }) {
   return renderEmail({
-    preheader: 'Thank you for taking my call — everything we spoke about, in one place.',
+    preheader: 'Thank you for taking my call. Everything we spoke about, in one place.',
     eyebrow: 'Great speaking with you',
     heading: `Hi ${firstName || 'there'},`,
     paragraphs: [
-      'Thank you for taking my call today. As promised, everything lives at stemfra.com — you can preview your website free before paying anything.',
-      planDiscussed ? `We spoke about the ${planDiscussed} plan — happy to answer anything else about it.` : '',
+      'Thank you for taking my call today. As promised, everything lives at stemfra.com. You can preview your website free before paying anything.',
+      planDiscussed ? `We spoke about the ${planDiscussed} plan. Happy to answer anything else about it.` : '',
       summary ? `My notes from our call: ${summary}` : '',
     ].filter(Boolean),
     cta: { label: 'Visit stemfra.com', url: 'https://stemfra.com' },
-    note: 'Just reply to this email — it comes straight to the team.',
+    note: 'Just reply to this email. It comes straight to the team.',
     reason: 'You are receiving this because we spoke on the phone today.',
   });
 }
@@ -484,7 +488,7 @@ function staffVoiceSupportNotification({ callerName, callerEmail, callerPhone, i
     preheader: `${callerName || 'A caller'} needs support${issue ? `: ${issue}` : ''}.`,
     eyebrow: 'Support call',
     heading: 'A customer called for support',
-    paragraphs: ['The voice agent took a support call from an existing customer. Please follow up by email today — the agent promised them a same-day reply.'],
+    paragraphs: ['The voice agent took a support call from an existing customer. Please follow up by email today. The agent promised them a same-day reply.'],
     rows: [
       { label: 'Caller', value: callerName || '(no name given)' },
       { label: 'Phone', value: callerPhone || '(unknown)' },
@@ -494,7 +498,7 @@ function staffVoiceSupportNotification({ callerName, callerEmail, callerPhone, i
     bodyHtml:
       (summary ? quoteBlock(summary, 'Summary') : '') +
       (transcript ? quoteBlock(transcript, 'Transcript') : ''),
-    note: callerEmail ? 'Reply-to is set to the caller — just hit reply.' : 'No email was captured — call them back on the number above.',
+    note: callerEmail ? 'Reply-to is set to the caller. Just hit reply.' : 'No email was captured. Call them back on the number above.',
     reason: 'Support-call notification for Stemfra staff, captured by Stemfra Voice.',
   });
 }
@@ -505,7 +509,7 @@ function staffOrphanPaymentAlert({ amountLabel, paymentIntentId, siteId }) {
     preheader: 'A payment succeeded with no matching booking.',
     eyebrow: 'Staff alert',
     heading: 'Orphan payment needs reconciling',
-    paragraphs: ['A Stripe payment succeeded but no booking carries its PaymentIntent — the customer likely paid and dropped before the booking write. Reconcile manually.'],
+    paragraphs: ['A Stripe payment succeeded but no booking carries its PaymentIntent. The customer likely paid and dropped before the booking write. Reconcile manually.'],
     rows: [
       { label: 'Amount', value: amountLabel, bold: true },
       { label: 'PaymentIntent', value: paymentIntentId },
