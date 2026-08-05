@@ -69,9 +69,11 @@ bottom of this file + ROADMAP P14 as tasks land._
   14-day grace window. Member keeps access/status display.
 - `expired` — grace passed unconfirmed. Terminal unless owner reactivates by
   confirming a payment (periods restart from confirmation date).
-- `cancelled` — member or owner cancelled (`canceled_at` stamped;
+- `canceled` — member or owner cancelled (`canceled_at` stamped;
   `cancel_at_period_end` honored: stays `active` until period end, then
-  `cancelled`, no reminders).
+  `canceled`, no reminders). **NOTE (A3, 2026-08-05): spelled `canceled`**
+  (American / Stripe / existing-DB spelling), not the `cancelled` this doc first
+  used — aligned so venue + legacy rows and the CMS share one status vocabulary.
 
 `renewal_due` and `expired` are DERIVED + STAMPED by the sweeper (E2), not by
 readers: readers trust `status`.
@@ -380,6 +382,31 @@ fixtures cleaned. Commits only; no push without Peter.)_
   Owner email render confirmed at /dev/preview (screenshot). **Fixtures cleaned**
   (subs + customers + audits + bells deleted).
 - Committed (no push). **Next: A3** (CMS Memberships page rework + Activate).
+
+### 2026-08-05 — A3 server half DONE (CMS UI half next)
+
+- **Plans are plain DB rows** (`membershipPlansController.js`): removed all Stripe
+  Product/Price creation from create/update/delete. Price change patches
+  `price_cents` in place (a member's amount is captured on their subscription at
+  signup, so existing members keep their rate). Legacy stripe_* ids left untouched.
+- **`subscriptionsController.js` branches venue subs** (`isVenue` = collection_mode
+  venue or no stripe_subscription_id): cancel = DB-only, pause/resume = metadata
+  flag only, all with NO Stripe calls. Legacy stripe rows keep the Stripe path.
+  `loadOwned` no longer requires a Stripe subscription.
+- **New `POST /api/cms/subscriptions/:id/activate`** — pending venue → active:
+  sets `current_period_end = now + interval` (anniversary, `lib/membershipPeriod.js`
+  luxon helper), captures the collected `amount_cents` (dialog amount, editable;
+  defaults to plan price), writes the first `site_subscription_payments` row
+  (commission source of truth), audits `membership_activated`, emails the member a
+  tenant-branded welcome (`membershipActivated` builder, pulled forward from E2).
+  **`/decline`** — pending → canceled + audit `membership_declined`.
+- **Verified** by calling the controllers directly with the real owner auth id on
+  forge-and-bell: activate → active + Sep-5 period + payment row (amount/method/
+  confirmed_by) + audit; decline → canceled. (Member email path exercised; Resend
+  rejects example.com in test mode — harmless.) Fixtures cleaned.
+- Status vocabulary aligned to `canceled` (see §1a note). Committed (no push).
+  **Next: A3 CMS UI** (Pending section + Activate/Decline dialogs, drop the
+  Native badge, hide Refund for venue subs) + live CMS walk.
 
 ### 2026-08-05 — OUT-OF-PLAN (Peter): booking auto-collect rule DONE
 

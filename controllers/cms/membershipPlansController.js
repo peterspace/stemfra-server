@@ -1,10 +1,9 @@
-// CMS — manage native membership plans (System B). A plan is a site_products row
-// with product_type='membership'. For native plans we create a Stripe Product +
-// recurring Price on the PLATFORM account (subscriptions are created there with
-// transfer_data to the gym). External (bring-your-own) plans just store a link.
-// Single-var supabase require per convention.
+// CMS — manage membership plans. A plan is a site_products row with
+// product_type='membership'. P14 (pay-at-venue, 2026-08-05): plans are PLAIN DB
+// ROWS — no Stripe Product/Price is created (online payments are suspended;
+// members sign up and pay at the venue). Any stripe_product_id/stripe_price_id
+// on legacy rows is left untouched (display-inert). Single-var supabase require.
 const supabase = require('../../config/supabase');
-const { stripe } = require('../../config/stripe');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 
 function slugify(s) {
@@ -38,25 +37,7 @@ async function createPlan(req, res) {
     if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
 
     const displayName = typeof name === 'string' ? name : name.en;
-    let stripeProductId = null;
-    let stripePriceId = null;
-
-    if (fulfillmentMode === 'native') {
-      if (!priceCents || priceCents <= 0) return res.status(400).json({ success: false, message: 'Native plans need a price.' });
-      if (!stripe) return res.status(503).json({ success: false, message: 'Stripe not configured.' });
-      const product = await stripe.products.create({
-        name: displayName,
-        metadata: { site_id: siteId, kind: 'site_membership' },
-      });
-      const price = await stripe.prices.create({
-        product: product.id,
-        unit_amount: priceCents,
-        currency: currency.toLowerCase(),
-        recurring: { interval, interval_count: intervalCount },
-      });
-      stripeProductId = product.id;
-      stripePriceId = price.id;
-    }
+    if (!priceCents || priceCents <= 0) return res.status(400).json({ success: false, message: 'A plan needs a price.' });
 
     const row = {
       site_id: siteId,
@@ -73,8 +54,8 @@ async function createPlan(req, res) {
       slug: slugify(displayName),
       display_order: displayOrder,
       is_active: true,
-      stripe_product_id: stripeProductId,
-      stripe_price_id: stripePriceId,
+      stripe_product_id: null, // pay-at-venue: no Stripe object
+      stripe_price_id: null,
       metadata: features ? { features } : {},
     };
     const { data, error } = await supabase.from('site_products').insert(row).select().single();
@@ -86,9 +67,9 @@ async function createPlan(req, res) {
   }
 }
 
-// Update a plan. Price changes create a NEW Stripe Price (Prices are immutable);
-// existing subscribers keep their current price — only new sign-ups get the new
-// one. Other fields update in place.
+// Update a plan (plain DB row). Price changes patch price_cents in place; a
+// member's amount is captured on their subscription at signup, so existing
+// members keep their rate and only new sign-ups get the new price.
 async function updatePlan(req, res) {
   try {
     const { id } = req.params;
@@ -107,25 +88,7 @@ async function updatePlan(req, res) {
     if (isActive !== undefined) patch.is_active = isActive;
     // external_url is deliberately NOT patchable: native booking only (2026-07-31).
 
-    if (priceCents !== undefined && priceCents > 0 && priceCents !== plan.price_cents && plan.fulfillment_mode === 'native') {
-      if (!stripe) return res.status(503).json({ success: false, message: 'Stripe not configured.' });
-      let productId = plan.stripe_product_id;
-      if (!productId) {
-        const product = await stripe.products.create({ name: plan.name?.en || 'Membership', metadata: { site_id: plan.site_id, kind: 'site_membership' } });
-        productId = product.id;
-        patch.stripe_product_id = productId;
-      }
-      const price = await stripe.prices.create({
-        product: productId,
-        unit_amount: priceCents,
-        currency: plan.currency || 'usd',
-        recurring: { interval: plan.billing_interval || 'month', interval_count: plan.billing_interval_count || 1 },
-      });
-      patch.stripe_price_id = price.id;
-      patch.price_cents = priceCents;
-    } else if (priceCents !== undefined && plan.fulfillment_mode !== 'native') {
-      patch.price_cents = priceCents; // external: display price only
-    }
+    if (priceCents !== undefined && priceCents > 0) patch.price_cents = priceCents;
 
     const { data, error } = await supabase.from('site_products').update(patch).eq('id', id).select().single();
     if (error) return res.status(500).json({ success: false, message: error.message });
@@ -136,19 +99,16 @@ async function updatePlan(req, res) {
   }
 }
 
-// Soft-delete: archive the Stripe product + deactivate the row (existing
-// subscriptions keep working; the plan just stops being offered).
+// Soft-delete: deactivate the row (existing subscriptions keep working; the plan
+// just stops being offered). No Stripe object to archive under pay-at-venue.
 async function deletePlan(req, res) {
   try {
     const { id } = req.params;
     const { data: plan } = await supabase
-      .from('site_products').select('id, site_id, stripe_product_id').eq('id', id).single();
+      .from('site_products').select('id, site_id').eq('id', id).single();
     if (!plan) return res.status(404).json({ success: false, message: 'Plan not found.' });
     const site = await verifySiteOwnership(req.cmsUser.id, plan.site_id);
     if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
-    if (plan.stripe_product_id && stripe) {
-      try { await stripe.products.update(plan.stripe_product_id, { active: false }); } catch { /* best effort */ }
-    }
     await supabase.from('site_products').update({ is_active: false }).eq('id', id);
     res.json({ success: true });
   } catch (err) {

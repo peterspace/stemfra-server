@@ -206,6 +206,28 @@ function ownerBookingNotification({ event, customerName, customerEmail, customer
   });
 }
 
+// Membership activated (pay-at-venue) — tenant → member. Sent when the owner
+// confirms the first payment in the CMS. A warm welcome + the renewal date.
+function membershipActivated({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, planName, priceLabel, nextRenewalLabel }) {
+  return renderEmail({
+    brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
+    preheader: `Your ${planName || 'membership'} is active.`,
+    heading: 'Your membership is active.',
+    paragraphs: [
+      ...(firstName ? [`Hi ${firstName},`] : []),
+      `Thanks for joining. Your membership with ${businessName} is now active:`,
+    ],
+    rows: [
+      { label: 'Plan', value: planName || 'Membership' },
+      priceLabel ? { label: 'Amount', value: priceLabel } : null,
+      nextRenewalLabel ? { label: 'Next renewal', value: nextRenewalLabel, bold: true } : null,
+    ],
+    note: `You renew in person at ${businessName}. We'll remind you before your renewal date.`,
+    security: tenantSecurityLine(businessName, businessEmail),
+    reason: `You're receiving this because you started a membership with ${businessName}.`,
+  });
+}
+
 // ─── Stemfra → site owner ─────────────────────────────────────────────────────
 
 // Contact-form lead landed on their site.
@@ -554,6 +576,7 @@ module.exports = {
   ownerLeadNotification,
   ownerChatLeadNotification,
   ownerMembershipSignup,
+  membershipActivated,
   firstVisitFollowup,
   winBack,
   reviewRequest,
