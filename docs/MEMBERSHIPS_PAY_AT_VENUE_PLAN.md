@@ -320,3 +320,31 @@ the MRR run-rate estimate. Bookings/at-visit basis unchanged.
 
 _(Executor: append dated entries per task — what landed, what was verified,
 fixtures cleaned. Commits only; no push without Peter.)_
+
+### 2026-08-05 — A1 (schema) DONE
+
+- **Pre-flight verification** (per ground rule 3 + the advisor checkpoint): the
+  live DB matched §1b exactly before migrating — `collection_mode` absent,
+  2 subscriptions both Stripe-linked, `site_subscription_payments` absent,
+  `user_owned_site_ids()`/`is_stemfra_staff()`/`set_updated_at` all present. No
+  deviation → no advisor escalation needed.
+- **Migration `memberships_pay_at_venue`** applied via `apply_migration`:
+  (1) `site_subscriptions.collection_mode text NOT NULL DEFAULT 'venue'`
+  (CHECK venue|stripe); the 2 existing Stripe rows backfilled to `'stripe'`.
+  (2) New table `site_subscription_payments` per §1b (unique
+  `(subscription_id, period_start)`, two indexes, RLS enabled) with 3
+  authenticated-only policies: owner_read (`user_owned_site_ids()` + staff),
+  staff_all, member_read (via own `site_customers` → subscription). Writes are
+  service-role only (no authenticated write policy).
+- **Verified (SQL):** both subs now `collection_mode='stripe'` (so any NEW venue
+  sub defaults `'venue'`); RLS enabled; exactly 3 policies, all `authenticated`,
+  NO anon policy → anon reads nothing (deny by default).
+- **Types hand-patched** (`packages/site-data/src/database.types.ts`):
+  `collection_mode` added to the 3 `site_subscriptions` shapes; new
+  `site_subscription_payments` table block (Row/Insert/Update + 2 FK
+  relationships). Convenience exports added to `types.ts`: `SiteSubscription`,
+  `SiteSubscriptionPayment`, `SiteSubscriptionPaymentInsert`.
+- **CMS typecheck clean** (`tsc --noEmit -p stemfra_cms/tsconfig.json`, exit 0).
+- Committed (no push): platform (types) + server (this plan doc). Migration is
+  applied to the remote DB directly (Supabase MCP), not a repo file.
+- **Next: A2** (server signup endpoint).
