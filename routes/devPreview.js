@@ -119,6 +119,9 @@ router.get('/booking-rescheduled', (_req, res) => send(res, tx.bookingReschedule
   businessName: 'Zen Haven', businessEmail: 'hello@zen-haven.com', firstName: 'Maya',
   serviceName: 'Hot Stone Massage', dateLabel: 'Saturday, July 18', timeLabel: '11:00 AM',
   oldDateLabel: 'Friday, July 17', oldTimeLabel: '2:30 PM',
+  // Photo included so this preview exercises the two-column card (the branch
+  // the mobile stacking media query rearranges).
+  businessPhotoUrl: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=460&h=900&fit=crop&q=80',
 })));
 
 router.get('/owner-new-booking', (_req, res) => send(res, tx.ownerBookingNotification({

@@ -275,17 +275,28 @@ function tenantDocument({ brand, heading, preheader, paragraphs = [], bodyHtml =
     ${cta ? button({ ...cta, color: cta.color || accent }) : ''}
     ${note ? `<p style="margin:18px 0 0;font-family:${FONT};font-size:13px;line-height:1.6;color:${T.muted};">${nl2br(note)}</p>` : ''}`;
   const photo = brand.photoUrl;
+  // The photo/content cells carry classes so the mobile media query (in <head>)
+  // can stack them: photo becomes a 150px top banner, content goes full-width.
+  // Clients that ignore <style> (old desktop Outlook) keep the two-column
+  // layout, which is fine at desktop widths — the mobile squeeze was the bug
+  // (230px photo left ~150px for the text on a phone).
   const cardInner = photo
     ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
-        <td width="230" style="padding:0;background-color:${accent};background-image:url('${escapeHtml(photo)}');background-position:center;background-size:cover;background-repeat:no-repeat;"></td>
-        <td style="padding:40px 38px;vertical-align:top;background:${T.card};">${content}</td>
+        <td width="230" class="sf-photo" style="padding:0;background-color:${accent};background-image:url('${escapeHtml(photo)}');background-position:center;background-size:cover;background-repeat:no-repeat;"></td>
+        <td class="sf-body" style="padding:40px 38px;vertical-align:top;background:${T.card};">${content}</td>
       </tr></table>`
     : `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td style="padding:40px 40px;background:${T.card};">${content}</td></tr></table>`;
   const bizName = brand.url ? `<a href="${brand.url}" style="color:${T.link};">${escapeHtml(brand.name)}</a>` : escapeHtml(brand.name);
   const links = (footerLinks && footerLinks.length)
     ? footerLinks.map((l) => `<a href="${l.url}" style="color:${T.link};text-decoration:underline;">${escapeHtml(l.label)}</a>`).join(' &middot; ') : '';
   return `<!doctype html>
-<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  @media only screen and (max-width:480px){
+    .sf-photo{display:block !important;width:100% !important;height:150px !important;}
+    .sf-body{display:block !important;width:100% !important;padding:28px 22px !important;box-sizing:border-box !important;}
+  }
+</style></head>
 <body style="margin:0;padding:0;background:${T.bg};">
   ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</div>` : ''}
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:${T.bg};padding:44px 12px 56px;"><tr><td align="center">
