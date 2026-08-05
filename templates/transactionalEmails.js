@@ -407,10 +407,10 @@ function noShowFollowup({ businessName, businessLogoUrl, businessUrl, businessAc
     heading: firstName ? `Sorry we missed you, ${firstName}.` : 'Sorry we missed you.',
     paragraphs: [
       `We had you down for ${serviceName ? serviceName.toLowerCase() : 'a visit'}${dateLabel ? ` on ${dateLabel}` : ''}, but didn't get to see you.`,
-      "No worries at all. Life happens. Whenever you're ready, we'd love to get you back in.",
+      "No worries at all. Life happens. If that time didn't work out, you can pick a new one that suits you better. We'd love to get you back in.",
     ],
-    cta: bookingUrl ? { label: 'Rebook your visit', url: bookingUrl } : undefined,
-    note: `Questions? Just reply to this email. ${businessName} is happy to help.`,
+    cta: bookingUrl ? { label: 'Reschedule your visit', url: bookingUrl } : undefined,
+    note: `Wrong about the missed visit? Just reply to this email and ${businessName} will sort it out.`,
     reason: `You're receiving this because you had a booking with ${businessName}.`,
     unsubscribeUrl,
   });
