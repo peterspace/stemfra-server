@@ -76,7 +76,7 @@ const computeAvailability = async ({ siteId, teamMemberId, serviceId, date, allo
   const { data: bookings } = await supabase
     .from('site_bookings').select('starts_at, ends_at, status')
     .eq('team_member_id', teamMemberId).eq('site_id', siteId)
-    .neq('status', 'cancelled')
+    .neq('status', 'canceled')
     .gte('starts_at', startOfDay.toUTC().toISO())
     .lt('starts_at', endOfDayNext.toUTC().toISO());
 
@@ -200,7 +200,7 @@ const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, start
 // P12 (direct-key payments): pass `pending:true` for the booking-FIRST hosted
 // Checkout flow. It writes a HELD row — `status='pending_payment'`,
 // `payment_status='pending'` — which blocks the slot (both availability paths
-// filter status != 'cancelled') but sends NO emails and takes no payment; the
+// filter status != 'canceled') but sends NO emails and takes no payment; the
 // payment flow finalizes it (finalizeBookingPayment) on Checkout success, or the
 // reconciler sweeper cancels it on expiry. Returns { ok, pending:true, bookingId,
 // amountCents, currency, serviceName, startsAtIso }.
@@ -234,7 +234,7 @@ const placeBooking = async ({
   // Re-check the slot is still free (guard against double-booking between availability load and submit)
   const { data: clashes } = await supabase
     .from('site_bookings').select('id, starts_at, ends_at')
-    .eq('team_member_id', teamMemberId).eq('site_id', siteId).neq('status', 'cancelled')
+    .eq('team_member_id', teamMemberId).eq('site_id', siteId).neq('status', 'canceled')
     .gte('starts_at', startsAt.startOf('day').toUTC().toISO())
     .lt('starts_at', startsAt.startOf('day').plus({ days: 1 }).toUTC().toISO());
   const conflict = (clashes || []).some(b => {
@@ -372,7 +372,7 @@ const finalizeBookingPayment = async ({ bookingId, amountCents = null, paymentIn
   if (b.status === 'confirmed' && b.payment_status === 'paid') {
     return { ok: true, code: 200, idempotent: true, booking: label };
   }
-  // Only a still-held booking can be finalized (a cancelled/expired one must not resurrect).
+  // Only a still-held booking can be finalized (a canceled/expired one must not resurrect).
   if (b.status !== 'pending_payment') {
     return { ok: false, code: 409, message: 'This booking is no longer pending payment.' };
   }
@@ -442,7 +442,7 @@ const getMonthAvailability = async (req, res) => {
     // Pull all bookings for this barber in the month once
     const monthEnd = monthStart.plus({ months: 1 });
     const { data: bookings } = await supabase.from('site_bookings').select('starts_at, ends_at, status')
-      .eq('team_member_id', teamMemberId).eq('site_id', siteId).neq('status', 'cancelled')
+      .eq('team_member_id', teamMemberId).eq('site_id', siteId).neq('status', 'canceled')
       .gte('starts_at', monthStart.toUTC().toISO()).lt('starts_at', monthEnd.toUTC().toISO());
     const busy = (bookings || []).map(b => ({
       start: DateTime.fromISO(b.starts_at, { zone }),
@@ -612,7 +612,7 @@ const placeBookingGroup = async ({
 
       const { data: clashes } = await supabase
         .from('site_bookings').select('id, starts_at, ends_at')
-        .eq('team_member_id', h.teamMemberId).eq('site_id', siteId).neq('status', 'cancelled')
+        .eq('team_member_id', h.teamMemberId).eq('site_id', siteId).neq('status', 'canceled')
         .gte('starts_at', dayStart.toUTC().toISO())
         .lt('starts_at', dayEnd.toUTC().toISO());
 
@@ -911,7 +911,7 @@ const finalizeGroupPayment = async ({ sessionId, paymentIntentId = null }) => {
 // ─── Class-based booking (Phase 2) ───────────────────────────────────────────
 // Classes are site_services with kind='class'. A scheduled occurrence is a
 // site_class_sessions row; a class booking is a site_bookings row pointing at the
-// session. Spots left = session.capacity − non-cancelled bookings for the session.
+// session. Spots left = session.capacity − non-canceled bookings for the session.
 
 // Core: list upcoming open class sessions (no HTTP). Returns { ok, code?, message?,
 // zone, sessions:[{id, serviceId, serviceName, instructor, teamMemberId, startsAt,
@@ -937,7 +937,7 @@ const listClassSessions = async ({ siteId, serviceId, days = 21, allowedStatuses
   const counts = {};
   if (ids.length) {
     const { data: bks } = await supabase.from('site_bookings')
-      .select('class_session_id').in('class_session_id', ids).neq('status', 'cancelled');
+      .select('class_session_id').in('class_session_id', ids).neq('status', 'canceled');
     for (const b of (bks || [])) counts[b.class_session_id] = (counts[b.class_session_id] || 0) + 1;
   }
 
@@ -973,7 +973,7 @@ const bookClassSession = async ({ siteId, sessionId, customer, notes, paymentInt
   if (s.status !== 'scheduled') return { ok: false, code: 409, message: 'That class is no longer available.' };
 
   const { count } = await supabase.from('site_bookings')
-    .select('id', { count: 'exact', head: true }).eq('class_session_id', sessionId).neq('status', 'cancelled');
+    .select('id', { count: 'exact', head: true }).eq('class_session_id', sessionId).neq('status', 'canceled');
   if ((count || 0) >= s.capacity) return { ok: false, code: 409, message: 'That class is full.' };
 
   // Payment verification (parity with placeBooking) — confirm the PI succeeded +
@@ -1025,7 +1025,7 @@ const bookClassSession = async ({ siteId, sessionId, customer, notes, paymentInt
 
   // Already booked into this session → idempotent.
   const { data: dupe } = await supabase.from('site_bookings')
-    .select('id').eq('class_session_id', sessionId).eq('customer_id', customerId).neq('status', 'cancelled').maybeSingle();
+    .select('id').eq('class_session_id', sessionId).eq('customer_id', customerId).neq('status', 'canceled').maybeSingle();
   if (dupe) return { ok: true, idempotent: true, booking: { id: dupe.id, date: start.toFormat('cccc, LLLL d'), time: start.toFormat('h:mm a') } };
 
   const { data: booking, error: bErr } = await supabase.from('site_bookings').insert([{

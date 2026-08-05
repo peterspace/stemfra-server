@@ -64,7 +64,7 @@ async function loadMembershipMrr(siteId) {
 //   online   → paid via Stripe (collected)
 //   atVisit  → Task #20 pay-at-visit: confirmed/completed, unpaid, has an amount
 //   refunded → info only, not revenue
-//   none     → free $0 / cancelled / pending → excluded
+//   none     → free $0 / canceled / pending → excluded
 function classify(b) {
   const amt = b.amount_cents || 0;
   if (b.payment_status === 'paid') return { kind: 'online', cents: amt };

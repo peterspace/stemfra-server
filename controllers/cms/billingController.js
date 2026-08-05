@@ -28,7 +28,7 @@ async function getBilling(req, res) {
   if (!site) return res.status(403).json({ error: 'Not your site' });
 
   const { data: sub } = await supabase.from('subscriptions')
-    .select('id, status, provider, build_amount_cents, monthly_amount_cents, currency, started_at, current_period_end, cancel_at_period_end, cancelled_at, metadata')
+    .select('id, status, provider, build_amount_cents, monthly_amount_cents, currency, started_at, current_period_end, cancel_at_period_end, canceled_at, metadata')
     .eq('site_id', siteId).maybeSingle();
 
   // Every charge for this site: commission + domain adjustments (subscription_id NULL)
@@ -135,11 +135,11 @@ async function cancelSubscription(req, res) {
   if (!site) return res.status(403).json({ error: 'Not your site' });
   const { data: sub } = await supabase.from('subscriptions').select('id, status, metadata').eq('site_id', siteId).maybeSingle();
   if (!sub) return res.status(400).json({ error: 'No subscription to cancel.' });
-  if (!['active', 'past_due'].includes(sub.status)) return res.status(400).json({ error: 'This subscription can’t be cancelled from here.' });
+  if (!['active', 'past_due'].includes(sub.status)) return res.status(400).json({ error: 'This subscription can’t be canceled from here.' });
 
   const metadata = { ...(sub.metadata || {}), cancel_reasons: reasons || null, cancel_feedback: feedback || null };
   const { data, error } = await supabase.from('subscriptions')
-    .update({ cancel_at_period_end: true, cancelled_at: new Date().toISOString(), metadata })
+    .update({ cancel_at_period_end: true, canceled_at: new Date().toISOString(), metadata })
     .eq('id', sub.id).select('*').single();
   if (error) return res.status(500).json({ error: error.message });
   logSiteActivity({ siteId, action: 'subscription_cancel_requested', actorName: req.cmsUser.email, entityType: 'subscription', entityId: sub.id, details: { reasons, feedback } });
@@ -155,7 +155,7 @@ async function reactivateSubscription(req, res) {
   const { data: sub } = await supabase.from('subscriptions').select('id').eq('site_id', siteId).maybeSingle();
   if (!sub) return res.status(400).json({ error: 'No subscription.' });
   const { data, error } = await supabase.from('subscriptions')
-    .update({ cancel_at_period_end: false, cancelled_at: null }).eq('id', sub.id).select('*').single();
+    .update({ cancel_at_period_end: false, canceled_at: null }).eq('id', sub.id).select('*').single();
   if (error) return res.status(500).json({ error: error.message });
   logSiteActivity({ siteId, action: 'subscription_reactivated', actorName: req.cmsUser.email, entityType: 'subscription', entityId: sub.id });
   return res.json({ subscription: data });

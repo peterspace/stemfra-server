@@ -23,7 +23,7 @@ const supabase = require('../../config/supabase');
 const ZONE = 'stemfra.com';
 const CAPS = { bookings: 10000, leads: 10000, activity: 5000, chats: 5000, news: 5000 };
 
-// Revenue counts bookings that stood (confirmed/completed); cancelled/no_show
+// Revenue counts bookings that stood (confirmed/completed); canceled/no_show
 // are excluded from revenue but still count as "activity" for last-seen.
 const REVENUE_STATUSES = new Set(['confirmed', 'completed']);
 

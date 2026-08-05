@@ -69,14 +69,17 @@ bottom of this file + ROADMAP P14 as tasks land._
   14-day grace window. Member keeps access/status display.
 - `expired` — grace passed unconfirmed. Terminal unless owner reactivates by
   confirming a payment (periods restart from confirmation date).
-- `cancelled` — member or owner cancelled (`canceled_at` COLUMN stamped — the
-  column keeps Stripe's spelling; only the status VALUE is standardized;
+- `canceled` — member or owner canceled (`canceled_at` stamped;
   `cancel_at_period_end` honored: stays `active` until period end, then
-  `cancelled`, no reminders). **NOTE (2026-08-05, Peter): the status VALUE is
-  `cancelled` (British) everywhere** — the codebase-dominant spelling (94:14).
-  System A + the Stripe webhook's `mapSubStatus` already normalize Stripe's
-  `canceled` → `cancelled`; the System B webhook + venue paths now do too, so all
-  subscription rows share ONE vocabulary. (A3 briefly wrote `canceled`; corrected.)
+  `canceled`, no reminders). **NOTE (2026-08-05, Peter — FINAL): the status VALUE
+  is `canceled` (American) EVERYWHERE** — standardized across the whole codebase +
+  DB (migration `standardize_canceled_spelling`) to match Stripe + Twilio and end
+  the British/American split. This flipped `site_bookings.status`,
+  `site_subscriptions.status`, `site_class_sessions.status`, `setup_calls.status`,
+  the `subscription_status` enum value, the `cancelled_at`→`canceled_at` columns
+  (sites, subscriptions), the `notif_on_booking`/`update_customer_booking_stats`
+  triggers + CHECK constraints, activity action names, notification types, and all
+  code/copy (44 files). (Earlier turns briefly used `cancelled`; fully reversed.)
 
 `renewal_due` and `expired` are DERIVED + STAMPED by the sweeper (E2), not by
 readers: readers trust `status`.

@@ -221,7 +221,7 @@ async function createCheckout(req, res) {
       mode: 'subscription',
       line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
       success_url: `${base}?membership=success`,
-      cancel_url: `${base}?membership=cancelled`,
+      cancel_url: `${base}?membership=canceled`,
       metadata: { kind: 'site_membership', site_id: siteId, product_id: productId },
       subscription_data: {
         application_fee_percent: SUBSCRIPTION_APP_FEE_PCT,

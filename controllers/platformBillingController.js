@@ -48,7 +48,7 @@ async function createCheckout(req, res) {
     const result = await createPlatformCheckout({
       siteId, monthlyAmountCents, buildAmountCents, currency,
       successUrl: `${RETURN_URL}?billing=success`,
-      cancelUrl: `${RETURN_URL}?billing=cancelled`,
+      cancelUrl: `${RETURN_URL}?billing=canceled`,
     });
     res.json({ success: true, ...result });
   } catch (err) {

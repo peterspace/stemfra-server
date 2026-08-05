@@ -188,7 +188,7 @@ async function createBookingCheckout({ siteId, teamMemberId, serviceId, date, ti
     return { ok: true, url: session.url, sessionId: session.id, bookingId: held.bookingId };
   } catch (err) {
     // Session creation failed → release the held slot so it isn't stuck.
-    await supabase.from('site_bookings').update({ status: 'cancelled', payment_status: 'failed' }).eq('id', held.bookingId);
+    await supabase.from('site_bookings').update({ status: 'canceled', payment_status: 'failed' }).eq('id', held.bookingId);
     console.error('[sitePayments.createBookingCheckout] session create failed:', err.message);
     return { ok: false, code: 502, message: 'Could not start checkout. Please try again.' };
   }
@@ -274,8 +274,8 @@ async function createGroupCheckout({ siteId, items, customer, notes, paymentChoi
     return { ok: true, url: session.url, sessionId: session.id, groupId: held.groupId };
   } catch (err) {
     // Session creation failed → release the whole held basket.
-    await supabase.from('site_bookings').update({ status: 'cancelled', payment_status: 'failed' }).eq('group_id', held.groupId);
-    await supabase.from('site_booking_groups').update({ status: 'cancelled' }).eq('id', held.groupId);
+    await supabase.from('site_bookings').update({ status: 'canceled', payment_status: 'failed' }).eq('group_id', held.groupId);
+    await supabase.from('site_booking_groups').update({ status: 'canceled' }).eq('id', held.groupId);
     console.error('[sitePayments.createGroupCheckout] session create failed:', err.message);
     return { ok: false, code: 502, message: 'Could not start checkout. Please try again.' };
   }

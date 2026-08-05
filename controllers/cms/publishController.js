@@ -88,7 +88,7 @@ async function billingCheckout(req, res) {
       // NB: must target /settings/publish directly — bare /settings redirects
       // via <Navigate>, which drops the ?billing= query the CMS reacts to.
       successUrl: `${CMS_URL}/settings/publish?billing=success`,
-      cancelUrl: `${CMS_URL}/settings/publish?billing=cancelled`,
+      cancelUrl: `${CMS_URL}/settings/publish?billing=canceled`,
     });
     res.json(result);
   } catch (err) {

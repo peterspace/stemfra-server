@@ -58,7 +58,7 @@ async function startCheckout(req, res) {
       buildAmountCents: v.build_price_cents,
       currency: v.currency || 'usd',
       successUrl: `${CMS_URL}/settings?billing=success`,
-      cancelUrl: `${CMS_URL}/settings?billing=cancelled`,
+      cancelUrl: `${CMS_URL}/settings?billing=canceled`,
     });
     res.json({ ok: true, url: result.url });
   } catch (err) {

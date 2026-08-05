@@ -10,7 +10,7 @@ router.post('/billing-portal', billingPortal);
 router.post('/cancel-booking', cancelBooking);
 // Member cancels their own membership (at period end).
 router.post('/cancel-subscription', cancelSubscription);
-// Member changes their mind and reactivates a cancelling membership.
+// Member changes their mind and reactivates a canceling membership.
 router.post('/reactivate-subscription', reactivateSubscription);
 // Member reschedules their own upcoming appointment.
 router.post('/reschedule-booking', rescheduleBooking);

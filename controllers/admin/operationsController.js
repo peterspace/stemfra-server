@@ -107,12 +107,12 @@ async function cancelMembership(req, res) {
     const mode = req.body?.mode === 'now' ? 'now' : 'period_end';
     if (mode === 'now') {
       await stripe.subscriptions.cancel(sub.stripe_subscription_id);
-      await supabase.from('site_subscriptions').update({ status: 'cancelled', canceled_at: new Date().toISOString(), cancel_at_period_end: false }).eq('id', sub.id);
+      await supabase.from('site_subscriptions').update({ status: 'canceled', canceled_at: new Date().toISOString(), cancel_at_period_end: false }).eq('id', sub.id);
     } else {
       await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: true });
       await supabase.from('site_subscriptions').update({ cancel_at_period_end: true }).eq('id', sub.id);
     }
-    await logSiteActivity({ siteId: sub.site_id, actorName: req.staffUser?.email, action: 'subscription_cancelled', entityType: 'site_subscription', entityId: sub.id, details: { mode, by: 'staff' } });
+    await logSiteActivity({ siteId: sub.site_id, actorName: req.staffUser?.email, action: 'subscription_canceled', entityType: 'site_subscription', entityId: sub.id, details: { mode, by: 'staff' } });
     res.json({ ok: true, mode });
   } catch (err) {
     res.status(500).json({ error: err.message });

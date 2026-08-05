@@ -138,14 +138,14 @@ function bookingReminder({ businessName, businessLogoUrl, businessEmail, busines
 }
 
 // Cancellation confirmation — tenant → visitor.
-function bookingCancelled({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, serviceName, dateLabel, timeLabel, cancelledByBusiness }) {
+function bookingCanceled({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, serviceName, dateLabel, timeLabel, canceledByBusiness }) {
   return renderEmail({
     brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
-    preheader: `Your ${dateLabel} booking has been cancelled.`,
-    heading: 'Your booking has been cancelled.',
+    preheader: `Your ${dateLabel} booking has been canceled.`,
+    heading: 'Your booking has been canceled.',
     paragraphs: [
-      ...(firstName && !cancelledByBusiness ? [`Hi ${firstName},`] : []),
-      cancelledByBusiness
+      ...(firstName && !canceledByBusiness ? [`Hi ${firstName},`] : []),
+      canceledByBusiness
         ? `${businessName} had to cancel the following booking. Sorry about the change of plans:`
         : 'This confirms your cancellation:',
     ],
@@ -184,14 +184,14 @@ function bookingRescheduled({ businessName, businessLogoUrl, businessEmail, busi
 
 // New booking / cancellation — Stemfra → site owner.
 function ownerBookingNotification({ event, customerName, customerEmail, customerPhone, serviceName, dateLabel, timeLabel, oldDateLabel, oldTimeLabel, dashboardUrl }) {
-  const cancelled = event === 'cancelled';
+  const canceled = event === 'canceled';
   const rescheduled = event === 'rescheduled';
   const who = customerName || 'A customer';
   return renderEmail({
-    preheader: cancelled ? `${who} cancelled their booking.` : rescheduled ? `${who} rescheduled their booking.` : `${who} just booked.`,
-    eyebrow: cancelled ? 'Booking cancelled' : rescheduled ? 'Booking rescheduled' : 'New booking',
-    heading: cancelled ? 'A booking was cancelled' : rescheduled ? 'A booking was rescheduled' : 'You have a new booking',
-    paragraphs: [cancelled ? 'A booking on your calendar was cancelled:' : rescheduled ? 'A booking on your calendar moved to a new time:' : 'A new booking just landed on your calendar:'],
+    preheader: canceled ? `${who} canceled their booking.` : rescheduled ? `${who} rescheduled their booking.` : `${who} just booked.`,
+    eyebrow: canceled ? 'Booking canceled' : rescheduled ? 'Booking rescheduled' : 'New booking',
+    heading: canceled ? 'A booking was canceled' : rescheduled ? 'A booking was rescheduled' : 'You have a new booking',
+    paragraphs: [canceled ? 'A booking on your calendar was canceled:' : rescheduled ? 'A booking on your calendar moved to a new time:' : 'A new booking just landed on your calendar:'],
     rows: [
       { label: 'Customer', value: customerName || '(no name)' },
       customerEmail ? { label: 'Email', value: customerEmail } : null,
@@ -568,7 +568,7 @@ function staffOrphanPaymentAlert({ amountLabel, paymentIntentId, siteId }) {
 module.exports = {
   bookingConfirmation,
   bookingReminder,
-  bookingCancelled,
+  bookingCanceled,
   bookingRescheduled,
   ownerBookingNotification,
   classConfirmation,

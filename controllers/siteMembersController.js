@@ -24,12 +24,12 @@ const isVenueSub = (sub) => sub.collection_mode === 'venue' || !sub.stripe_subsc
 
 // Best-effort owner bell when a member self-cancels (the "no front desk" value —
 // the owner should know to expect the member to lapse). Never throws.
-async function notifyOwnerMemberCancelled(sub, memberEmail) {
+async function notifyOwnerMemberCanceled(sub, memberEmail) {
   try {
     await supabase.from('cms_notifications').insert([{
-      site_id: sub.site_id, type: 'member_cancelled', category: 'operations',
-      title: 'A member cancelled their membership',
-      body: `${memberEmail || 'A member'} cancelled at the end of their current period.`,
+      site_id: sub.site_id, type: 'member_canceled', category: 'operations',
+      title: 'A member canceled their membership',
+      body: `${memberEmail || 'A member'} canceled at the end of their current period.`,
       href: '/memberships', metadata: { subscription_id: sub.id },
     }]);
   } catch (e) { console.warn('[siteMembers] owner cancel notification failed:', e.message); }
@@ -143,15 +143,15 @@ async function cancelBookingCore({ bookingId, member }) {
   const owns = cust && (cust.auth_user_id === user.id || (cust.email || '').toLowerCase() === (user.email || '').toLowerCase());
   if (!owns) return { ok: false, code: 403, message: 'Not your booking.' };
 
-  if (b.status !== 'confirmed') return { ok: false, code: 400, message: 'This booking can no longer be cancelled.' };
-  if (new Date(b.starts_at).getTime() <= Date.now()) return { ok: false, code: 400, message: 'Past appointments cannot be cancelled.' };
+  if (b.status !== 'confirmed') return { ok: false, code: 400, message: 'This booking can no longer be canceled.' };
+  if (new Date(b.starts_at).getTime() <= Date.now()) return { ok: false, code: 400, message: 'Past appointments cannot be canceled.' };
 
-  await supabase.from('site_bookings').update({ status: 'cancelled' }).eq('id', b.id);
+  await supabase.from('site_bookings').update({ status: 'canceled' }).eq('id', b.id);
   await logSiteActivity({
     siteId: b.site_id, actorName: user.email,
-    action: 'booking_cancelled_by_member', entityType: 'site_booking', entityId: b.id,
+    action: 'booking_canceled_by_member', entityType: 'site_booking', entityId: b.id,
   });
-  sendCancellationEmails(b.id, { cancelledByBusiness: false }).catch(() => {});
+  sendCancellationEmails(b.id, { canceledByBusiness: false }).catch(() => {});
   return { ok: true, booking: b };
 }
 
@@ -185,8 +185,8 @@ async function cancelSubscription(req, res) {
     if (!owns) return res.status(403).json({ success: false, message: 'Not your membership.' });
 
     const venue = isVenueSub(sub);
-    // Ended/pending subs can't be self-cancelled from the portal.
-    if (['cancelled', 'expired', 'pending'].includes(sub.status)) return res.status(400).json({ success: false, message: 'This membership cannot be cancelled.' });
+    // Ended/pending subs can't be self-canceled from the portal.
+    if (['canceled', 'expired', 'pending'].includes(sub.status)) return res.status(400).json({ success: false, message: 'This membership cannot be canceled.' });
     if (!venue && !stripe) return res.status(503).json({ success: false, message: 'Billing is not configured.' });
 
     const cleanReasons = Array.isArray(reasons) ? reasons.filter(r => typeof r === 'string').slice(0, 10) : [];
@@ -196,14 +196,14 @@ async function cancelSubscription(req, res) {
     if (!venue) await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: true });
     await supabase.from('site_subscriptions').update({
       cancel_at_period_end: true,
-      metadata: { ...(sub.metadata || {}), cancel_reasons: cleanReasons, cancel_feedback: cleanFeedback, cancelled_by_member_at: new Date().toISOString() },
+      metadata: { ...(sub.metadata || {}), cancel_reasons: cleanReasons, cancel_feedback: cleanFeedback, canceled_by_member_at: new Date().toISOString() },
     }).eq('id', sub.id);
     await logSiteActivity({
       siteId: sub.site_id, actorName: user.email,
-      action: 'subscription_cancelled_by_member', entityType: 'site_subscription', entityId: sub.id,
+      action: 'subscription_canceled_by_member', entityType: 'site_subscription', entityId: sub.id,
       details: { reasons: cleanReasons, feedback: cleanFeedback },
     });
-    if (venue) await notifyOwnerMemberCancelled(sub, user.email); // owner has no Stripe/webhook signal for venue subs
+    if (venue) await notifyOwnerMemberCanceled(sub, user.email); // owner has no Stripe/webhook signal for venue subs
     res.json({ success: true });
   } catch (err) {
     console.error('[siteMembers.cancelSubscription]', err.message);
@@ -234,15 +234,15 @@ async function reactivateSubscription(req, res) {
     if (!owns) return res.status(403).json({ success: false, message: 'Not your membership.' });
 
     const venue = isVenueSub(sub);
-    // Only an active (not fully ended) membership can be un-cancelled.
-    if (['cancelled', 'expired', 'pending'].includes(sub.status)) {
+    // Only an active (not fully ended) membership can be un-canceled.
+    if (['canceled', 'expired', 'pending'].includes(sub.status)) {
       return res.status(400).json({ success: false, message: 'This membership has ended — please re-subscribe.' });
     }
     if (!venue && !stripe) return res.status(503).json({ success: false, message: 'Billing is not configured.' });
 
     if (!venue) await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: false });
     const md = { ...(sub.metadata || {}) };
-    delete md.cancel_reasons; delete md.cancel_feedback; delete md.cancelled_by_member_at;
+    delete md.cancel_reasons; delete md.cancel_feedback; delete md.canceled_by_member_at;
     await supabase.from('site_subscriptions').update({ cancel_at_period_end: false, metadata: md }).eq('id', sub.id);
     await logSiteActivity({
       siteId: sub.site_id, actorName: user.email,

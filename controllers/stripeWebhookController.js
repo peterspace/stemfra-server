@@ -16,14 +16,14 @@ const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const ORPHAN_GRACE_MS = 20_000;
 
 // Map a Stripe subscription status → our `subscription_status` enum
-// (pending | active | past_due | cancelled | expired).
+// (pending | active | past_due | canceled | expired).
 function mapSubStatus(s) {
   switch (s) {
     case 'active':
     case 'trialing': return 'active';
     case 'past_due':
     case 'unpaid': return 'past_due';
-    case 'canceled': return 'cancelled';
+    case 'canceled': return 'canceled';
     case 'incomplete_expired': return 'expired';
     default: return 'pending'; // incomplete, paused, etc.
   }
@@ -230,18 +230,17 @@ async function handleWebhook(req, res) {
         if (sub.metadata?.kind === 'platform_billing') {
           // System A — maps to the subscription_status enum.
           await supabase.from('subscriptions').update({
-            status: deleted ? 'cancelled' : mapSubStatus(sub.status),
+            status: deleted ? 'canceled' : mapSubStatus(sub.status),
             current_period_start: subPeriodStart(sub),
             current_period_end: subPeriodEnd(sub),
             cancel_at_period_end: !!sub.cancel_at_period_end,
-            cancelled_at: tsToIso(sub.canceled_at),
+            canceled_at: tsToIso(sub.canceled_at),
           }).eq('stripe_subscription_id', sub.id);
         } else if (sub.metadata?.kind === 'site_membership') {
-          // System B — site_subscriptions.status stores the raw Stripe status,
-          // except Stripe's 'canceled' is normalized to our 'cancelled' so the
-          // status vocabulary matches System A + the venue path.
+          // System B — site_subscriptions.status stores the raw Stripe status
+          // (Stripe's 'canceled' already matches our standardized spelling).
           await supabase.from('site_subscriptions').update({
-            status: deleted ? 'cancelled' : (sub.status === 'canceled' ? 'cancelled' : sub.status),
+            status: deleted ? 'canceled' : sub.status,
             current_period_end: subPeriodEnd(sub),
             cancel_at_period_end: !!sub.cancel_at_period_end,
             canceled_at: tsToIso(sub.canceled_at),

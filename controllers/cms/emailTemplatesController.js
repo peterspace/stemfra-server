@@ -50,9 +50,9 @@ const VARIANTS = {
     ...brandArgs(b), firstName: S.firstName, serviceName: S.serviceName,
     dateLabel: S.dateLabel, timeLabel: S.timeLabel, isClass: false,
   }),
-  booking_cancelled: (b) => emails.bookingCancelled({
+  booking_canceled: (b) => emails.bookingCanceled({
     ...brandArgs(b), firstName: S.firstName, serviceName: S.serviceName,
-    dateLabel: S.dateLabel, timeLabel: S.timeLabel, cancelledByBusiness: true,
+    dateLabel: S.dateLabel, timeLabel: S.timeLabel, canceledByBusiness: true,
   }),
   review_request: (b) => emails.reviewRequest({
     ...brandArgs(b), firstName: S.firstName, serviceName: S.serviceName,
@@ -72,7 +72,7 @@ function listVariants(req, res) {
       { key: 'booking_confirmation', label: 'Booking confirmation', editableHeading: true },
       { key: 'class_confirmation', label: 'Class confirmation', editableHeading: false },
       { key: 'booking_reminder', label: 'Appointment reminder', editableHeading: false },
-      { key: 'booking_cancelled', label: 'Booking cancelled', editableHeading: false },
+      { key: 'booking_canceled', label: 'Booking canceled', editableHeading: false },
       { key: 'review_request', label: 'Review request', editableHeading: false },
       { key: 'win_back', label: 'We miss you', editableHeading: false },
     ],

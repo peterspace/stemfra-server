@@ -18,13 +18,13 @@ router.use(requireCmsAuth);
 // PATCH /api/cms/bookings/:bookingId/adjust — change delivered service/price/duration (task 60).
 router.patch('/:bookingId/adjust', adjustBooking);
 
-// POST /api/cms/bookings/notify { siteId, bookingId, event: 'cancelled'|'rescheduled', oldStartsAt? }
+// POST /api/cms/bookings/notify { siteId, bookingId, event: 'canceled'|'rescheduled', oldStartsAt? }
 router.post('/notify', async (req, res) => {
   try {
     const { siteId, bookingId, event, oldStartsAt } = req.body || {};
     const site = await verifySiteOwnership(req.cmsUser.id, siteId);
     if (!site) return res.status(403).json({ error: 'You do not have access to this site.' });
-    if (!bookingId || !['cancelled', 'rescheduled', 'no_show'].includes(event)) {
+    if (!bookingId || !['canceled', 'rescheduled', 'no_show'].includes(event)) {
       return res.status(400).json({ error: 'bookingId and a valid event are required.' });
     }
 
@@ -34,7 +34,7 @@ router.post('/notify', async (req, res) => {
     if (!b || b.site_id !== siteId) return res.status(404).json({ error: 'Booking not found on this site.' });
 
     let result;
-    if (event === 'cancelled') result = await sendCancellationEmails(bookingId, { cancelledByBusiness: true });
+    if (event === 'canceled') result = await sendCancellationEmails(bookingId, { canceledByBusiness: true });
     else if (event === 'rescheduled') result = await sendRescheduleEmails(bookingId, { oldStartsAtISO: oldStartsAt || null });
     else result = { client: await sendNoShow(bookingId) }; // no_show
     res.json({ ok: true, sent: result });
@@ -66,7 +66,7 @@ router.post('/resend-confirmation', async (req, res) => {
 
 // POST /api/cms/bookings/cancel-class-session { siteId, sessionId }
 // Owner tool: cancel a whole class session — mark the session + every confirmed
-// booking cancelled, and email each enrolled customer. Best-effort emails.
+// booking canceled, and email each enrolled customer. Best-effort emails.
 router.post('/cancel-class-session', async (req, res) => {
   try {
     const { siteId, sessionId } = req.body || {};
@@ -85,14 +85,14 @@ router.post('/cancel-class-session', async (req, res) => {
     let notified = 0;
     for (const bk of enrolled || []) {
       await supabase.from('site_bookings')
-        .update({ status: 'cancelled', reminder_24h_sent_at: new Date().toISOString() }) // stamp so no reminder fires for a cancelled slot
+        .update({ status: 'canceled', reminder_24h_sent_at: new Date().toISOString() }) // stamp so no reminder fires for a canceled slot
         .eq('id', bk.id);
-      const r = await sendCancellationEmails(bk.id, { cancelledByBusiness: true });
+      const r = await sendCancellationEmails(bk.id, { canceledByBusiness: true });
       if (r?.client) notified += 1;
     }
-    await supabase.from('site_class_sessions').update({ status: 'cancelled' }).eq('id', sessionId);
+    await supabase.from('site_class_sessions').update({ status: 'canceled' }).eq('id', sessionId);
 
-    res.json({ ok: true, cancelled: (enrolled || []).length, notified });
+    res.json({ ok: true, canceled: (enrolled || []).length, notified });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

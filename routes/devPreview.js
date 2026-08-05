@@ -27,7 +27,7 @@ function indexPage() {
     ['class-confirmation', 'Class confirmation (tenant brand)'],
     ['visit-confirmation', 'Salon visit — multi-service (tenant brand)'],
     ['booking-reminder', 'Booking reminder — 24h (tenant brand)'],
-    ['booking-cancelled', 'Booking cancelled (tenant brand)'],
+    ['booking-canceled', 'Booking canceled (tenant brand)'],
     ['booking-rescheduled', 'Booking rescheduled (tenant brand)'],
     ['owner-new-booking', 'Owner: new booking'],
     ['first-visit-followup', 'Lifecycle: first-visit follow-up (tenant brand)'],
@@ -109,10 +109,10 @@ router.get('/booking-reminder', (_req, res) => send(res, tx.bookingReminder({
   unsubscribeUrl: 'https://api.stemfra.com/api/site-emails/unsubscribe?token=sample',
 })));
 
-router.get('/booking-cancelled', (_req, res) => send(res, tx.bookingCancelled({
+router.get('/booking-canceled', (_req, res) => send(res, tx.bookingCanceled({
   businessName: 'Argyle & Sons', businessEmail: 'hello@argyle-and-sons.com', firstName: 'James',
   serviceName: 'Classic Cut & Hot Towel', dateLabel: 'Friday, July 17', timeLabel: '2:30 PM',
-  cancelledByBusiness: true,
+  canceledByBusiness: true,
 })));
 
 router.get('/booking-rescheduled', (_req, res) => send(res, tx.bookingRescheduled({
