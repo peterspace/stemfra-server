@@ -700,3 +700,35 @@ kill-switch), E (member lifecycle: renewal reminders/portal v2/yoga surface).
   Committed (server 195a60d), no push. **E3 COMPLETE.** Remaining in Phase E: E1
   (member area v2 across crossfit/massage/spa + yoga) and E4 (yoga membership
   surface).
+
+### E1 — member area v2 (2026-08-06)
+
+- **Shared member `AccountPage`** (crossfit/massage/spa were byte-identical
+  copies; edited crossfit as the reference then propagated). Membership card
+  gained: a **status pill** (`subStatusPill` — active reads in the theme accent;
+  renewal_due amber, pending indigo, expired/canceled/paused neutral), the
+  **renew-by date**, **"visits this period"** (member bookings whose `starts_at`
+  falls inside the current billing window — the latest confirmed
+  `site_subscription_payments` period, else the sub's `current_period_end`), and a
+  **payment history** list (date · method · amount). New member self-read of
+  `site_subscription_payments` via the `_member_read` RLS policy.
+- **"Manage billing"** (Stripe portal) now gated on `collection_mode === 'stripe'`
+  — hidden for venue subs (no Stripe customer behind them).
+- **Dead links fixed** via a per-app `PLANS_HREF` const: crossfit → `/memberships`
+  (the A4 Join flow); massage/spa/yoga → `/` (home) until they get a plans surface
+  (yoga's is E4). "Restart membership" now also shows for `expired`.
+- **Contrast fix (all themes):** button text on the accent switched from a
+  hardcoded `#0A0A0A` to `var(--site-on-accent, #0A0A0A)` — the sign-in /
+  reactivate / reschedule buttons were dark-on-dark on dark-accent themes (caught
+  live: yoga's demo accent is `#141414`).
+- **Yoga portal ADDED** (was missing entirely): `lib/members.ts` +
+  `lib/supabaseAuth.ts` (verbatim from massage), `pages/AccountPage.tsx`, the
+  `/account` route, and an "Account" nav item.
+- **Verified live:** signed-out on crossfit (regression) + yoga (new port,
+  contrast fixed) + massage (0 console errors); **signed-in venue card** exercised
+  with a throwaway venue member on forge-and-bell (minted session injected) —
+  ACTIVE pill, "Renews 16/08/2026", "Visits this period: 2", payment history
+  ("17 Jul 2026 · cash → $175"), and NO Manage billing. Test data + auth user +
+  session all cleaned up. All 4 apps typecheck clean. Committed (platform
+  0a7d356), no push. **E1 COMPLETE.** Remaining in Phase E: **E4** (yoga
+  membership surface + Join flow).
