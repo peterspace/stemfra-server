@@ -267,7 +267,9 @@ function tenantDocument({ brand, heading, preheader, paragraphs = [], bodyHtml =
   ).join('');
   const content = `
     ${logo}
-    <div style="font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${accent};margin-bottom:14px;">${escapeHtml(brand.name)}</div>
+    <!-- Business name uses the dark ink (same as the heading), NOT the tenant
+         accent — a light accent (e.g. lime) was illegible on the white card. -->
+    <div style="font-family:${FONT};font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${T.ink};margin-bottom:14px;">${escapeHtml(brand.name)}</div>
     <h1 style="margin:0 0 16px;font-family:${headFont};font-size:27px;font-weight:700;line-height:1.2;color:${T.ink};">${escapeHtml(heading)}</h1>
     ${paras}
     ${rows && rows.length ? rowsTable(rows) : ''}
