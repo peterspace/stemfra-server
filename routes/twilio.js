@@ -99,6 +99,7 @@ async function findEntityByPhone(phone) {
 // Best-effort activity log — lifted to lib/activity.js (2026-07-21) once the
 // Voice agent became a second consumer. Same fire-and-forget contract.
 const { logActivity } = require('../lib/activity');
+const { recordSmsOptOutByPhone } = require('../lib/ownerSmsAlerts');
 
 // ─── POST /api/twilio/token — Voice SDK access token ─────────────────────────
 //
@@ -232,6 +233,14 @@ router.post('/sms-inbound', async (req, res) => {
   const { MessageSid, From, To, Body, NumSegments } = req.body || {};
   if (!From || !To || Body === undefined) {
     return res.status(400).send('Missing required fields');
+  }
+
+  // Task 9 owner SMS alerts: honor STOP replies by flipping the sender's consent
+  // record. Twilio already blocks further sends carrier-side after a STOP; this
+  // keeps the CMS SmsAlertsCard state honest. Best-effort, never blocks the webhook.
+  const stopWord = String(Body).trim().toUpperCase();
+  if (['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT'].includes(stopWord)) {
+    recordSmsOptOutByPhone(From).catch(() => {});
   }
 
   const link = await findEntityByPhone(From);

@@ -16,6 +16,7 @@ const { buildSiteContext } = require('../lib/stacyContext');
 const { buildListCard } = require('../lib/frontdeskLists');
 const { runManageTool } = require('../lib/frontdeskManage');
 const { runBookingTool } = require('../lib/frontdeskBooking');
+const { sendOwnerSms } = require('../lib/ownerSmsAlerts');
 const { runMembershipTool } = require('../lib/frontdeskMemberships');
 const { placeBooking, bookClassSession } = require('../controllers/bookingController');
 
@@ -221,6 +222,9 @@ async function notifyOwnerOfEscalation(site, esc) {
   if (!prefs.owner_chat_lead) return;
   const { data: owner } = await supabase.from('contacts').select('email, full_name, auth_user_id').eq('id', site.owner_contact_id).single();
   if (!owner?.email) return;
+  // Task 9: escalations are the most time-sensitive alert (a visitor is waiting),
+  // so SMS rides the same pref gate as the email. Consent-gated inside.
+  sendOwnerSms(owner.auth_user_id, `${esc.label} raised in your website chat by ${esc.name || 'a visitor'}. It is waiting for your reply. Details are in your email and Leads inbox.`);
   const dashboardUrl = await cmsMagicLink(owner.auth_user_id, '/leads');
   const intent = `${esc.label}${esc.member ? ' (signed-in member)' : ''}`;
   await sendMail({
@@ -255,6 +259,8 @@ async function notifyOwnerOfLead(site, lead) {
   if (!prefs.owner_chat_lead) return;
   const { data: owner } = await supabase.from('contacts').select('email, full_name, auth_user_id').eq('id', site.owner_contact_id).single();
   if (!owner?.email) return;
+  // Task 9: SMS alongside the email, same pref gate, consent-gated inside.
+  sendOwnerSms(owner.auth_user_id, `New chat lead on your website: ${lead.name || 'a visitor'}. Open your Leads inbox to follow up.`);
   const dashboardUrl = await cmsMagicLink(owner.auth_user_id, '/leads');
   await sendMail({
     fromName: 'STEMfra Sites',

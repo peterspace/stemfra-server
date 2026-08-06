@@ -13,6 +13,7 @@ const { logSiteActivity } = require('../lib/activity');
 const { getSiteNotifyPrefs } = require('../lib/notifyPrefs');
 const { cmsMagicLink } = require('../lib/cmsMagicLink');
 const { sendMail } = require('../lib/mailer');
+const { sendOwnerSms } = require('../lib/ownerSmsAlerts');
 const emails = require('../templates/transactionalEmails');
 
 // Light per-IP+site rate limit (in-memory, per-instance) — same convention as
@@ -115,6 +116,8 @@ async function createMembershipSignup({ siteId, productId, customer, allowedStat
           const priceLabel = moneyLabel(plan.price_cents, plan.currency);
           const planName = en(plan.name) || '(membership)';
           const name = [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim() || customer.name || null;
+          // Task 9: SMS alongside the email, same pref gate, consent-gated inside.
+          sendOwnerSms(owner.auth_user_id, `New membership signup: ${name || 'a customer'}, ${planName}. Collect payment at the venue, then confirm it in your CMS.`);
           await sendMail({
             fromName: 'STEMfra Sites',
             to: owner.email,
