@@ -48,8 +48,17 @@ model** (`docs/COMMISSION_MODEL.md`)._
    dead-gated for every new tenant. Both resolve together when collect-first lands
    on a payment rail; until then the path is inert for new tenants, which is safe
    but worth knowing before demoing it.
-4. **P12 Wave 2 Task 9 — owner/staff SMS alerts** — gated on A2P vetting (v2 submitted
-   2026-07-26).
+4. ✅ **P12 Wave 2 Task 9 — owner SMS alerts — DONE 2026-08-06** (A2P campaign
+   approved 2026-08-03, Peter confirmed via the Twilio email). `lib/ownerSmsAlerts.js`
+   (consent-gated on `cms_notification_prefs.prefs.sms` from the SmsAlertsCard;
+   `OWNER_SMS_ALERTS_ENABLED=false` kill switch) wired alongside the owner emails
+   under the same per-event prefs: new booking / cancellation / reschedule /
+   website lead / chat lead / chat escalation / membership signup. Inbound
+   STOP flips the consent record (`routes/twilio.js` sms-inbound). Verified
+   end-to-end: a real forge-and-bell booking produced a DELIVERED alert on the
+   approved campaign; all fixtures + the seeded test consent cleaned.
+   ⚠ Remaining Peter action: opt in for real via CMS → Settings → Notifications
+   SmsAlertsCard (no consent rows exist yet; nothing sends until owners opt in).
 5. **P10 case 42 "Remix" R2/R3** (AI theme composer engine) — R1 registry done; rest pending.
 6. **P10 case 1 remainder** — task videos + a "What's new" channel (guidance polish shipped).
 7. **VSL production** (P12 "Last") — deliberately last.
