@@ -676,3 +676,27 @@ kill-switch), E (member lifecycle: renewal reminders/portal v2/yoga surface).
   sweep idempotent (no re-stamp); audit rows landed; both reminder emails render
   tenant-branded (Forge & Bell) in the browser. Test data cleaned up. Committed
   (server f8a5227 + platform 6d33707), no push. **E2 COMPLETE.**
+
+### E3 — owner monthly renewal digest (2026-08-06)
+
+- **`sweepOwnerRenewalDigests`** in `lib/membershipRenewalSweeper.js`: groups venue
+  renewals due in/before the current calendar month by site (status
+  `active|renewal_due`, not `cancel_at_period_end`, live site). For each site with
+  ≥1 due it posts a **`membership_renewal_digest`** `cms_notifications` bell
+  (category `operations`, href `/memberships`, `metadata={month,due,overdue}`) and
+  a **Stemfra-brand** owner email (`ownerRenewalDigest`, deep-linked via
+  `cmsMagicLink` to `/memberships`, gated on the `owner_membership` notify pref).
+  Idempotent — one digest per site per month, guarded by looking up an existing
+  bell stamped with the same `metadata.month`. Skips `is_starter` demos by default;
+  `dryRun` supported. Runs on the SAME 12h interval as E2 via the new
+  `runMembershipSweeps` wrapper (digest self-gates to monthly, so 12h is safe).
+- **`ownerRenewalDigest`** builder added to `transactionalEmails.js` (+ export) +
+  `/dev/preview/owner-renewal-digest`. CMS needs no change — the bell renders by
+  `category` (`CATEGORY_META`), not per-type.
+- **Verified** on forge-and-bell (2 throwaway venue subs, one overdue): bell row
+  correct (`due=2, overdue=1, month=2026-08`), second run idempotent (skipped),
+  digest email renders in the browser. Owner email suppressed during the test via
+  a temporary `owner_membership=false` pref; all test data + the pref restored.
+  Committed (server 195a60d), no push. **E3 COMPLETE.** Remaining in Phase E: E1
+  (member area v2 across crossfit/massage/spa + yoga) and E4 (yoga membership
+  surface).
