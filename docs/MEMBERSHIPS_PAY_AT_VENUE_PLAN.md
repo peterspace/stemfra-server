@@ -732,3 +732,33 @@ kill-switch), E (member lifecycle: renewal reminders/portal v2/yoga surface).
   session all cleaned up. All 4 apps typecheck clean. Committed (platform
   0a7d356), no push. **E1 COMPLETE.** Remaining in Phase E: **E4** (yoga
   membership surface + Join flow).
+
+### E4 — yoga membership surface (2026-08-06) — PHASE E + P14 COMPLETE
+
+- **Yoga `/memberships` page** (`pages/MembershipsPage.tsx`), mirroring crossfit's
+  pay-at-venue flow in the studio voice: plans from `useMembershipPlans` →
+  `PricingTiers` (light cards, highlighted tier); **Join** opens a `JoinDialog`
+  (name/email/phone, prefilled for a signed-in member via `claimAccount`) →
+  `joinMembership` (`lib/memberships.ts`, ported) → **pending venue signup** (no
+  online payment) → "You're on the list" banner. `pricing_table`/`free_intro`
+  sections stay section-driven; sensible default copy so the page is complete
+  without a seeded `memberships` page.
+- `/memberships` route + a **"Memberships"** nav item; E1's yoga `PLANS_HREF` now
+  points here (was `/`).
+- Seeded **3 demo plans** on lila-studio (Twice Weekly $95/mo, Unlimited Monthly
+  $150/mo highlighted, Annual Unlimited $1400/yr) with feature lists.
+- **Verified live** on lila-studio: all 3 plans + features render, the Join dialog
+  opens with the business name resolved, a real submit created a `pending`/`venue`
+  sub (Ivy / Unlimited Monthly), the success banner showed, zero console errors.
+  Test signup cleaned up (demo plans kept). Committed (platform a78abdc), no push.
+  **E4 COMPLETE.**
+
+**🏁 PHASE E COMPLETE → the entire P14 pay-at-venue membership arc (Phases A–E) is
+done.** Members sign up online (pending) → the owner confirms the in-person
+payment in the CMS (activation = the commissionable event) → the renewal sweeper
+stamps `renewal_due`/`expired` and nudges members (E2) → the owner gets a monthly
+"N to confirm" digest (E3) → members see their card, visits, and payment history
+in the portal (E1) across crossfit/massage/spa/yoga, with a plans+Join surface on
+crossfit and yoga (A4/E4). Online card payments remain suspended platform-wide
+(Phase D). Everything committed, NOT pushed (standing rule until Peter says
+otherwise).
