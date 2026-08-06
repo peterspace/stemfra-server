@@ -15,6 +15,7 @@ const { startBillingCycleSweeper } = require('./lib/billingCycleSweeper');
 const { startSiteDeletionSweeper } = require('./lib/siteDeletionSweeper');
 const { startBookingReminderSweeper } = require('./lib/bookingReminderSweeper');
 const { startLifecycleSweeper } = require('./lib/lifecycleSweeper');
+const { startMembershipRenewalSweeper } = require('./lib/membershipRenewalSweeper');
 const { startBookingCheckoutSweeper } = require('./lib/bookingCheckoutSweeper');
 const { startBookingAutoCollectSweeper } = require('./lib/bookingAutoCollectSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
@@ -214,6 +215,9 @@ server.listen(PORT, () => {
   startBookingCheckoutSweeper();
   // Lifecycle/marketing emails (N4): first-visit follow-up, etc. Opt-out honored.
   startLifecycleSweeper();
+  // Venue memberships (P14 E2): stamp renewal_due/expired, send renewal reminders,
+  // finalize cancel-at-period-end. Transactional — not gated by marketing opt-out.
+  startMembershipRenewalSweeper();
   // Lead-gen follow-up sequencer (A2 → read-gated call → A8 → A20). Inert until
   // crm_settings.leadgen_sequencer.enabled = true.
   startOutreachSequencer();

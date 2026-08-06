@@ -68,7 +68,10 @@ async function memberEmail(sub, builder, subject) {
       replyTo: brand.businessEmail || undefined,
       to: cust.email,
       subject,
-      ...builder({
+      // builder returns an HTML string (renderEmail output), not {html,text} —
+      // assign it to `html`. (Spreading a string would scatter it into indexed
+      // char keys and sendMail would get no body.)
+      html: builder({
         businessName: brand.name, businessLogoUrl: brand.logoUrl, businessEmail: brand.businessEmail,
         businessUrl: brand.businessUrl, businessAccent: brand.accent, businessFont: brand.font,
         businessPhotoUrl: brand.photoUrl, firstName: cust.first_name,
@@ -183,8 +186,9 @@ async function confirmOnePayment(req, siteId, item) {
     .from('site_subscriptions').select('*').eq('id', subId).maybeSingle();
   if (!sub || sub.site_id !== siteId) return { subscriptionId: subId, error: 'Not found.' };
   if (!isVenue(sub)) return { subscriptionId: subId, error: 'Billed online.' };
-  // E2 adds 'renewal_due'; until then only 'active' subs are ever due here.
-  if (sub.status !== 'active') return { subscriptionId: subId, error: `status=${sub.status}` };
+  // A venue sub is renewable while active, or once E2 has stamped it renewal_due
+  // (period ended, awaiting the in-person payment). Confirming restores 'active'.
+  if (sub.status !== 'active' && sub.status !== 'renewal_due') return { subscriptionId: subId, error: `status=${sub.status}` };
   if (!sub.current_period_end) return { subscriptionId: subId, error: 'No period to renew.' };
 
   const { data: plan } = await supabase

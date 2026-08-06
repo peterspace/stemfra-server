@@ -250,6 +250,32 @@ function membershipRenewed({ businessName, businessLogoUrl, businessEmail, busin
   });
 }
 
+// Renewal reminder for a pay-at-venue membership (from the lifecycle sweeper).
+// `due=false` = a heads-up ~7 days before the renewal date; `due=true` = the
+// renewal date has arrived/passed. Transactional (about their active membership),
+// so it is not gated by the marketing opt-out.
+function membershipRenewalReminder({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, planName, priceLabel, renewalDateLabel, due }) {
+  return renderEmail({
+    brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
+    preheader: due ? `Your ${planName || 'membership'} is due to renew.` : `Your ${planName || 'membership'} renews soon.`,
+    heading: due ? 'Your membership is due to renew.' : 'Your membership renews soon.',
+    paragraphs: [
+      ...(firstName ? [`Hi ${firstName},`] : []),
+      due
+        ? `Your membership at ${businessName} was due to renew on ${renewalDateLabel}. Pop in to renew and keep your spot.`
+        : `A quick heads-up: your membership at ${businessName} renews on ${renewalDateLabel}.`,
+    ],
+    rows: [
+      { label: 'Plan', value: planName || 'Membership' },
+      priceLabel ? { label: 'Amount', value: priceLabel } : null,
+      { label: due ? 'Was due' : 'Renews', value: renewalDateLabel, bold: true },
+    ],
+    note: `You renew in person at ${businessName}. Bring your usual payment and we'll take care of the rest.`,
+    security: tenantSecurityLine(businessName, businessEmail),
+    reason: `You're receiving this because you have a membership with ${businessName}.`,
+  });
+}
+
 // ─── Stemfra → site owner ─────────────────────────────────────────────────────
 
 // Contact-form lead landed on their site.
@@ -600,6 +626,7 @@ module.exports = {
   ownerMembershipSignup,
   membershipActivated,
   membershipRenewed,
+  membershipRenewalReminder,
   firstVisitFollowup,
   winBack,
   reviewRequest,

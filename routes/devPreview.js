@@ -30,6 +30,9 @@ function indexPage() {
     ['booking-canceled', 'Booking canceled (tenant brand)'],
     ['booking-rescheduled', 'Booking rescheduled (tenant brand)'],
     ['owner-new-booking', 'Owner: new booking'],
+    ['membership-renewal-soon', 'Membership: renewal reminder — soon (tenant brand)'],
+    ['membership-renewal-due', 'Membership: renewal reminder — due (tenant brand)'],
+    ['membership-renewed', 'Membership: payment received (tenant brand)'],
     ['first-visit-followup', 'Lifecycle: first-visit follow-up (tenant brand)'],
     ['review-request', 'Lifecycle: review ask — with review link (tenant brand)'],
     ['review-request-noreview', 'Lifecycle: review ask — reply-only fallback (tenant brand)'],
@@ -133,6 +136,28 @@ router.get('/owner-new-booking', (_req, res) => send(res, tx.ownerBookingNotific
 router.get('/owner-membership-signup', (_req, res) => send(res, tx.ownerMembershipSignup({
   customerName: 'Nora Vale', customerEmail: 'nora@example.com', customerPhone: '(212) 555-0175',
   planName: '1-Year Unlimited', priceLabel: '$175.00',
+})));
+
+// P14 E2 — venue-membership renewal reminders (tenant brand).
+router.get('/membership-renewal-soon', (_req, res) => send(res, tx.membershipRenewalReminder({
+  businessName: 'Forge & Bell', businessLogoUrl: ARGYLE_LOGO, businessEmail: 'hello@forge-and-bell.com',
+  businessAccent: '#E0FF4F', businessFont: 'Bebas Neue',
+  firstName: 'Kerson', planName: '1-Year Unlimited', priceLabel: '$175.00',
+  renewalDateLabel: 'Monday, August 17', due: false,
+})));
+
+router.get('/membership-renewal-due', (_req, res) => send(res, tx.membershipRenewalReminder({
+  businessName: 'Forge & Bell', businessLogoUrl: ARGYLE_LOGO, businessEmail: 'hello@forge-and-bell.com',
+  businessAccent: '#E0FF4F', businessFont: 'Bebas Neue',
+  firstName: 'Kerson', planName: '1-Year Unlimited', priceLabel: '$175.00',
+  renewalDateLabel: 'Monday, August 10', due: true,
+})));
+
+router.get('/membership-renewed', (_req, res) => send(res, tx.membershipRenewed({
+  businessName: 'Forge & Bell', businessLogoUrl: ARGYLE_LOGO, businessEmail: 'hello@forge-and-bell.com',
+  businessAccent: '#E0FF4F', businessFont: 'Bebas Neue',
+  firstName: 'Kerson', planName: '1-Year Unlimited', priceLabel: '$175.00',
+  nextRenewalLabel: 'Thursday, September 10',
 })));
 
 router.get('/visit-confirmation', (_req, res) => send(res, tx.visitConfirmation({
