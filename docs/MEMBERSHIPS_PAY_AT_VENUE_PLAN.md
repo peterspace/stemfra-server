@@ -638,3 +638,41 @@ kill-switch), E (member lifecycle: renewal reminders/portal v2/yoga surface).
   Checkout url (pay-at-venue), fixtures cleaned; CMS Payments section renders the quiet
   state with zero console errors. Committed (server + platform), no push. **Phase D
   COMPLETE.** Remaining: Phase E (member lifecycle).
+
+### E2 — renewal reminder sweeper (2026-08-06)
+
+- **`renewal_due`/`expired` are TEXT on `site_subscriptions.status`**, not the
+  `subscription_status` enum (that enum backs the System-A `subscriptions`
+  table). So the transitions are plain string writes — no schema change was
+  needed. (The additive `renewal_due` enum value was added to `subscription_status`
+  per plan §1 anyway; harmless no-op for the venue path.)
+- **`lib/membershipRenewalSweeper.js`** (`startMembershipRenewalSweeper` +
+  `sweepMembershipRenewals`), wired in `index.js` after `startLifecycleSweeper`
+  (12h interval, 60s after boot, guarded on `activeProvider()`). One pass over
+  `collection_mode='venue'` subs with status in `active|renewal_due` on live
+  sites: (a) `active`→`renewal_due` once `current_period_end` passes,
+  `→expired` after a 14-day grace; (b) tenant-branded reminders at T-7d
+  (heads-up) and T-0 (due), stamped once per period on
+  `metadata.renewal_reminders.{t7_for,t0_for}=current_period_end` so a confirmed
+  payment (which advances the period) re-arms them; (c) `cancel_at_period_end`
+  subs finalize to `canceled` at period end. Skips `is_starter` demos by
+  default (`includeDemo` opt-in); `dryRun` for counts. Audits
+  `membership_renewal_due`/`membership_expired`/`membership_canceled_at_period_end`
+  to `site_activity`.
+- **`membershipRenewalReminder`** builder added to `transactionalEmails.js`
+  (it existed but was never exported) — `due` flag flips the copy between
+  "renews soon" and "due to renew"; pay-in-person note.
+- **B1 fixes:** `confirmOnePayment` guard widened to accept `renewal_due` (the
+  confirm restores `active` + advances the period); CMS `MembershipsPage`
+  Renewals filter now includes `renewal_due`. **Latent B1 email bug fixed:** the
+  `memberEmail` helper did `...builder(...)`, but builders return an HTML
+  *string* (renderEmail output) — spreading it scattered the html into indexed
+  char keys, so `sendMail` got no body. Now `html: builder(...)`. This had made
+  the activation + renewal-confirm emails send blank.
+- **Previews:** `/dev/preview/membership-renewal-soon|due` + `membership-renewed`.
+- **Verified end-to-end** against DB fixtures on forge-and-bell (3 throwaway
+  venue subs): `active`→`renewal_due` (T-3d), `active`→`expired` (T-20d),
+  `cancel_at_period_end`→`canceled` (flag cleared, `canceled_at` set); second
+  sweep idempotent (no re-stamp); audit rows landed; both reminder emails render
+  tenant-branded (Forge & Bell) in the browser. Test data cleaned up. Committed
+  (server f8a5227 + platform 6d33707), no push. **E2 COMPLETE.**
