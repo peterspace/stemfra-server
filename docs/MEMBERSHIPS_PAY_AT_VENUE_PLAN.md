@@ -599,3 +599,42 @@ kill-switch), E (member lifecycle: renewal reminders/portal v2/yoga surface).
   re-confirm returned "You're already on the list" (idempotent via the A2 core's
   existing-sub reuse), fixtures cleaned. Live chat walk pending Peter's n8n paste.
   Committed (server only), no push.
+
+### 2026-08-06 — Phase D (suspend online payments in booking) DONE + advisor-cleared
+
+- **⚠ Advisor checkpoint (the plan's D1 premise was WRONG):** the plan said templates
+  key the payment step off `/api/site-payments/config`. They do NOT — a code sweep
+  found the BookingForm gates on `sites.payments_enabled` + `sites.payment_collection`
+  read straight from the DB by the anon client; no template reads `/config`. Consulted
+  the advisor with the finding + 3 UI options → **verdict: server-authoritative gate +
+  option B (data flip)**. The advisor also caught THREE choke points I'd have missed
+  and a `config/stripe.js` fallback bug.
+- **D1 kill-switch:** `config/stripe.js` `ONLINE_PAYMENTS_ENABLED` (strict `=== 'true'`,
+  default OFF). Gated at EVERY public tenant charge core so booking falls through to
+  pay-at-venue regardless of a site's own `payments_enabled`:
+  `sitePaymentsController` `createBookingCheckout` + `createGroupCheckout` (`canOnline`),
+  `createBookingIntent` (early notReady), **`siteMembershipsController.createCheckout`**
+  (advisor-flagged; 400 → steer to pay-at-venue signup), `frontdeskBooking.resolveCardRail`
+  (false → pay-at-venue in chat), and **`cms/paymentsController.saveKeys`** (advisor-flagged;
+  403 so an owner can't re-flip `payments_enabled=true` while suspended → keeps option B
+  durable). `config()` also returns `{enabled}`. **Stemfra's own `lib/platformBilling.js`
+  is EXEMPT** (commented) — never gated.
+- **D3 fees:** `APPLICATION_FEE_BPS` + `SUBSCRIPTION_APP_FEE_PCT` default 0 (§2b — commission
+  via invoice, no per-charge fee). **Fallback bug fixed** (advisor): the old `Number(x)||d`
+  made `0` unrepresentable via env (0 is falsy → fell back to 4.5/290); switched to a
+  `Number.isFinite` helper so a deliberate `=0` sticks. deploy.yml zeroed the two fee
+  vars too (else prod env would override the code default and defeat the guarantee).
+- **UI (option B):** flipped the ONLY `payments_enabled=true` row (forge-and-bell) to
+  false — truthful current state, templates already render plain pay-at-venue, owners
+  re-enable per-site when payments return. CMS PaymentsSection collapses to a single
+  "Online card payments: available later" note (reads the config `enabled` flag via new
+  `getOnlinePaymentsEnabled`), keeping the pay-at-venue message + methods editing.
+  Publish checklist (`siteCompleteness.js`) + Stacy onboarding already had NO payment
+  step — nothing to strip.
+- **D4:** `ONLINE_PAYMENTS_ENABLED=false` added to deploy.yml (absent already = off; set
+  so the block stays the single source of truth).
+- **Verified against :4000 (switch OFF):** `config` → `enabled:false`; membership checkout
+  → 400 notReady; a PRICED Personal-Training booking checkout → `payInPerson:true`, no
+  Checkout url (pay-at-venue), fixtures cleaned; CMS Payments section renders the quiet
+  state with zero console errors. Committed (server + platform), no push. **Phase D
+  COMPLETE.** Remaining: Phase E (member lifecycle).

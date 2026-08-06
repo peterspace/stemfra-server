@@ -4,7 +4,7 @@
 // require per the server convention.
 const supabase = require('../../config/supabase');
 const Stripe = require('stripe');
-const { stripe } = require('../../config/stripe');
+const { stripe, ONLINE_PAYMENTS_ENABLED } = require('../../config/stripe');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const {
   isConfigured: credsConfigured, saveSiteCredentials, setSiteWebhookSecret,
@@ -155,6 +155,10 @@ async function dashboardLink(req, res) {
  * Enables payments on the site. Never returns the secret.
  */
 async function saveKeys(req, res) {
+  // P14: online payments are suspended platform-wide, so don't let an owner flip a
+  // site back to payments_enabled=true by pasting keys (it would re-show the "pay
+  // online" UI while the server still books pay-at-venue). Refuse cleanly.
+  if (!ONLINE_PAYMENTS_ENABLED) return res.status(403).json({ error: 'Online card payments are currently unavailable on Stemfra. Your site collects payment in person for now.' });
   if (!credsConfigured()) return res.status(503).json({ error: 'Payment key storage is not configured on the server.' });
   try {
     const { siteId, publishableKey, secretKey, webhookSecret } = req.body || {};

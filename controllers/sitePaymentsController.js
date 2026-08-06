@@ -7,7 +7,7 @@
 // (+ a reconciler sweeper for closed tabs). The legacy Connect destination-charge
 // path (config/createIntent + createBookingIntent) is kept dormant, not deleted.
 const supabase = require('../config/supabase');
-const { stripe, APPLICATION_FEE_BPS, PROCESSING_PCT_BPS, PROCESSING_FIXED_CENTS } = require('../config/stripe');
+const { stripe, ONLINE_PAYMENTS_ENABLED, APPLICATION_FEE_BPS, PROCESSING_PCT_BPS, PROCESSING_FIXED_CENTS } = require('../config/stripe');
 const { getStripeForSite, getSiteCredentials } = require('../lib/paymentCredentials');
 
 const CHECKOUT_TTL_SECONDS = 30 * 60; // Stripe minimum for expires_at
@@ -19,9 +19,10 @@ function siteOrigin(site) {
   return `https://${site.custom_domain || `${site.subdomain}.stemfra.com`}`;
 }
 
-/** GET /api/site-payments/config — public publishable key for Stripe.js on the client. */
+/** GET /api/site-payments/config — public publishable key for Stripe.js on the client.
+ *  `enabled` reflects the P14 platform-wide online-payments kill-switch. */
 function config(_req, res) {
-  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null });
+  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null, enabled: ONLINE_PAYMENTS_ENABLED });
 }
 
 /**
@@ -32,6 +33,8 @@ function config(_req, res) {
  * Shared by the public POST handler and the Front Desk in-chat payment flow.
  */
 async function createBookingIntent({ siteId, serviceId, customerEmail, productId }) {
+  // P14: online card payments suspended platform-wide → no in-chat / inline charge.
+  if (!ONLINE_PAYMENTS_ENABLED) return { ok: false, code: 400, message: 'Online payments are currently unavailable.', notReady: true };
   if (!stripe) return { ok: false, code: 503, message: 'Payments are not configured.', notReady: true };
   if (!siteId || !serviceId) return { ok: false, code: 400, message: 'Missing siteId or serviceId.' };
 
@@ -139,8 +142,9 @@ async function createBookingCheckout({ siteId, teamMemberId, serviceId, date, ti
 
   // Resolve the effective collection mode (Task #20). The server is authoritative:
   // it never trusts paymentChoice alone. Online is only possible with a connected
-  // Stripe key; otherwise every priced booking falls back to pay-at-visit.
-  const tenantStripe = (site.payments_enabled ? await getStripeForSite(siteId) : null);
+  // Stripe key AND the P14 kill-switch on; otherwise every priced booking falls
+  // back to pay-at-visit (the switch overrides a site's own payments_enabled).
+  const tenantStripe = (ONLINE_PAYMENTS_ENABLED && site.payments_enabled ? await getStripeForSite(siteId) : null);
   const canOnline = !!tenantStripe;
   const mode = ['online', 'onsite', 'both'].includes(site.payment_collection) ? site.payment_collection : 'both';
   // What the customer actually gets to do:
@@ -230,7 +234,8 @@ async function createGroupCheckout({ siteId, items, customer, notes, paymentChoi
   }
 
   // Resolve the effective collection mode (Task #20 semantics — server-authoritative).
-  const tenantStripe = (site.payments_enabled ? await getStripeForSite(siteId) : null);
+  // P14 kill-switch overrides the site's own payments_enabled (see single-service core).
+  const tenantStripe = (ONLINE_PAYMENTS_ENABLED && site.payments_enabled ? await getStripeForSite(siteId) : null);
   const canOnline = !!tenantStripe;
   const mode = ['online', 'onsite', 'both'].includes(site.payment_collection) ? site.payment_collection : 'both';
   const payInPerson = !canOnline || mode === 'onsite' || (mode === 'both' && paymentChoice === 'onsite');

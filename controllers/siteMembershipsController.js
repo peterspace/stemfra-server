@@ -7,7 +7,7 @@
 //     any new surface. Left intact per the plan (do not repair/extend).
 // Single-var supabase require per convention.
 const supabase = require('../config/supabase');
-const { stripe, SUBSCRIPTION_APP_FEE_PCT } = require('../config/stripe');
+const { stripe, ONLINE_PAYMENTS_ENABLED, SUBSCRIPTION_APP_FEE_PCT } = require('../config/stripe');
 const { upsertBookingCustomer } = require('./bookingController');
 const { logSiteActivity } = require('../lib/activity');
 const { getSiteNotifyPrefs } = require('../lib/notifyPrefs');
@@ -185,6 +185,9 @@ async function signup(req, res) {
  * (kind='site_membership') links the customer + writes the site_subscriptions row.
  */
 async function createCheckout(req, res) {
+  // P14 pay-at-venue: online membership checkout is suspended platform-wide. Steer
+  // to the signup (pay-at-venue) path instead of charging a card.
+  if (!ONLINE_PAYMENTS_ENABLED) return res.status(400).json({ success: false, message: 'Online membership payments are unavailable. Sign up and pay in person.', notReady: true });
   if (!stripe) return res.status(503).json({ success: false, message: 'Payments are not configured.' });
   try {
     const { siteId, productId, returnUrl } = req.body || {};

@@ -129,10 +129,18 @@ jobs:
             STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
             STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
             STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
-            STRIPE_APPLICATION_FEE_BPS=150
+            # P14 pay-at-venue: tenant online card payments suspended platform-wide.
+            # Absent would already default OFF; set explicitly so this block stays the
+            # single source of truth. Flip to true (per-site payments_enabled re-enabled)
+            # only when online payments return.
+            ONLINE_PAYMENTS_ENABLED=false
+            # In-band fees zeroed (COMMISSION_MODEL §2b: commission via monthly invoice,
+            # never a per-charge fee). Kept at 0 in prod too so re-awakening a dormant
+            # Connect path cannot double-charge (the code default is also 0).
+            STRIPE_APPLICATION_FEE_BPS=0
             STRIPE_PROCESSING_PCT_BPS=290
             STRIPE_PROCESSING_FIXED_CENTS=30
-            STRIPE_SUBSCRIPTION_APP_FEE_PCT=4.5
+            STRIPE_SUBSCRIPTION_APP_FEE_PCT=0
             PAYMENT_CREDENTIALS_KEK=${{ secrets.PAYMENT_CREDENTIALS_KEK }}
             COMMISSION_SCHEDULER_ENABLED=true
             # Public pk. token served to the template apps via /api/public-config.
