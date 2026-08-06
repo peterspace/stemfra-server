@@ -567,3 +567,35 @@ switched to the same `.or(...is.null...)` filter as the SELECT.
 **Phase B COMPLETE** (B1 confirm-all · B2 cash-basis meter · B3 Reports v2). Next
 per the plan: Phase C (Front Desk chat membership signup), D (booking online-payment
 kill-switch), E (member lifecycle: renewal reminders/portal v2/yoga surface).
+
+### 2026-08-06 — Phase C (Front Desk membership signup) DONE
+
+- **C1** — new `lib/frontdeskMemberships.js` `runMembershipTool({site, membership})`,
+  mirroring the booking tool: no-plan → `options` card of real plans; plan → `form`
+  (name/email/phone); details → `membership_confirm` card ("Sign & pay in person");
+  confirm → creates a PENDING venue sub via the SHARED A2 core
+  `createMembershipSignup` (NOT an HTTP self-call) → `membership_done` card ("Visit us
+  to sign your agreement and start · Nothing to pay online"). Never shows a payment
+  card. External (bring-your-own) plans hand off to their URL. `siteChatController`
+  wired: `mergeMembership` + a `membership_system_note` re-invoke loop + tool_log
+  `membership_state` persistence, exactly parallel to the booking branch. The widget
+  needs NO change — `membership_confirm`/`membership_done` render through its generic
+  ReceiptCard (title/lines/price/actions).
+- **C2** — n8n `frontdesk-build-prompt.js` (added the MEMBERSHIPS action contract +
+  `membership_system_note` slot + `membership` in the output JSON) and
+  `frontdesk-parse.js` (pass `membership` through). **⚠ Peter action: paste BOTH
+  updated node scripts into the Front Desk workflow** (Build Prompt + Parse), then a
+  live chat walk on a preview site confirms the agent emits `membership`. (n8n state
+  lives with Peter; never curl the prod webhook.)
+- **C3** — class-pack gate reworded away from online payment: passes are LISTED, not
+  sold in chat (no card taken, no `/book` "buy" button) — the visitor purchases the
+  pass in person. Dropped the in-chat Stripe pack-intent branch; kept the pass list.
+  Scope = copy + gating change (no advisor checkpoint needed); the gate is only
+  reachable on a still-card-rail site anyway (pay-at-venue booking falls through
+  before it). `createBookingIntent` stays in use for regular priced-service handoff.
+- **Verified** server-side on forge-and-bell: `runMembershipTool` walked all four
+  stages (options → form → confirm → done), the confirm created a real pending venue
+  sub (`collection_mode=venue`, status `pending`, plan "1-Year Unlimited"), a
+  re-confirm returned "You're already on the list" (idempotent via the A2 core's
+  existing-sub reuse), fixtures cleaned. Live chat walk pending Peter's n8n paste.
+  Committed (server only), no push.

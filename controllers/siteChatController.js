@@ -16,6 +16,7 @@ const { buildSiteContext } = require('../lib/stacyContext');
 const { buildListCard } = require('../lib/frontdeskLists');
 const { runManageTool } = require('../lib/frontdeskManage');
 const { runBookingTool } = require('../lib/frontdeskBooking');
+const { runMembershipTool } = require('../lib/frontdeskMemberships');
 const { placeBooking, bookClassSession } = require('../controllers/bookingController');
 
 const ALLOWED_CHAT = ['live', 'previewing'];
@@ -56,6 +57,19 @@ function mergeBooking(prev, next) {
     date: next.date || p.date || null,
     time: next.time || p.time || null,
     notes: next.notes || p.notes || null,
+    customer: { name: nc.name || pc.name || null, email: nc.email || pc.email || null, phone: nc.phone || pc.phone || null },
+    confirm: next.confirm === true,
+  };
+}
+
+// Same merge discipline as mergeBooking, for the membership signup flow: keep the
+// plan + gathered contact fields across turns; take `confirm` fresh each turn.
+function mergeMembership(prev, next) {
+  if (!next) return prev || null;
+  const p = prev || {}, pc = p.customer || {}, nc = next.customer || {};
+  return {
+    intent: 'membership',
+    plan: next.plan || p.plan || null,
     customer: { name: nc.name || pc.name || null, email: nc.email || pc.email || null, phone: nc.phone || pc.phone || null },
     confirm: next.confirm === true,
   };
@@ -288,6 +302,7 @@ async function callFrontdesk({ convId, siteId, business, message, history, conte
     escalation: data.escalation && typeof data.escalation === 'object' ? data.escalation : null,
     list: data.list && typeof data.list === 'object' && data.list.source ? String(data.list.source) : null,
     booking: data.booking && typeof data.booking === 'object' ? data.booking : null,
+    membership: data.membership && typeof data.membership === 'object' ? data.membership : null,
     quickReplies: Array.isArray(data.quick_replies) ? data.quick_replies.filter(s => typeof s === 'string' && s.trim()).slice(0, 6) : [],
   };
 }
@@ -319,12 +334,14 @@ async function send(req, res) {
     let convId = conversationId;
     let history = [];
     let bookingState = null; // merged in-progress booking, persisted in tool_log
+    let membershipState = null; // merged in-progress membership signup, persisted in tool_log
     if (convId) {
       const { data: conv } = await supabase.from('agent_conversations')
         .select('messages, tool_log').eq('id', convId).eq('site_id', siteId).eq('agent', 'frontdesk').maybeSingle();
       if (conv) {
         history = (conv.messages || []).slice(-12);
         bookingState = conv.tool_log?.booking_state || null;
+        membershipState = conv.tool_log?.membership_state || null;
       } else convId = null;
     }
     if (!convId) {
@@ -412,6 +429,23 @@ async function send(req, res) {
               : { known: false } },
           });
         }
+      } else if (out.membership) {
+        // Pay-at-venue membership signup (C1). Same merge + one-note-reinvoke loop
+        // as booking, but the tool NEVER takes a payment — its terminal card is
+        // membership_done and it creates a PENDING venue subscription.
+        membershipState = mergeMembership(membershipState, out.membership);
+        const tool = await runMembershipTool({ site, membership: membershipState });
+        if (tool.card) card = tool.card;
+        if (tool.quickReplies?.length) quickReplies = tool.quickReplies;
+        if (tool.card?.kind === 'membership_done') membershipState = null; // signed up → clear
+        if (tool.note) {
+          out = await callFrontdesk({
+            convId, siteId, business, message: userMsg.content, history,
+            context: { ...baseContext, today, membership_system_note: tool.note, member: member
+              ? { known: true, name: member.name, email: member.email, phone: member.phone }
+              : { known: false } },
+          });
+        }
       }
 
       // An escalation we cannot ACT on is worse than none: the agent tells the
@@ -456,7 +490,7 @@ async function send(req, res) {
     // Persist the in-progress booking (recover dropped fields next turn) + any
     // pending in-chat payment (so /complete-booking can finalize after the charge).
     await supabase.from('agent_conversations')
-      .update({ tool_log: { booking_state: bookingState, pending_payment: pendingPayment } }).eq('id', convId);
+      .update({ tool_log: { booking_state: bookingState, membership_state: membershipState, pending_payment: pendingPayment } }).eq('id', convId);
 
     // F2 — if the agent gathered the visitor's details, capture a lead (best-effort,
     // never blocks or fails the reply).
