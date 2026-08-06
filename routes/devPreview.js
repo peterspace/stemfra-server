@@ -33,6 +33,7 @@ function indexPage() {
     ['membership-renewal-soon', 'Membership: renewal reminder — soon (tenant brand)'],
     ['membership-renewal-due', 'Membership: renewal reminder — due (tenant brand)'],
     ['membership-renewed', 'Membership: payment received (tenant brand)'],
+    ['owner-renewal-digest', 'Owner: monthly renewal digest (Stemfra brand)'],
     ['first-visit-followup', 'Lifecycle: first-visit follow-up (tenant brand)'],
     ['review-request', 'Lifecycle: review ask — with review link (tenant brand)'],
     ['review-request-noreview', 'Lifecycle: review ask — reply-only fallback (tenant brand)'],
@@ -151,6 +152,11 @@ router.get('/membership-renewal-due', (_req, res) => send(res, tx.membershipRene
   businessAccent: '#E0FF4F', businessFont: 'Bebas Neue',
   firstName: 'Kerson', planName: '1-Year Unlimited', priceLabel: '$175.00',
   renewalDateLabel: 'Monday, August 10', due: true,
+})));
+
+router.get('/owner-renewal-digest', (_req, res) => send(res, tx.ownerRenewalDigest({
+  dueCount: 3, overdueCount: 1, amountLabel: '$525.00', monthLabel: 'August 2026',
+  dashboardUrl: 'https://cms.stemfra.com/memberships',
 })));
 
 router.get('/membership-renewed', (_req, res) => send(res, tx.membershipRenewed({

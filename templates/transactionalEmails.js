@@ -317,6 +317,31 @@ function ownerChatLeadNotification({ name, email, phone, intent, summary, dashbo
   });
 }
 
+// Monthly membership-renewal digest (pay-at-venue). Stemfra → site owner (E3).
+// "N renewals to confirm this month", with an overdue count when some periods
+// have already lapsed. Deep-links to the CMS Renewals view.
+function ownerRenewalDigest({ dueCount, overdueCount, amountLabel, monthLabel, dashboardUrl }) {
+  const n = dueCount || 0;
+  const overdue = overdueCount || 0;
+  return renderEmail({
+    preheader: `${n} membership renewal${n === 1 ? '' : 's'} to confirm${monthLabel ? ` in ${monthLabel}` : ''}.`,
+    eyebrow: 'Memberships',
+    heading: n === 1 ? '1 renewal to confirm' : `${n} renewals to confirm`,
+    paragraphs: [
+      `You have ${n} membership renewal${n === 1 ? '' : 's'} to confirm${monthLabel ? ` for ${monthLabel}` : ' this month'}. Once you've collected payment at the venue, mark each one collected in your CMS so your reports and commission stay accurate.`,
+      ...(overdue > 0 ? [`${overdue} of these ${overdue === 1 ? 'is' : 'are'} already past the renewal date.`] : []),
+    ],
+    rows: [
+      { label: 'To confirm', value: String(n), bold: true },
+      overdue > 0 ? { label: 'Overdue', value: String(overdue) } : null,
+      amountLabel ? { label: 'Expected to collect', value: amountLabel } : null,
+    ],
+    cta: { label: 'Open your Renewals', url: dashboardUrl || `${CMS_URL}/memberships` },
+    note: 'Nothing is charged online. Confirming a renewal records the payment you took in person and advances the membership to its next period.',
+    reason: "You're receiving this because you have pay-at-venue memberships on your Stemfra website. You can turn these emails off in your CMS settings.",
+  });
+}
+
 // Membership signup (pay-at-venue). Stemfra → site owner. The customer signed up
 // online; the owner signs the agreement + collects payment in person, then
 // confirms it in the CMS. Not a Stripe charge, so the copy says "confirm at the
@@ -624,6 +649,7 @@ module.exports = {
   ownerLeadNotification,
   ownerChatLeadNotification,
   ownerMembershipSignup,
+  ownerRenewalDigest,
   membershipActivated,
   membershipRenewed,
   membershipRenewalReminder,
