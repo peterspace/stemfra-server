@@ -816,14 +816,27 @@ CMS boot spinner, card active states, FAQ+legal onboarding steps).
    chart block on the CMS dashboard (inspiration screenshot 2026-08-07).
 3. **Supademo 30-second pilot workflow** — then Phases A/B per the plan doc;
    Growth-trial window is ticking (14 days from ~2026-08-06).
-4. **BYO-domain architecture note (2026-08-07 discussion, no action now):** our
-   existing connect flow ALREADY implements the "Cloudflare for SaaS" pattern
-   Gemini recommended, via Pages custom domains (owner keeps registrar +
-   renewals, adds ONE CNAME, SSL auto): no transfer support needed, ever
-   (CF Registrar inbound transfers are dashboard-only, not API-able).
-   The real future trigger: **Cloudflare Pages caps ~100 custom domains per
-   project** and we run one project per vertical, so when any vertical nears
-   ~100 custom-domain tenants, migrate that vertical to Cloudflare for SaaS
-   (Custom Hostnames + fallback origin, ~100 free then ~$0.10/hostname/mo).
-   Near-term cheap polish: DomainSection "Check status" refresh affordance +
-   registrar-specific CNAME instructions (Namecheap/GoDaddy).
+4. **Domain routing at scale (AGREED direction 2026-08-07; build BEFORE the
+   self-serve funnel launches):** our BYO connect flow already implements the
+   "Cloudflare for SaaS" pattern via Pages custom domains (owner keeps
+   registrar + renewals, one CNAME, auto SSL; transfers permanently out of
+   scope: CF Registrar inbound transfers are dashboard-only). BUT the limit is
+   sharper than first noted: **Pages caps custom domains per project at
+   100 (Free) / 250 (Pro) / 500 (Business+), and attachSiteDomain attaches
+   EVERY site's {subdomain}.stemfra.com as a Pages custom domain — so the cap
+   counts ALL sites per vertical, not just BYO tenants.** Verified against CF
+   Pages limits docs 2026-08-07. The 1M-user architecture (Render provably
+   runs the same stack: their wildcard flow sets _cf-custom-hostname records,
+   i.e. resold Cloudflare for SaaS):
+   (a) subdomains: ONE wildcard *.stemfra.com DNS record -> a Cloudflare
+   WORKER that resolves host -> vertical -> serves that vertical's bundle;
+   new site = DB row only, no per-site attach, unlimited subdomains;
+   (b) custom domains: Cloudflare for SaaS Custom Hostnames on the
+   stemfra.com zone (fallback origin = the Worker), API-automated, auto-SSL,
+   ~$0.10/hostname/mo after 100 (paying tenants only, scales linearly);
+   (c) incremental migration: keep Pages builds, front with the Worker, swap
+   the attach calls Pages API -> Custom Hostnames API in attachSiteDomain +
+   cms/domainController.
+   Near-term (separate small slice): DomainSection redesign on Render's
+   3-step model (Add domain -> Configure DNS w/ per-provider instructions ->
+   Verify button; render.com/docs/custom-domains is the reference).
