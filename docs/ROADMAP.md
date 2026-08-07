@@ -816,3 +816,14 @@ CMS boot spinner, card active states, FAQ+legal onboarding steps).
    chart block on the CMS dashboard (inspiration screenshot 2026-08-07).
 3. **Supademo 30-second pilot workflow** — then Phases A/B per the plan doc;
    Growth-trial window is ticking (14 days from ~2026-08-06).
+4. **BYO-domain architecture note (2026-08-07 discussion, no action now):** our
+   existing connect flow ALREADY implements the "Cloudflare for SaaS" pattern
+   Gemini recommended, via Pages custom domains (owner keeps registrar +
+   renewals, adds ONE CNAME, SSL auto): no transfer support needed, ever
+   (CF Registrar inbound transfers are dashboard-only, not API-able).
+   The real future trigger: **Cloudflare Pages caps ~100 custom domains per
+   project** and we run one project per vertical, so when any vertical nears
+   ~100 custom-domain tenants, migrate that vertical to Cloudflare for SaaS
+   (Custom Hostnames + fallback origin, ~100 free then ~$0.10/hostname/mo).
+   Near-term cheap polish: DomainSection "Check status" refresh affordance +
+   registrar-specific CNAME instructions (Namecheap/GoDaddy).
