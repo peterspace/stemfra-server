@@ -794,3 +794,25 @@ sweeper T-7/T-0 + 14d grace, owner digest, yoga surface + member area).
 Out of scope: credits/entitlement ledger, Stripe repairs, deposits, massage/spa
 real-plan tiers, the Display-only UX rework (separate task). Executor: Opus 4.8
 per ADVISOR_STRATEGY; commits only, NO push without Peter.
+
+## P15 — Video/demos arc + CMS UI polish (NEW, 2026-08-07)
+
+**Video/demos plan doc (source of truth): [`P15_VIDEO_DEMOS_PLAN.md`](P15_VIDEO_DEMOS_PLAN.md).**
+Phase 0a (Stacy onboarding fixes + update_contact do-it-for-me) DONE + live-verified
+2026-08-07; the CMS UI-polish pass shipped alongside it (form kit `components/form/`,
+violet PrimaryButton standardization, refined Select dropdown + category creation,
+CMS boot spinner, card active states, FAQ+legal onboarding steps).
+
+**Pending (queued after the UI pass, agreed with Peter 2026-08-07):**
+1. **Phone validation + Google address autocomplete slice** — Location editor +
+   Stacy contact card: libphonenumber validation with the tenant's country (known
+   from onboarding), resolved-number echo (PhoneField's showResolved pattern),
+   parallel `phone_e164` in location_map content for tel: hrefs; Google Places
+   Autocomplete on the address fields (session pricing ≈ free at our volume;
+   PETER ACTION: Google Cloud project + billing + domain-restricted API key).
+   Later: a "Business location/country" setting under Billing that drives
+   formatting app-wide (the Google-account model).
+2. **Dashboard analytics upgrade** — Airwallex-inspired: a richer balance/revenue
+   chart block on the CMS dashboard (inspiration screenshot 2026-08-07).
+3. **Supademo 30-second pilot workflow** — then Phases A/B per the plan doc;
+   Growth-trial window is ticking (14 days from ~2026-08-06).
