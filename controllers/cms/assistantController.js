@@ -24,14 +24,31 @@ const STACY_MODEL = process.env.STACY_MODEL || 'gpt-4o';  // per-conversation de
 // S3 (act) — whitelist the actions Stacy may PROPOSE. The server never executes;
 // it relays a validated proposal to the CMS, which shows a confirm card and (on
 // the owner's explicit OK) runs the real endpoint. Stacy stays "confirm-before-act".
-// Currently the only action is 'clone' (duplicate the current site).
+// Actions: 'clone' (duplicate the current site) + 'update_contact' (patch the
+// home Location section's address/phone/email — the do-it-for-me path for the
+// onboarding contact step; the CMS card applies via the owner's own RLS write).
 function normalizeAction(a) {
-  if (!a || typeof a !== 'object' || a.type !== 'clone') return null;
-  return {
-    type: 'clone',
-    businessName: (a.businessName && String(a.businessName).trim().slice(0, 80)) || null,
-    city: (a.city && String(a.city).trim().slice(0, 60)) || null,
-  };
+  if (!a || typeof a !== 'object') return null;
+  const s = (v, n) => (v && String(v).trim().slice(0, n)) || null;
+  if (a.type === 'clone') {
+    return {
+      type: 'clone',
+      businessName: s(a.businessName, 80),
+      city: s(a.city, 60),
+    };
+  }
+  if (a.type === 'update_contact') {
+    const out = {
+      type: 'update_contact',
+      address: s(a.address, 160),
+      phone: s(a.phone, 40),
+      email: s(a.email, 120),
+      locationName: s(a.locationName ?? a.location_name, 120),
+    };
+    // At least one real field, else drop the proposal.
+    return out.address || out.phone || out.email || out.locationName ? out : null;
+  }
+  return null;
 }
 
 // Append messages to a conversation's jsonb array (single owner per chat → no race concern at S1).
