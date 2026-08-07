@@ -162,6 +162,7 @@ app.use('/api/cms/site-publish', cmsPublishRouter);
 app.use('/api/cms/site-domain', cmsSiteDomainRouter);
 app.use('/api/cms/site-email', cmsSiteEmailRouter);
 app.use('/api/cms/bookings', require('./routes/cms/bookings'));
+app.use('/api/cms/leads', require('./routes/cms/leads'));
 app.use('/api/cms/email-templates', require('./routes/cms/emailTemplates'));
 app.use('/api/cms/google-profile', require('./routes/cms/googleProfile'));
 app.use('/api/cms/reports', require('./routes/cms/reports'));
