@@ -157,3 +157,29 @@ per tour. A quarterly sweep re-walks every published demo.
   SMS Task 9 shipped separately the same day. Phase 0 waiting on Peter's UI
   corrections; Phase A ready to start the moment 0 clears (or before it, if
   Peter wants the pilot on the current UI, accepting one early re-capture).
+
+
+## Build log — Phase 0 pilot SHIPPED (2026-08-07)
+
+**"Stemfra CMS in 30 seconds"** — demo id `cmsj17qj000k5rq20fo7y47gy`, published
+public: https://app.supademo.com/demo/cmsj17qj000k5rq20fo7y47gy
+
+Pipeline proven end to end in one sitting:
+1. **Capture**: Playwright (server dep) against the live CMS at 1920x1080@2x,
+   authenticated by injecting the browser session token into localStorage
+   (`scratchpad capture_pilot.js` pattern; the demos-cms-login password file had
+   gone stale, now updated). 7 frames: dashboard, pages, hero editor (deep-link
+   `?section=hero`), live-preview drawer, click-to-edit chip (dismiss the promo
+   popup inside the iframe first or it blocks hover), Stacy greeting, publish.
+2. **Upload**: create_upload_job -> Peter dragged the 7 PNGs into the portal
+   (requires HIS Supademo login; claude-in-chrome file_upload is the automated
+   path when the extension is connected) -> get_upload_job -> CDN URLs.
+3. **Assemble**: create_demo_from_uploaded_media (step texts) ->
+   create_hotspots (violet #6366F1 tooltips, Pulse, action-framed labels) ->
+   generate_voiceovers (Drew, 7 lines, ~46s total) ->
+   update_demo_settings (autoplay + play bar + public) -> publish handled by
+   creation; get_demo_embed_code.
+
+Learnings for Phases A/B: results from get_upload_job come back in upload
+order; hotspot coords are % of the image (read the frames back to place them);
+per-frame narrative + one hotspot per step matches the tour spec cleanly.
