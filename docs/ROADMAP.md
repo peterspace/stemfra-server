@@ -816,6 +816,14 @@ CMS boot spinner, card active states, FAQ+legal onboarding steps).
    chart block on the CMS dashboard (inspiration screenshot 2026-08-07).
 3. **Supademo 30-second pilot workflow** — then Phases A/B per the plan doc;
    Growth-trial window is ticking (14 days from ~2026-08-06).
+5. **Live Porkbun purchase + connect test (Peter + Claude, 2026-08-07):** buy a
+   real domain through the CMS Porkbun flow and walk the new 3-step connect
+   card end to end against Cloudflare (first real registration; Porkbun
+   account email/phone verification + funded balance are prerequisites).
+6. **Domain scale infra (PENDING, build before the self-serve funnel):** the
+   *.stemfra.com wildcard Worker + move custom domains to Cloudflare for SaaS
+   Custom Hostnames — full architecture + triggers in item 4 above. Its own
+   focused arc; zero owner-facing change.
 4. **Domain routing at scale (AGREED direction 2026-08-07; build BEFORE the
    self-serve funnel launches):** our BYO connect flow already implements the
    "Cloudflare for SaaS" pattern via Pages custom domains (owner keeps
