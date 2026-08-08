@@ -183,3 +183,28 @@ Pipeline proven end to end in one sitting:
 Learnings for Phases A/B: results from get_upload_job come back in upload
 order; hotspot coords are % of the image (read the frames back to place them);
 per-frame narrative + one hotspot per step matches the tour spec cleanly.
+
+## Build log — Native in-CMS walkthrough SHIPPED, visual + voice (2026-08-08)
+
+Peter's pivot from the Supademo pilot: build the walkthrough NATIVELY on the
+real CMS for logged-in owners (Supademo stays for anonymous marketing only).
+Shipped and Peter-approved end to end (platform commits through `5d8fc0b`):
+
+- **Engine** (`stemfra_cms/src/lib/tour.ts` + `components/TourOverlay.tsx`):
+  `data-tour` DOM anchors, box-shadow cutout spotlight that tracks its target,
+  cross-route steps (navigate, poll for mount, scroll, re-measure), module
+  store via useSyncExternalStore. Launched from Dashboard quick actions.
+- **Design language** (iterated against the Supademo Mercury demo per Peter):
+  two-layer spotlight = solid #1C1917 outline + soft rgba(28,25,23,.4) ring,
+  halo-only pulse (one shade); dark #1C1917 card, hover-only ring + 1.03 zoom;
+  white glove cursor (Peter's FA hand-pointer SVG as data URI).
+- **10 steps**: Dashboard metrics / quick actions / Website nav, home editor
+  sections + live preview, Services, Leads, Bookings (toolbar anchored — tall
+  targets fight the card), Stacy launcher, Publish.
+- **Voice**: ElevenLabs Creator plan (key in stemfra_server/.env, TTS +
+  voices-read scope; ⚠ add to deploy.yml env block at prod push). Brand voice
+  = library "Jessica" (DbwWo4rVEd5NrejHYUnm) @ speed 0.95; alternates
+  Sarah/Matilda @ 0.9. `stemfra_cms/scripts/generate-tour-voice.mjs`
+  regenerates public/tour/<target>.mp3 from TOUR_STEPS (--voice/--speed/
+  --force). TourOverlay plays per step with a persisted mute toggle.
+  Generate-once = zero runtime TTS cost (~1.5k credits per full regen).
