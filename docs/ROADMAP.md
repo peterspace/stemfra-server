@@ -870,8 +870,11 @@ call must become optional/minimal; Stacy + interactive tours carry onboarding.
    call). The dogfood proposal was validated LIVE: internal site 'stemfra-support'
    (5 call services = the categories, support team member, Mon-Fri 9-17 ET) takes
    REAL site_bookings through the public engine — a test call booked from the CMS
-   confirmed end to end, then cancelled. REMAINING in this item: CRM ticket view +
-   staff book-on-behalf action; Concierge booking hook on the marketing page;
+   confirmed end to end, then cancelled. CRM ticket view + staff book-on-behalf SHIPPED
+   2026-08-09 (server ab06700 + ops 35489ae: CRM /support page — cross-site
+   ticket table w/ status triage, Book-call modal prefilled from the ticket,
+   real booking verified + cancelled). REMAINING: Concierge booking hook on the
+   marketing page;
    ticket ack email to the owner; support-calendar staffing (who answers).
    ─ Original design: CMS Support surface
    with category dropdown (General / Domain / Email / Payments / Accounts) →
