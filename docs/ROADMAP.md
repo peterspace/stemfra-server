@@ -873,8 +873,13 @@ call must become optional/minimal; Stacy + interactive tours carry onboarding.
    confirmed end to end, then cancelled. CRM ticket view + staff book-on-behalf SHIPPED
    2026-08-09 (server ab06700 + ops 35489ae: CRM /support page — cross-site
    ticket table w/ status triage, Book-call modal prefilled from the ticket,
-   real booking verified + cancelled). REMAINING: Concierge booking hook on the
-   marketing page;
+   real booking verified + cancelled). Concierge booking hook SHIPPED 2026-08-09
+   (server 145cdde + client 5c938dbb: 'Consultation call' sales service on the
+   support site, public /api/concierge/call-config, widget inline scheduler via
+   a local starter + agent cta 'book_call'; ⚠ PETER PASTE: the updated
+   n8n-workflows/concierge-build-prompt.js into the Concierge Build Prompt node
+   so the AGENT can offer booking — the widget starter works without it).
+   REMAINING:
    ticket ack email to the owner; support-calendar staffing (who answers).
    ─ Original design: CMS Support surface
    with category dropdown (General / Domain / Email / Payments / Accounts) →
