@@ -180,6 +180,7 @@ app.use('/api/admin/memberships', require('./routes/admin/memberships'));
 app.use('/api/admin/mockups', require('./routes/admin/mockups'));
 app.use('/api/admin/marketing-assets', require('./routes/admin/marketingAssets'));
 app.use('/api/admin/theme-registry', require('./routes/admin/themeRegistry'));
+app.use('/api/admin/support', require('./routes/admin/support'));
 
 // Dev-only: in-browser email template previews
 if (process.env.NODE_ENV !== 'production') {
