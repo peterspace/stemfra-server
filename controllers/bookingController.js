@@ -13,6 +13,8 @@ const { sendOwnerNewBookingEmail } = require('./../lib/bookingEmails');
 // footer line, and as the reply-to so "just reply" actually reaches the
 // business. Best-effort: the confirmation still sends without them.
 const { resolveTenantEmailBrand } = require('../lib/tenantEmailBrand');
+// Support-site extras (P16.4b): Meet event on booking + host free/busy filter.
+const { isSupportSite, createSupportCallMeet, filterSlotsByHostBusy } = require('../lib/supportMeet');
 const getTenantEmailBits = (siteId) => resolveTenantEmailBrand(siteId);
 
 const SLOT_GRID_MINUTES = 15;
@@ -26,9 +28,10 @@ const computeAvailability = async ({ siteId, teamMemberId, serviceId, date, allo
     return { ok: false, code: 400, message: 'Missing required parameters.' };
   }
 
-  // Site (for timezone + status check)
+  // Site (for timezone + status check; subdomain lets the handlers apply the
+  // support-site host free/busy filter — see lib/supportMeet.js)
   const { data: site, error: siteErr } = await supabase
-    .from('sites').select('id, status, time_zone').eq('id', siteId).single();
+    .from('sites').select('id, status, time_zone, subdomain').eq('id', siteId).single();
   if (siteErr || !site) return { ok: false, code: 404, message: 'Site not found.' };
   if (!allowedStatuses.includes(site.status)) return { ok: false, code: 403, message: 'Site not live.' };
 
@@ -105,7 +108,7 @@ const computeAvailability = async ({ siteId, teamMemberId, serviceId, date, allo
 
   // Dedupe + sort (in case of overlapping windows)
   const unique = [...new Set(slots)].sort();
-  return { ok: true, slots: unique, duration, zone };
+  return { ok: true, slots: unique, duration, zone, subdomain: site.subdomain, date };
 };
 
 // ─── GET /api/site-bookings/availability?siteId=&teamMemberId=&serviceId=&date=YYYY-MM-DD ───
@@ -114,7 +117,13 @@ const getAvailability = async (req, res) => {
   try {
     const r = await computeAvailability({ ...req.query, allowedStatuses: ['live'] });
     if (!r.ok) return res.status(r.code).json({ success: false, message: r.message });
-    return res.json({ success: true, slots: r.slots, duration: r.duration, ...(r.reason ? { reason: r.reason } : {}) });
+    // Support site only: a slot must also be free on the call host's REAL
+    // Google calendar (lib/supportMeet.js; fails open if Google is down).
+    let slots = r.slots;
+    if (isSupportSite({ subdomain: r.subdomain }) && slots.length) {
+      slots = await filterSlotsByHostBusy({ slots, date: r.date, zone: r.zone, durationMinutes: r.duration });
+    }
+    return res.json({ success: true, slots, duration: r.duration, ...(r.reason ? { reason: r.reason } : {}) });
   } catch (err) {
     console.error('getAvailability error:', err);
     return res.status(500).json({ success: false, message: 'Could not load availability.' });
@@ -216,7 +225,7 @@ const placeBooking = async ({
   }
 
   const { data: site, error: siteErr } = await supabase
-    .from('sites').select('id, status, time_zone, owner_contact_id').eq('id', siteId).single();
+    .from('sites').select('id, status, time_zone, owner_contact_id, subdomain').eq('id', siteId).single();
   if (siteErr || !site) return { ok: false, code: 404, message: 'Site not found.' };
   if (!allowedStatuses.includes(site.status)) return { ok: false, code: 403, message: 'Site not live.' };
 
@@ -339,6 +348,10 @@ const placeBooking = async ({
     siteId, bookingId: booking.id, service, startsAt,
     customerEmail: customer.email, customerFirstName: customer.firstName, emailFromName,
   });
+
+  // Support site only: also create the Google Calendar event with a Meet link
+  // (invites the customer; fire-and-forget — the booking stands regardless).
+  createSupportCallMeet({ site, booking, service, customer });
 
   return {
     ok: true,
