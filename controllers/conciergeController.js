@@ -22,6 +22,11 @@ const EMAIL_RE = /^\S+@\S+\.\S+$/;
 const CTA_LINKS = buildConciergeContext().links;
 const CTA_LABELS = { start_free: 'Start free', pricing: 'See pricing', examples: 'See examples', contact: 'Talk to us' };
 
+// P16.4a: the agent may also request cta key 'book_call' — instead of a link it
+// opens the widget's inline booking card (a REAL booking on the internal
+// stemfra-support site through the public booking engine).
+const SUPPORT_SUBDOMAIN = 'stemfra-support';
+
 // Per-IP in-memory rate limit (public endpoint + LLM cost protection; per-instance).
 const hits = new Map();
 function rateLimited(key, limit = 20, windowMs = 60_000) {
@@ -82,7 +87,7 @@ async function send(req, res) {
       ? history.slice(-12).filter(m => m && typeof m.role === 'string' && typeof m.content === 'string')
       : [];
 
-    let reply = '', lead = null, quickReplies = [], ctaKeys = [];
+    let reply = '', lead = null, quickReplies = [], ctaKeys = [], wantsBooking = false;
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
@@ -96,7 +101,10 @@ async function send(req, res) {
       reply = data.reply ?? data.output ?? '';
       if (data.lead && typeof data.lead === 'object') lead = data.lead;
       if (Array.isArray(data.quick_replies)) quickReplies = data.quick_replies.filter(s => typeof s === 'string' && s.trim()).slice(0, 6);
-      if (Array.isArray(data.cta)) ctaKeys = data.cta.filter(k => CTA_LINKS[k]);
+      if (Array.isArray(data.cta)) {
+        wantsBooking = data.cta.includes('book_call');
+        ctaKeys = data.cta.filter(k => CTA_LINKS[k]);
+      }
     } catch (e) {
       console.error('[concierge.send] n8n error:', e.message);
       return res.status(502).json({ error: 'The assistant could not respond right now. Please try again.' });
@@ -104,9 +112,14 @@ async function send(req, res) {
 
     if (lead) captureLead(lead).catch(e => console.error('[concierge] captureLead error:', e.message));
 
-    // Build a CTA card from the agent's requested link keys (server-controlled hrefs).
+    // Build a CTA card from the agent's requested link keys (server-controlled
+    // hrefs). 'book_call' is special: it opens the widget's inline booking
+    // card instead of following a link, and supersedes everything else.
     let card = null;
-    if (ctaKeys.length) {
+    if (wantsBooking) {
+      card = { kind: 'book_call' };
+      quickReplies = [];
+    } else if (ctaKeys.length) {
       card = { kind: 'cta', actions: ctaKeys.map(k => ({ label: CTA_LABELS[k], href: CTA_LINKS[k] })) };
       quickReplies = []; // a CTA card supersedes chips
     }
@@ -117,4 +130,39 @@ async function send(req, res) {
   }
 }
 
-module.exports = { send };
+// GET /api/concierge/call-config — PUBLIC coordinates for booking a
+// consultation call: the internal support site + its 'sales' service only
+// (support-category services stay owner/staff-facing). The widget books
+// through the public booking endpoints with these.
+async function callConfig(req, res) {
+  try {
+    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown';
+    if (rateLimited(`cfg:${ip}`, 30)) return res.status(429).json({ error: 'Too many requests.' });
+
+    const { data: site } = await supabase
+      .from('sites')
+      .select('id, time_zone')
+      .eq('subdomain', SUPPORT_SUBDOMAIN)
+      .single();
+    if (!site) return res.status(503).json({ error: 'Calls are not available right now.' });
+
+    const [{ data: team }, { data: services }] = await Promise.all([
+      supabase.from('site_team_members').select('id').eq('site_id', site.id).eq('is_active', true).limit(1),
+      supabase.from('site_services').select('id, name, duration_minutes, metadata').eq('site_id', site.id).eq('is_active', true),
+    ]);
+    const sales = (services ?? []).find(s => s.metadata?.support_category === 'sales');
+    if (!team?.length || !sales) return res.status(503).json({ error: 'Calls are not available right now.' });
+
+    return res.json({
+      siteId: site.id,
+      timeZone: site.time_zone,
+      teamMemberId: team[0].id,
+      service: { id: sales.id, name: sales.name?.en ?? 'Consultation call', durationMinutes: sales.duration_minutes },
+    });
+  } catch (err) {
+    console.error('[concierge] call-config failed:', err);
+    return res.status(500).json({ error: 'Could not load the call schedule.' });
+  }
+}
+
+module.exports = { send, callConfig };
