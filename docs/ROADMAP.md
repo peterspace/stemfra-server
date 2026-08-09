@@ -864,7 +864,16 @@ call must become optional/minimal; Stacy + interactive tours carry onboarding.
    feature announcements via the existing broadcast_announcement rail + a
    What's New surface in the CMS; each entry can carry a "Show me" hook that
    launches a mini-tour of the new feature.
-3. **Support system (repurposes the onboarding-call idea)**: CMS Support surface
+3. ✅ **Support system CORE SHIPPED 2026-08-09** (server 2881147 + platform e9a7cc8):
+   support_requests table (service-role RLS) + /api/cms/support (create/list +
+   call-config) + CMS /support page (category dropdown, ticket list, schedule-a-
+   call). The dogfood proposal was validated LIVE: internal site 'stemfra-support'
+   (5 call services = the categories, support team member, Mon-Fri 9-17 ET) takes
+   REAL site_bookings through the public engine — a test call booked from the CMS
+   confirmed end to end, then cancelled. REMAINING in this item: CRM ticket view +
+   staff book-on-behalf action; Concierge booking hook on the marketing page;
+   ticket ack email to the owner; support-calendar staffing (who answers).
+   ─ Original design: CMS Support surface
    with category dropdown (General / Domain / Email / Payments / Accounts) →
    ticket + email + CRM visibility; optional "schedule a call" per category.
    Proposal to validate: DOGFOOD our own booking engine — a Stemfra-internal
