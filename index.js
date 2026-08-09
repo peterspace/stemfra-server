@@ -168,6 +168,7 @@ app.use('/api/cms/google-profile', require('./routes/cms/googleProfile'));
 app.use('/api/cms/reports', require('./routes/cms/reports'));
 app.use('/api/cms/sites', cmsSitesRouter);
 app.use('/api/cms/billing', require('./routes/cms/billing'));
+app.use('/api/cms/support', require('./routes/cms/support'));
 app.use('/api/cms/assistant', cmsAssistantRouter);
 app.use('/api/admin/sites', require('./routes/admin/sites'));
 app.use('/api/admin/domains', require('./routes/admin/domains'));
