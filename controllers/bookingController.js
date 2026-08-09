@@ -166,10 +166,17 @@ const upsertBookingCustomer = async (siteId, customer) => {
 // a CONFIRMED booking. Stamps confirmation_sent_at so it's idempotent (never
 // sends twice). Shared by placeBooking (paid/free) and finalizeBookingPayment
 // (paid-via-Checkout). Never throws — email is always best-effort.
-const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, startsAt, customerEmail, customerFirstName, emailFromName, attachIcs = true }) => {
+const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, startsAt, customerEmail, customerFirstName, emailFromName, attachIcs = true, customerTimeZone = null }) => {
   try {
     if (customerEmail) {
       const bits = await getTenantEmailBits(siteId);
+      // When the visitor booked in their own zone (Concierge / setup-call
+      // page), the email reads in THAT clock with the zone named — "5:00 AM
+      // GMT+9", not a bare ET time they would misremember. Tenant bookings
+      // pass no zone and keep the plain site-local labels.
+      const local = customerTimeZone ? startsAt.setZone(customerTimeZone) : startsAt;
+      const dateLabel = local.toFormat('cccc, LLLL d');
+      const timeLabel = customerTimeZone ? local.toFormat('h:mm a ZZZZ') : local.toFormat('h:mm a');
       // Add-to-calendar file (lib/ics.js). Skipped for support-site bookings,
       // whose Google Calendar invite already IS the calendar entry — attaching
       // both would double up on the customer's calendar.
@@ -188,7 +195,7 @@ const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, start
         to: customerEmail,
         attachments,
         subject: 'Your appointment is confirmed',
-        text: `Your appointment is confirmed for ${startsAt.toFormat('cccc, LLLL d')} at ${startsAt.toFormat('h:mm a')}.\n\nWe look forward to seeing you.`,
+        text: `Your appointment is confirmed for ${dateLabel} at ${timeLabel}.\n\nWe look forward to seeing you.`,
         html: emails.bookingConfirmation({
           businessName: emailFromName,
           businessLogoUrl: bits.logoUrl, businessAccent: bits.accent, businessFont: bits.font, businessPhotoUrl: bits.photoUrl,
@@ -198,8 +205,8 @@ const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, start
           businessEmail: bits.businessEmail,
           firstName: customerFirstName,
           serviceName: en(service.name) || 'Appointment',
-          dateLabel: startsAt.toFormat('cccc, LLLL d'),
-          timeLabel: startsAt.toFormat('h:mm a'),
+          dateLabel,
+          timeLabel,
           durationLabel: service.duration_minutes ? `${service.duration_minutes} min` : null,
         }),
       });
@@ -230,6 +237,7 @@ const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, start
 const placeBooking = async ({
   siteId, teamMemberId, serviceId, date, time, customer, notes, paymentIntentId,
   pending = false, collectInPerson = false, allowedStatuses = ['live'], emailFromName = 'Argyle & Sons',
+  customerTimeZone,
 }) => {
   if (!siteId || !teamMemberId || !serviceId || !date || !time || !customer) {
     return { ok: false, code: 400, message: 'Missing required fields.' };
@@ -244,6 +252,12 @@ const placeBooking = async ({
   if (!allowedStatuses.includes(site.status)) return { ok: false, code: 403, message: 'Site not live.' };
 
   const zone = site.time_zone || 'America/New_York';
+  // Visitor's own zone (Calendly-gap work): validated here, stored on the
+  // booking, and used to render the confirmation email in THEIR clock. Absent
+  // for tenant walk-in visitors — everything then behaves exactly as before.
+  const custZone = customerTimeZone && DateTime.now().setZone(customerTimeZone).isValid
+    ? customerTimeZone
+    : null;
 
   const { data: service, error: svcErr } = await supabase
     .from('site_services').select('id, name, duration_minutes, price_cents, currency').eq('id', serviceId).eq('site_id', siteId).single();
@@ -354,6 +368,7 @@ const placeBooking = async ({
       status: 'confirmed',
       customer_notes: notes?.trim() || null,
       confirmation_sent_at: null,
+      ...(custZone ? { metadata: { customer_time_zone: custZone } } : {}),
       ...paymentFields,
     }]).select().single();
   if (bookErr) return { ok: false, code: 500, message: bookErr.message };
@@ -362,6 +377,7 @@ const placeBooking = async ({
     siteId, bookingId: booking.id, service, startsAt,
     customerEmail: customer.email, customerFirstName: customer.firstName, emailFromName,
     attachIcs: !isSupportSite(site),
+    customerTimeZone: custZone,
   });
 
   // Support site only: also create the Google Calendar event with a Meet link
