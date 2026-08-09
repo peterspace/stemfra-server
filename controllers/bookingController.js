@@ -15,6 +15,7 @@ const { sendOwnerNewBookingEmail } = require('./../lib/bookingEmails');
 const { resolveTenantEmailBrand } = require('../lib/tenantEmailBrand');
 // Support-site extras (P16.4b): Meet event on booking + host free/busy filter.
 const { isSupportSite, createSupportCallMeet, filterSlotsByHostBusy } = require('../lib/supportMeet');
+const { buildBookingIcsAttachment } = require('../lib/ics');
 const getTenantEmailBits = (siteId) => resolveTenantEmailBrand(siteId);
 
 const SLOT_GRID_MINUTES = 15;
@@ -165,14 +166,27 @@ const upsertBookingCustomer = async (siteId, customer) => {
 // a CONFIRMED booking. Stamps confirmation_sent_at so it's idempotent (never
 // sends twice). Shared by placeBooking (paid/free) and finalizeBookingPayment
 // (paid-via-Checkout). Never throws — email is always best-effort.
-const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, startsAt, customerEmail, customerFirstName, emailFromName }) => {
+const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, startsAt, customerEmail, customerFirstName, emailFromName, attachIcs = true }) => {
   try {
     if (customerEmail) {
       const bits = await getTenantEmailBits(siteId);
+      // Add-to-calendar file (lib/ics.js). Skipped for support-site bookings,
+      // whose Google Calendar invite already IS the calendar entry — attaching
+      // both would double up on the customer's calendar.
+      const attachments = attachIcs
+        ? [buildBookingIcsAttachment({
+            uid: bookingId,
+            summary: `${en(service.name) || 'Appointment'} at ${emailFromName}`,
+            description: 'Booked online. Need to change it? Just reply to this email.',
+            startIso: startsAt.toUTC().toISO(),
+            endIso: startsAt.plus({ minutes: service.duration_minutes || 30 }).toUTC().toISO(),
+          })]
+        : undefined;
       await sendMail({
         fromName: emailFromName,
         replyTo: bits.businessEmail || undefined,
         to: customerEmail,
+        attachments,
         subject: 'Your appointment is confirmed',
         text: `Your appointment is confirmed for ${startsAt.toFormat('cccc, LLLL d')} at ${startsAt.toFormat('h:mm a')}.\n\nWe look forward to seeing you.`,
         html: emails.bookingConfirmation({
@@ -347,6 +361,7 @@ const placeBooking = async ({
   await sendBookingConfirmationEmails({
     siteId, bookingId: booking.id, service, startsAt,
     customerEmail: customer.email, customerFirstName: customer.firstName, emailFromName,
+    attachIcs: !isSupportSite(site),
   });
 
   // Support site only: also create the Google Calendar event with a Meet link
@@ -376,7 +391,7 @@ const finalizeBookingPayment = async ({ bookingId, amountCents = null, paymentIn
     .eq('id', bookingId).maybeSingle();
   if (!b) return { ok: false, code: 404, message: 'Booking not found.' };
 
-  const { data: site } = await supabase.from('sites').select('time_zone, company:companies(name)').eq('id', b.site_id).maybeSingle();
+  const { data: site } = await supabase.from('sites').select('time_zone, subdomain, company:companies(name)').eq('id', b.site_id).maybeSingle();
   const zone = site?.time_zone || 'America/New_York';
   const startsAt = DateTime.fromISO(b.starts_at, { zone });
   const label = { id: b.id, date: startsAt.toFormat('cccc, LLLL d'), time: startsAt.toFormat('h:mm a') };
@@ -408,6 +423,7 @@ const finalizeBookingPayment = async ({ bookingId, amountCents = null, paymentIn
     siteId: b.site_id, bookingId: b.id, service: service || { name: b.service_id }, startsAt,
     customerEmail: customer?.email, customerFirstName: customer?.first_name,
     emailFromName: site?.company?.name || 'Bookings',
+    attachIcs: !isSupportSite(site),
   });
 
   return { ok: true, code: 200, booking: label };
