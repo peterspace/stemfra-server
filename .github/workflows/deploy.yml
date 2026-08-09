@@ -110,6 +110,7 @@ jobs:
             CONCIERGE_N8N_URL=https://n8n.srv1555257.hstgr.cloud/webhook/concierge
             CONCIERGE_MODEL=gpt-4o
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            ELEVENLABS_API_KEY=${{ secrets.ELEVENLABS_API_KEY }}
             VOICE_MODEL=gpt-4o-mini
             VOICE_PHONE_NUMBER=+16672205540
             LEADGEN_MODEL=gpt-4o
