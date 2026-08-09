@@ -848,3 +848,37 @@ CMS boot spinner, card active states, FAQ+legal onboarding steps).
    Near-term (separate small slice): DomainSection redesign on Render's
    3-step model (Add domain -> Configure DNS w/ per-provider instructions ->
    Verify button; render.com/docs/custom-domains is the reference).
+
+## P16 — Interactive onboarding + What's New + Support system (QUEUED 2026-08-09, design agreed in discussion; build order TBD with Peter)
+
+Context: the native CMS walkthrough (P15) shipped 2026-08-08 (10 spotlight steps,
+Jessica voice @ 0.95, docs in P15_VIDEO_DEMOS_PLAN.md). Peter's goal: the setup
+call must become optional/minimal; Stacy + interactive tours carry onboarding.
+
+1. **Interactive "do-it" tour steps**: extend the tour engine so a step can
+   require the user's REAL action (click the spotlit target, advance on route
+   change/DOM event) instead of Next. Then wire Stacy's 14-step onboarding
+   checklist to launch per-task mini-tours ("Show me how" on each step) — the
+   checklist says WHAT, the tour shows WHERE, in place.
+2. **What's New channel** (absorbs the parked P10 case-1 "What's new" item):
+   feature announcements via the existing broadcast_announcement rail + a
+   What's New surface in the CMS; each entry can carry a "Show me" hook that
+   launches a mini-tour of the new feature.
+3. **Support system (repurposes the onboarding-call idea)**: CMS Support surface
+   with category dropdown (General / Domain / Email / Payments / Accounts) →
+   ticket + email + CRM visibility; optional "schedule a call" per category.
+   Proposal to validate: DOGFOOD our own booking engine — a Stemfra-internal
+   site whose services are the call types and whose team is support staff, so
+   owner-side CMS, marketing Concierge, AND CRM staff all book through the
+   same site_bookings rails (CRM books on behalf of a client who stalled).
+4. **Marketing booking page stays, reframed for SALES/special needs** (custom
+   websites per the pricing page); Concierge can offer it. Setup calls are no
+   longer the default onboarding path.
+
+## Deferred one-offs (kept pending per Peter 2026-08-09)
+- First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
+  + Jessica @ 0.95) — draft when Peter wants to record.
+- Supademo pilot step-order fix (one reorder_steps call on demo
+  cmsj17qj000k5rq20fo7y47gy) — before any marketing use of the pilot.
+- ELEVENLABS_API_KEY into deploy.yml env block + GitHub secret AT PROD PUSH
+  (deploys wipe unlisted vars).
