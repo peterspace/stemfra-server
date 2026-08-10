@@ -264,6 +264,159 @@ async function classify(siteId, rawRows) {
 }
 
 // POST /api/cms/customers/import/preview  { siteId, rows } — dry run (no writes).
+
+// ─── Import column mapping: provider presets first, AI fallback ────────────
+// (Plan of record: stemfra_platform/docs/ANALYTICS_AND_IMPORTS_PLAN.md.)
+// The LLM only ever makes the MAPPING DECISION — it sees headers plus a few
+// MASKED sample values, never the dataset; plain code transforms every row.
+const OpenAI = require('openai');
+const importAi = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const IMPORT_MAP_MODEL = process.env.IMPORT_MAP_MODEL || 'gpt-4o-mini';
+
+const IMPORT_FIELD_KEYS = ['firstName', 'lastName', 'email', 'phone', 'birthdate', 'tags', 'notes', 'smsOptIn', 'emailOptOut'];
+
+// Known export layouts (lowercase headers). Signature = headers that identify
+// the provider; map = header → our field. Refined as real exports come in.
+const IMPORT_PRESETS = [
+  {
+    name: 'Mindbody',
+    signature: ['first name', 'last name', 'email', 'mobile phone', 'birth date'],
+    minMatch: 4,
+    map: {
+      'first name': 'firstName', 'last name': 'lastName', 'email': 'email',
+      'mobile phone': 'phone', 'home phone': null, 'work phone': null,
+      'birth date': 'birthdate', 'birthday': 'birthdate', 'client id': null,
+      'notes': 'notes', 'tags': 'tags', 'liability release': null,
+    },
+  },
+  {
+    name: 'Square',
+    signature: ['first name', 'surname', 'email address', 'phone number'],
+    minMatch: 3,
+    map: {
+      'first name': 'firstName', 'surname': 'lastName', 'last name': 'lastName',
+      'email address': 'email', 'phone number': 'phone', 'birthday': 'birthdate',
+      'memo': 'notes', 'groups': 'tags', 'email subscription status': null,
+    },
+  },
+  {
+    name: 'Vagaro',
+    signature: ['first name', 'last name', 'mobile', 'email'],
+    minMatch: 4,
+    map: {
+      'first name': 'firstName', 'last name': 'lastName', 'email': 'email',
+      'mobile': 'phone', 'day phone': null, 'birthday': 'birthdate',
+      'customer notes': 'notes', 'tags': 'tags',
+    },
+  },
+  {
+    name: 'Acuity / Squarespace',
+    signature: ['first name', 'last name', 'phone', 'email', 'notes'],
+    minMatch: 4,
+    map: {
+      'first name': 'firstName', 'last name': 'lastName', 'email': 'email',
+      'phone': 'phone', 'notes': 'notes',
+    },
+  },
+  {
+    name: 'Booksy',
+    signature: ['first name', 'last name', 'e-mail', 'phone'],
+    minMatch: 3,
+    map: {
+      'first name': 'firstName', 'last name': 'lastName', 'e-mail': 'email',
+      'phone': 'phone', 'birth date': 'birthdate', 'note': 'notes',
+    },
+  },
+];
+
+function matchImportPreset(headers) {
+  const lower = headers.map(h => String(h || '').toLowerCase().trim());
+  for (const preset of IMPORT_PRESETS) {
+    const hits = preset.signature.filter(sig => lower.includes(sig)).length;
+    if (hits >= preset.minMatch) {
+      const map = {};
+      headers.forEach((h, i) => {
+        const key = preset.map[lower[i]];
+        map[h] = key === undefined ? null : key;
+      });
+      return { name: preset.name, map };
+    }
+  }
+  return null;
+}
+
+/** Mask a sample so structure survives but PII does not: digits → #, letters
+ *  after the first two of each token → x; email domains stay readable. */
+function maskSample(v) {
+  const str = String(v ?? '').slice(0, 48);
+  const at = str.indexOf('@');
+  if (at > 0) return `${maskSample(str.slice(0, at))}@${str.slice(at + 1)}`;
+  let letters = 0;
+  return str.replace(/[0-9]/g, '#').replace(/[A-Za-z]/g, (c) => (letters++ < 2 ? c : 'x'));
+}
+
+async function aiMapColumns(headers, samples) {
+  if (!importAi) return null;
+  const lines = headers.map(h => {
+    const vals = (samples?.[h] ?? []).slice(0, 3).map(maskSample).filter(Boolean);
+    return `- "${h}"${vals.length ? ` (masked samples: ${vals.join(' | ')})` : ''}`;
+  });
+  const completion = await importAi.chat.completions.create({
+    model: IMPORT_MAP_MODEL,
+    response_format: { type: 'json_object' },
+    messages: [
+      {
+        role: 'system',
+        content: [
+          'You map spreadsheet columns from a local-business client export onto a fixed set of customer fields.',
+          `Allowed field values: ${IMPORT_FIELD_KEYS.join(', ')}, or null for columns that should not be imported (ids, addresses, spend history, appointment data, marketing stats).`,
+          'smsOptIn/emailOptOut are consent flags; only map clearly-labeled consent columns. Sample values are masked (digits are #, most letters are x) but keep their structure.',
+          'Each field may be used at most once. Return ONLY JSON: { "map": { "<exact header>": "<field or null>", ... } } covering every header.',
+        ].join('\n'),
+      },
+      { role: 'user', content: `Columns:\n${lines.join('\n')}` },
+    ],
+  });
+  const parsed = JSON.parse(completion.choices[0]?.message?.content ?? '{}');
+  const raw = parsed.map || {};
+  const used = new Set();
+  const map = {};
+  for (const h of headers) {
+    const key = raw[h];
+    if (IMPORT_FIELD_KEYS.includes(key) && !used.has(key)) { map[h] = key; used.add(key); }
+    else map[h] = null;
+  }
+  return map;
+}
+
+// POST /api/cms/customers/import/map  { siteId, headers, samples } →
+// { source: 'preset'|'ai'|'none', presetName?, map }
+async function mapImportColumns(req, res) {
+  try {
+    const { siteId, headers, samples } = req.body || {};
+    if (!siteId || !Array.isArray(headers) || !headers.length || headers.length > 120) {
+      return res.status(400).json({ success: false, message: 'Missing siteId or headers.' });
+    }
+    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
+    if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
+
+    const preset = matchImportPreset(headers);
+    if (preset) return res.json({ success: true, source: 'preset', presetName: preset.name, map: preset.map });
+
+    try {
+      const aiMap = await aiMapColumns(headers, samples);
+      if (aiMap) return res.json({ success: true, source: 'ai', map: aiMap });
+    } catch (err) {
+      console.error('[customers.mapImportColumns] AI mapping failed:', err.message);
+    }
+    // No preset, no AI: the client falls back to its local heuristic.
+    res.json({ success: true, source: 'none', map: null });
+  } catch (err) {
+    console.error('[customers.mapImportColumns]', err.message);
+    res.status(500).json({ success: false, message: 'Could not match the columns.' });
+  }
+}
+
 async function importPreview(req, res) {
   try {
     const { siteId, rows } = req.body || {};
@@ -348,4 +501,5 @@ async function importCustomers(req, res) {
   }
 }
 
-module.exports = { setSuspended, sendReviewEmail, listCustomers, exportCustomers, importPreview, importCustomers };
+module.exports = {
+  mapImportColumns, setSuspended, sendReviewEmail, listCustomers, exportCustomers, importPreview, importCustomers };
