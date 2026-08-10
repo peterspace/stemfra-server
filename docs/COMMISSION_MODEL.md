@@ -308,6 +308,19 @@ against a live seed site (forge-and-bell): $325/mo membership + $190 June online
 - ⬜ **Remaining (Batch 2a):** none — the manual Airwallex invoicing loop is complete
   (meter → invoice PDF → CMS bank panel + receipt upload → CRM compliance packet →
   mark paid). Batch 2b (auto-debit) stays blocked on Airwallex card KYB.
+- ✅ **Airwallex invoice MIRROR (2026-08-10, verified live).** `lib/airwallexBilling.js`
+  mirrors every issued charge into Airwallex Billing as an official **OUT_OF_BAND**
+  invoice via their API (billing customer per owner contact, cached at
+  `contacts.billing_profile.awx_customer_id`; shared "Stemfra services" product id in
+  `crm_settings.airwallex_billing`; invoice carries OUR number + due date; awx ids on
+  `charge.metadata`). Hooks: `billing.markRequested` → mirror+finalize;
+  `billing.markPaid` → mark_as_paid; `voidInvoice` exported for a future void path.
+  Best-effort/fire-and-forget — our ledger never blocks on Airwallex. Idempotent.
+  Gate `AIRWALLEX_MIRROR_ENABLED` + `AIRWALLEX_CLIENT_ID/API_KEY` (in deploy.yml).
+  First mirror: INV-FC394268 → `inv_sgpdjl7cchl7nll1p6e` (FINALIZED/UNPAID $8.54).
+  Why: official invoices in Airwallex = the trading history card-KYB looks at, and
+  when Payments activates, flipping `collection_method` to digital-link/auto-charge
+  automates collection with no re-architecture (= Batch 2b's on-ramp).
 
 **Batch 2b — auto-debit (blocked on Airwallex card KYB, which trading history unlocks):**
 auto-debit invoices so collection automates. Also capture real subscription/order payment
