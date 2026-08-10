@@ -50,6 +50,11 @@ async function connect(req, res) {
     const target = `${project}.pages.dev`;
 
     await cf.attachCustomDomain(project, clean);
+    // Apex connect → also attach the www twin (found live 2026-08-10: only the
+    // entered hostname was attached, so www.<domain> had no Pages cert even
+    // when the owner added its CNAME). Best-effort — apex alone still works.
+    const isApex = clean.split('.').length === 2 && !clean.endsWith('.stemfra.com');
+    if (isApex) { try { await cf.attachCustomDomain(project, `www.${clean}`); } catch { /* apex still connects */ } }
     // If it's a *.stemfra.com host we wire DNS ourselves; otherwise the owner
     // adds the CNAME at their registrar (returned below).
     if (clean.endsWith('.stemfra.com')) {
@@ -106,6 +111,8 @@ async function disconnect(req, res) {
     if (customDomain) {
       const project = projectFor(slug);
       await cf.removeCustomDomain(project, customDomain);
+      // The www twin may have been attached alongside an apex — best-effort.
+      try { await cf.removeCustomDomain(project, `www.${customDomain}`); } catch { /* may not exist */ }
       await cf.deleteCnameRecord(customDomain); // no-op if not in our zone
     }
     await supabase.from('sites').update({ custom_domain: null }).eq('id', siteId);
