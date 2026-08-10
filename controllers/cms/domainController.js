@@ -241,7 +241,7 @@ async function registerOwn(req, res) {
       .eq('site_id', siteId)
       .maybeSingle();
     if (!sub) {
-      return res.status(402).json({ error: 'Set up your Stemfra plan first — then we can add a domain to your invoice.', code: 'subscription_required' });
+      return res.status(402).json({ error: 'Set up your Stemfra plan first. Then we can add a domain to your invoice.', code: 'subscription_required' });
     }
 
     // Fresh availability + exact cost (the registrar rejects a mismatched cost).
