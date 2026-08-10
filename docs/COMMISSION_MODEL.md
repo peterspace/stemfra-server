@@ -321,6 +321,33 @@ against a live seed site (forge-and-bell): $325/mo membership + $190 June online
   Why: official invoices in Airwallex = the trading history card-KYB looks at, and
   when Payments activates, flipping `collection_method` to digital-link/auto-charge
   automates collection with no re-architecture (= Batch 2b's on-ramp).
+  **Decisions attached to the mirror (2026-08-10, Peter):**
+  - **Airwallex customer emails: ALL OFF** (Billing settings → Customer emails).
+    Our branded Stemfra emails (Resend, chocolate register, our PDF w/ bank panel)
+    are the tenant-facing voice; Airwallex's would duplicate them unbranded.
+    Revisit ONE toggle at Batch 2b: "Payment attempt failed" (useful once
+    Airwallex itself attempts auto-charges).
+  - **Airwallex invoice Themes/branding: skipped for now** (same reason — tenants
+    see our email/PDF; the mirror is back-office + KYB evidence).
+  - **Bank-transfer instructions on mirrored invoices: NOT YET AVAILABLE** —
+    verified live: Billing settings → Payment account shows "No options" and
+    `GET /billing_customers/{id}/bank_transfer_instructions` returns `[]`. The
+    payment-account link (and per-invoice unique references) unlocks with the
+    Payments/collection capability (the pending KYB). No action possible now;
+    our own PDF carries the bank details. Re-check after Payments activates.
+  - **Global Tax Automation: OFF until real multi-state revenue.** It calculates
+    only where we DECLARE registrations (no nexus determination); pre-launch we
+    have none (Delaware home base has no sales tax; economic nexus thresholds
+    ~$100k/200 txns per state). Airwallex has NO public per-state rate-lookup
+    API (`/api/v1/accounting/tax_codes` = Spend expense-coding, not rates); the
+    Billing tax engine computes internally at invoice time + provides CSV
+    exports. ACTIVATION CHECKLIST when the day comes: (1) add state
+    registrations in Billing settings → Tax; (2) split the shared "Stemfra
+    services" product into commission + domains products and set `tax_code`
+    (SaaS-Business for commission) on each; (3) pass tenant billing ADDRESSES
+    into `ensureBillingCustomer` (tax needs customer location — currently we
+    send name/email only); (4) flip the toggle. Consult a tax advisor on
+    SaaS-fee taxability per state before (1).
 
 **Batch 2b — auto-debit (blocked on Airwallex card KYB, which trading history unlocks):**
 auto-debit invoices so collection automates. Also capture real subscription/order payment
