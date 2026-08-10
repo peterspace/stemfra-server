@@ -150,3 +150,30 @@ Four tabs:
 3. MoR for System A: yes/no once the first-year state footprint is visible.
 4. ITIN applications (W-7) for all three members.
 5. Nigerian accountant engagement (PIT + CBN/FX path).
+
+## 8. Round-2 changes (2026-08-10, Peter review) + advisor questions
+
+Built after the first pass, all shipped + verified:
+- **Company tab** added (first tab): the entity card (jurisdiction,
+  classification, cap table, notes) moved here out of Filings & status.
+- **Calendar** is now a table with headers + a fixed-width right-column Year
+  dropdown (the copy no longer competes with the filter); row actions moved to
+  a ⋮ kebab. **Books** header matches; registry / calendar / books paginate via
+  the shared CRM `tablekit.jsx` (10/page).
+- **Copy**: "non-resident aliens" → "non-resident"; softened the
+  Nigerian-members note; **ETBUS/ECI spelled out in full** with the acronyms.
+
+**Advisor (Fable 5) questions — documented per Peter's request:**
+1. **CORS omits PUT.** The server's global `cors({ methods: [...] })` list has
+   GET/POST/PATCH/DELETE/OPTIONS but not PUT, so a PUT preflights 204 then
+   fails (`net::ERR_FAILED`). Compliance settings uses POST as a result; a
+   pre-existing `PUT /api/admin/billing/plans` (useSavePlanCatalog) is likely
+   failing too. Add PUT globally, or standardize on POST/PATCH and migrate?
+2. **CRM bundle size.** `npm run build` warns the main chunk is ~8.7MB (2.3MB
+   gzip), no route-level code-splitting (pre-existing). Invest in `lazy()` now
+   or defer?
+3. **ECI/ETBUS steer.** Peter notes most clients start in the US, so ETBUS
+   "feels like yes". But ETBUS depends on where **Stemfra itself** operates
+   (people/office/agents), not where customers are (taxGuidance gap #2). The UI
+   now clarifies the acronyms + the nuance and stays at "Not yet determined";
+   this remains a CPA decision the engine only tracks.
