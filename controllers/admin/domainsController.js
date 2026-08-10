@@ -98,7 +98,7 @@ async function registerDomain(req, res) {
         const { data: sub } = await supabase.from('subscriptions').select('id, currency, provider').eq('site_id', siteId).maybeSingle();
         const { data: ch } = await supabase.from('billing_charges').insert({
           subscription_id: sub?.id ?? null, site_id: siteId, kind: 'adjustment',
-          line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
+          line_items: [{ label: `Domain registration: ${avail.domain} (1 yr)`, cents: avail.retailCents }],
           amount_cents: avail.retailCents, currency: sub?.currency || 'USD',
           // Domain invoices collect by bank transfer to the Airwallex account
           // (COMMISSION_MODEL.md §2) — never inherit a dormant provider stamp.

@@ -210,7 +210,7 @@ async function checkOne(req, res) {
 async function invoiceDomain({ siteId, sub, avail, orderId = null, pending }) {
   const { data: ch } = await supabase.from('billing_charges').insert({
     subscription_id: sub?.id ?? null, site_id: siteId, kind: 'adjustment',
-    line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
+    line_items: [{ label: `Domain registration: ${avail.domain} (1 yr)`, cents: avail.retailCents }],
     amount_cents: avail.retailCents, currency: sub?.currency || 'USD',
     due_date: dueInDays(7), status: 'due', provider: 'airwallex',
     metadata: {
