@@ -9,7 +9,7 @@ const { logSiteActivity } = require('../../lib/activity');
 const { streamInvoicePdf } = require('../../lib/invoicePdf');
 const { getCommissionBank } = require('../../lib/commission');
 
-const CONTACT_COLS = 'full_name, first_name, last_name, email, country, state, billing_profile';
+const CONTACT_COLS = 'full_name, first_name, last_name, email, phone, country, state, billing_profile';
 
 // The plans an owner can self-serve switch to: sellable tiers only (drop
 // coming-soon), ordered, trimmed to what the UI needs.
