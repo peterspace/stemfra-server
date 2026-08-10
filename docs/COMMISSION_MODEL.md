@@ -344,10 +344,26 @@ against a live seed site (forge-and-bell): $325/mo membership + $190 June online
     exports. ACTIVATION CHECKLIST when the day comes: (1) add state
     registrations in Billing settings → Tax; (2) split the shared "Stemfra
     services" product into commission + domains products and set `tax_code`
-    (SaaS-Business for commission) on each; (3) pass tenant billing ADDRESSES
-    into `ensureBillingCustomer` (tax needs customer location — currently we
-    send name/email only); (4) flip the toggle. Consult a tax advisor on
-    SaaS-fee taxability per state before (1).
+    (SaaS-Business for commission; digital-services category for domains) on
+    each; (3) ~~pass tenant billing ADDRESSES into `ensureBillingCustomer`~~
+    **DONE 2026-08-10** (address built from `contacts.billing_profile` +
+    country/state, human-name→ISO-2; pushed on create and on later mirrors;
+    customers with an address report `automatic_tax_eligibility: ELIGIBLE`);
+    (4) flip the toggle. Consult a tax advisor on SaaS-fee taxability per
+    state before (1).
+  - **Taxability research (2026-08-10, for the future CRM tax registry):**
+    the 5% commission is consideration for the platform → treated as SaaS.
+    ~22 states + DC tax SaaS (incl. NY, TX, PA, WA, MA, CT, OH; TX taxes 80%
+    of the price as data processing, CT has a 1% B2B rate). Domain
+    registration = "digital automated service": explicitly taxable in WA,
+    patchier elsewhere (broad-base HI/NM/SD-style states likely tax it; most
+    others don't enumerate it). Airwallex does NOT determine nexus or monitor
+    thresholds — it applies 0% wherever no registration is declared, so the
+    threshold watch is OURS. Watch the 200-transaction prong where retained:
+    many small domain invoices can trip counts before dollars. Proposed CRM
+    registry (not yet approved/built): per-state 12-month billed rollup from
+    billing_charges + tenant billing state, split commission vs domains, with
+    threshold progress + a registrations table; alert at 80% of threshold.
 
 **Batch 2b — auto-debit (blocked on Airwallex card KYB, which trading history unlocks):**
 auto-debit invoices so collection automates. Also capture real subscription/order payment
