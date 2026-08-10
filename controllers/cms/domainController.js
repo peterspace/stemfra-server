@@ -12,7 +12,7 @@ const { projectFor } = require('../../lib/attachSiteDomain');
 const cf = require('../../lib/cloudflarePages');
 const registrar = require('../../lib/registrar');
 const domainBalance = require('../../lib/domainBalance');
-const { provisionDomainZone } = require('../../lib/domainZone');
+const { purchaseAndWire } = require('../../lib/domainPurchase');
 const { logSiteActivity } = require('../../lib/activity');
 const billing = require('../../lib/billing');
 
@@ -65,6 +65,9 @@ async function connect(req, res) {
 }
 
 // GET /api/cms/site-domain?siteId= — current connection + live Cloudflare status.
+// `managed: true` = Stemfra registered this domain (a domain_registration charge
+// exists for it), so we configured all DNS ourselves — the CMS hides the BYO
+// "add this record at your registrar" instructions for managed domains.
 async function status(req, res) {
   try {
     const siteId = req.query.siteId;
@@ -74,8 +77,19 @@ async function status(req, res) {
     const { slug, customDomain } = await loadVerticalAndDomain(siteId);
     if (!customDomain) return res.json({ domain: null });
     const project = projectFor(slug);
-    const cfStatus = await cf.getCustomDomain(project, customDomain);
-    res.json({ domain: customDomain, cnameTarget: `${project}.pages.dev`, status: cfStatus?.status || 'pending' });
+    const [cfStatus, { data: regCharge }] = await Promise.all([
+      cf.getCustomDomain(project, customDomain),
+      supabase.from('billing_charges').select('id')
+        .eq('site_id', siteId)
+        .contains('metadata', { type: 'domain_registration', domain: customDomain })
+        .limit(1),
+    ]);
+    res.json({
+      domain: customDomain,
+      cnameTarget: `${project}.pages.dev`,
+      status: cfStatus?.status || 'pending',
+      managed: !!(regCharge && regCharge.length),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -101,14 +115,25 @@ async function disconnect(req, res) {
   }
 }
 
-// ─── Owner "buy a domain" (Hostinger-style search + instant register) ────────
-// Peter's call (2026-07-05): instant buy + invoice, gated on an ACTIVE platform
-// subscription. Porkbun checkDomain is rate-limited (~1/10s account-wide), so
-// search does ONE live check (the exact query) and lists alternates with CACHED
-// retail pricing (getPricing, 24h cache); each alternate has its own on-demand
-// /check. Register mirrors the staff flow in admin/domainsController.js.
+// ─── Owner "buy a domain" (Hostinger-style search + register) ────────────────
+// Purchase model (2026-08-10, Peter's call — the fintech reconcile pattern):
+//   INSTANT while the prepaid Porkbun balance is healthy — we buy + wire the
+//   domain immediately (no staff wait, no risk of losing the name or a price
+//   change) and the invoice follows; the owner pays it by bank transfer to the
+//   Airwallex account like every other invoice.
+//   INVOICE-FIRST fallback once the balance drops under the threshold
+//   (lib/domainBalance, $30 default) — invoice now, staff register after
+//   payment clears (admin registerDomain reuses the pending invoice). The mode
+//   flips back to instant automatically when the balance is topped up.
+// Porkbun checkDomain is rate-limited (~1/10s account-wide), so search does ONE
+// live check (the exact query) and lists alternates with CACHED retail pricing
+// (getPricing, 24h cache); each alternate has its own on-demand /check.
 
-const SUGGEST_TLDS = ['com', 'net', 'co', 'studio', 'salon', 'spa', 'shop', 'online'];
+const SUGGEST_TLDS = [
+  'com', 'net', 'org', 'co', 'us', 'biz', 'info', 'online', 'site', 'xyz',
+  'store', 'shop', 'club', 'vip', 'studio', 'salon', 'spa', 'care', 'company',
+  'services', 'work', 'fit', 'yoga', 'click', 'cc',
+];
 const dueInDays = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 
 // GET /api/cms/site-domain/search?siteId=&q=
@@ -129,18 +154,26 @@ async function searchDomains(req, res) {
     // One live availability check (rate-limited API — never per keystroke).
     const exact = await reg.checkDomain(exactDomain);
 
-    // Alternates: cached registration pricing only; availability checked on demand.
+    // Alternates: cached registration + renewal pricing; availability on demand.
     let alternates = [];
     try {
       const pricing = await reg.getPricing();
       alternates = SUGGEST_TLDS.filter(t => t !== exactTld).map(tld => {
-        const p = pricing[tld]?.registration;
-        const costCents = p != null ? Math.round(Number(p) * 100) : null;
-        return { domain: `${base}.${tld}`, tld, retailCents: reg.retailCents(costCents), available: null };
+        const toCents = (p) => (p != null ? Math.round(Number(p) * 100) : null);
+        const costCents = toCents(pricing[tld]?.registration);
+        const renewalCostCents = toCents(pricing[tld]?.renewal);
+        return {
+          domain: `${base}.${tld}`, tld, available: null,
+          retailCents: reg.retailCents(costCents),
+          renewalRetailCents: reg.retailCents(renewalCostCents),
+        };
       }).filter(a => a.retailCents != null);
     } catch { /* pricing is best-effort — search still returns the exact match */ }
 
-    res.json({ exact, alternates });
+    // Which purchase mode the register button will use (drives the CMS copy).
+    const purchaseMode = (await domainBalance.purchasesSuspended()) ? 'invoice_first' : 'instant';
+
+    res.json({ exact, alternates, purchaseMode });
   } catch (e) {
     res.status(502).json({ error: e.message });
   }
@@ -161,11 +194,32 @@ async function checkOne(req, res) {
   }
 }
 
-// POST /api/cms/site-domain/register { siteId, domain, dryRun? (dev only) }
-// Registers on Porkbun at our cost, points DNS (apex ALIAS + www CNAME), attaches
-// the Pages custom domain, writes sites.custom_domain, and invoices the owner our
-// retail price on their existing billing (Payoneer request / card later). The
-// billing_charges insert fires the owner's bell notification via the DB trigger.
+// Creates the owner's domain invoice (bank transfer to the Airwallex account,
+// like every Stemfra invoice) + emails it. `pending` marks an invoice-first
+// charge that staff fulfill after payment (admin registerDomain reuses it).
+async function invoiceDomain({ siteId, sub, avail, orderId = null, pending }) {
+  const { data: ch } = await supabase.from('billing_charges').insert({
+    subscription_id: sub.id, site_id: siteId, kind: 'adjustment',
+    line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
+    amount_cents: avail.retailCents, currency: sub.currency || 'USD',
+    due_date: dueInDays(7), status: 'due', provider: 'airwallex',
+    metadata: {
+      type: 'domain_registration', domain: avail.domain, cost_cents: avail.costCents,
+      renewal_cost_cents: avail.renewalCostCents ?? null,
+      registrar: process.env.DOMAIN_REGISTRAR || 'porkbun', purchased_by: 'owner',
+      pending_registration: pending, ...(orderId ? { order_id: orderId } : {}),
+    },
+  }).select('id').single();
+  const chargeId = ch?.id || null;
+  // Email the invoice (best-effort; the insert already rang the bell).
+  if (chargeId) { try { await billing.markRequested(chargeId, { by: null }); } catch { /* email best-effort */ } }
+  return chargeId;
+}
+
+// POST /api/cms/site-domain/register { siteId, domain }
+// Two modes (2026-08-10 — see the section comment above):
+//   instant       — balance healthy: buy + wire NOW, invoice follows.
+//   invoice_first — balance low: invoice now, staff register once paid.
 async function registerOwn(req, res) {
   try {
     const { siteId, domain } = req.body || {};
@@ -175,12 +229,7 @@ async function registerOwn(req, res) {
     if (!reg.isConfigured()) return res.status(503).json({ error: 'Domain registration is not available right now.', code: 'registrar_unconfigured' });
     if (!domain) return res.status(400).json({ error: 'domain is required' });
 
-    // Prepaid-balance guard: never take a domain invoice we cannot fulfill.
-    if (await domainBalance.purchasesSuspended()) {
-      return res.status(503).json({ error: 'Domain registration is paused for a short while. Please try again soon.', code: 'registrar_low_balance' });
-    }
-
-    const { customDomain } = await loadVerticalAndDomain(siteId);
+    const { slug, customDomain } = await loadVerticalAndDomain(siteId);
     if (customDomain) {
       return res.status(409).json({ error: `This site is already connected to ${customDomain}. Disconnect it first to register a new domain.` });
     }
@@ -195,39 +244,55 @@ async function registerOwn(req, res) {
       return res.status(402).json({ error: 'Set up your Stemfra plan first — then we can add a domain to your invoice.', code: 'subscription_required' });
     }
 
-    // Fresh availability + exact retail cost for the invoice.
+    // Fresh availability + exact cost (the registrar rejects a mismatched cost).
     const avail = await reg.checkDomain(domain);
     if (!avail.available) return res.status(409).json({ error: `${avail.domain} is not available`, availability: avail });
 
-    // GATED (2026-07-14): we do NOT purchase the domain at the registrar here.
-    // Instead we invoice the owner our retail price via Payoneer and email a
-    // payment request; Stemfra staff register + wire the domain once payment
-    // clears (admin registerDomain). This avoids spending at the registrar
-    // before the customer has paid.
-    let chargeId = null;
-    try {
-      const { data: ch } = await supabase.from('billing_charges').insert({
-        subscription_id: sub.id, site_id: siteId, kind: 'adjustment',
-        line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
-        amount_cents: avail.retailCents, currency: sub.currency || 'USD',
-        due_date: dueInDays(7), status: 'due', provider: sub.provider || 'payoneer',
-        metadata: { type: 'domain_registration', domain: avail.domain, cost_cents: avail.costCents, registrar: process.env.DOMAIN_REGISTRAR || 'porkbun', purchased_by: 'owner', pending_registration: true },
-      }).select('id').single();
-      chargeId = ch?.id || null;
-    } catch (e) {
-      return res.status(500).json({ error: `Could not create the invoice: ${e.message}` });
+    const instant = !(await domainBalance.purchasesSuspended());
+
+    if (!instant) {
+      // Balance below threshold — never spend what we can't cover. Invoice now;
+      // staff register + wire once payment clears (and the balance is topped up).
+      let chargeId = null;
+      try {
+        chargeId = await invoiceDomain({ siteId, sub, avail, pending: true });
+      } catch (e) {
+        return res.status(500).json({ error: `Could not create the invoice: ${e.message}` });
+      }
+      logSiteActivity({
+        siteId, action: 'domain_invoice_requested', actorName: req.cmsUser.email || 'owner',
+        entityType: 'site', entityId: siteId,
+        details: { domain: avail.domain, retail_cents: avail.retailCents, cost_cents: avail.costCents, charge_id: chargeId, purchased_by: 'owner', mode: 'invoice_first' },
+      });
+      return res.json({ ok: true, mode: 'invoice_first', invoiced: true, domain: avail.domain, retailCents: avail.retailCents, renewalRetailCents: avail.renewalRetailCents ?? null });
     }
 
-    // Email the payment request (best-effort; the insert already rang the bell).
-    if (chargeId) { try { await billing.markRequested(chargeId, { by: null }); } catch { /* email best-effort */ } }
+    // Instant: buy + wire immediately (shared orchestrator — same steps as the
+    // staff path), then invoice. The domain is secured before any payment wait.
+    const { orderId, steps } = await purchaseAndWire({
+      site: { id: siteId, vertical: { slug } },
+      availability: avail,
+    });
+    let chargeId = null;
+    try {
+      chargeId = await invoiceDomain({ siteId, sub, avail, orderId, pending: false });
+    } catch (e) { steps.billing = e.message; }
 
     logSiteActivity({
-      siteId, action: 'domain_invoice_requested', actorName: req.cmsUser.email || 'owner',
+      siteId, action: 'domain_registered', actorName: req.cmsUser.email || 'owner',
       entityType: 'site', entityId: siteId,
-      details: { domain: avail.domain, retail_cents: avail.retailCents, cost_cents: avail.costCents, charge_id: chargeId, purchased_by: 'owner' },
+      details: { domain: avail.domain, order_id: orderId, cost_cents: avail.costCents, retail_cents: avail.retailCents, steps, charge_id: chargeId, purchased_by: 'owner', mode: 'instant' },
     });
 
-    res.json({ ok: true, invoiced: true, domain: avail.domain, retailCents: avail.retailCents });
+    // Refresh the cached balance so the CRM monitor + the suspension switch see
+    // the spend right away (this is what flips the mode at the $30 line).
+    domainBalance.getBalanceCents({ force: true }).catch(() => {});
+
+    res.json({
+      ok: true, mode: 'instant', domain: avail.domain, orderId,
+      retailCents: avail.retailCents, renewalRetailCents: avail.renewalRetailCents ?? null,
+      steps, billed: !!chargeId,
+    });
   } catch (e) {
     res.status(502).json({ error: e.message, porkbun: e.porkbun || undefined });
   }

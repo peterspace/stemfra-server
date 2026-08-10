@@ -1,158 +1,182 @@
-# Domains — buy-a-domain (P6.27)
+# Domains — registration, wiring, billing & monitoring
 
-_Status: ✅ v1 BUILT 2026-06-29 (staff-mediated, in the CRM), INERT until Peter
-provisions Porkbun keys + funds the account. Registrar = **Porkbun** (decided).
-Decisions resolved: Stemfra holds the registration (reseller, we renew + bill);
-domain billed as a one-off System-A line (`billing_charges.kind='adjustment'`)._
+_Status: ✅ LIVE end-to-end (first real purchase: `argyleandsons.click` for
+Argyle & Sons, 2026-08-10, Porkbun order 11293757). Registrar = **Porkbun**
+(prepaid balance); DNS/SSL/email = **Cloudflare** (zone per domain). Rewritten
+2026-08-10 — the pre-build spec this file used to hold is superseded by what
+shipped. §6 is the step-by-step walkthrough written for a tutorial video._
 
-## ✅ What was built (v1 — staff, in the CRM)
-- **`lib/registrar/porkbun.js`** — client: `checkDomain` (availability + cost +
-  our retail price), `register` (supports `dryRun`), `getRequirements`,
-  `createDnsRecord`, `retailCents` markup. `isConfigured()` false until keys set.
-- **`lib/registrar/index.js`** — provider selector (mirrors `lib/billing`), so a
-  second registrar can slot in later (`DOMAIN_REGISTRAR`).
-- **`/api/admin/domains/*`** (PLATFORM_OPS): `GET /healthcheck`, `GET /search?domain=`,
-  `GET /requirements?tld=`, `POST /:siteId/register {domain, confirm?}`. A real
-  purchase needs `confirm:true`; otherwise `register` runs a **dryRun** (spends
-  nothing). On a real buy: register → Porkbun DNS (apex ALIAS + www CNAME →
-  `{project}.pages.dev`) → `attachCustomDomain` to the Pages project → write
-  `sites.custom_domain` → insert a `billing_charges` 'adjustment' line at our
-  **retail** price → audit `site_activity` (`domain_registered`). Each post-buy
-  step is best-effort so a hiccup never loses the paid registration.
-- **CRM UI** — Sites → Domain modal now has **Connect existing** | **Buy a domain**
-  tabs: search → availability + price → "Register & connect". Shows a friendly
-  "not set up yet" message when keys are missing.
+## 1. The model in one paragraph
 
-## ⚠ Peter's setup checklist (before it works)
-1. Create a **Porkbun account**; **fund the balance** (or card on file) —
-   `domain/create` draws from the prepaid balance.
-2. Account → **API Access** → create an **API key + secret**.
-3. (For DNS on domains we register) enable **API Access per-domain** after purchase —
-   needed for the `dns/create` step. _(New-domain registration only needs the
-   account key; DNS record creation needs the per-domain toggle — verify on first buy.)_
-4. Set server env: `PORKBUN_API_KEY`, `PORKBUN_SECRET_API_KEY` (+ optional
-   `DOMAIN_MARKUP_MULT` / `DOMAIN_MARKUP_MIN_CENTS`). Secrets → GitHub Actions
-   `deploy.yml` env block, never `.env.example`.
-5. Confirm `/api/admin/domains/healthcheck` → `configured:true`.
+A tenant searches for a domain inside the CMS (Settings → Domain) and registers
+it with one click. While our prepaid Porkbun balance is healthy, the purchase is
+**instant**: Stemfra buys the domain at wholesale, wires all DNS + SSL + email
+routing automatically, and the invoice (bank transfer to our Airwallex account,
+like every Stemfra invoice) follows. If the balance drops below the threshold
+($30 default), the CMS automatically switches to **invoice-first**: the tenant
+gets the invoice up front and staff register the domain after payment clears.
+The mode flips back to instant on top-up, with no deploy. Stemfra holds the
+registration (reseller model — we renew and bill); WHOIS privacy + SSL are
+included free.
 
-## Pricing & limits (Porkbun, verified 2026-06-29)
-- **API access is free** (no per-request fee); resource limits apply.
-- **Domain cost** = registration price, flat renewal (no first-year bait): **.com
-  ≈ $11.08/yr**, **.net ≈ $12.52/yr**; **WHOIS privacy + SSL included free**.
-- Our **retail** = `max(cost×1.5, cost+$7)` → e.g. .com bills the client **$18.08/yr**
-  (tune via env). Margin = retail − cost.
-- **Rate limits:** `checkDomain` default **1 / 10 s per account** (configurable — ask
-  Porkbun to raise it). So search is an explicit **"Check" button**, never per-keystroke.
-  `domain/create`: 1 attempt / 10 s, 50 successes / day.
-- **`cost` must match** the current price on `create` → we always `checkDomain`
-  immediately before registering and pass that exact `costCents`.
+## 2. The two purchase modes (the fintech reconcile pattern)
 
-## ⚠ Needs live verification (couldn't test — no keys yet)
-- **Apex DNS**: we create a Porkbun **ALIAS** at the apex → `{project}.pages.dev` +
-  a `www` CNAME. Cloudflare Pages custom-domain validation against Porkbun-hosted
-  DNS (ALIAS at apex) must be confirmed on the first real purchase. Fallback if it
-  misbehaves: point the domain's **nameservers to Cloudflare** + add it as a CF zone.
-- Exact `checkDomain` response field names (`avail`/`price`) — coded to the documented
-  shape; verify against a live response.
+| | **Instant** (balance ≥ $30) | **Invoice-first** (balance < $30) |
+|---|---|---|
+| Trigger | `domainBalance.purchasesSuspended()` false | true |
+| What happens on Register | Buy at Porkbun → wire everything → invoice after | Insert pending invoice → email it → stop |
+| Who completes it | Fully automatic | Staff: CRM Sites → Domain → Buy → Register & connect (reuses the pending invoice — no double bill) |
+| Owner-facing copy | "We register it immediately and connect it to your site" | "We'll email you an invoice, then register once payment is confirmed" |
+| Where decided | `controllers/cms/domainController.js registerOwn`; search returns `purchaseMode` so the CMS shows the right copy before the click | same |
 
-## Deferred to v2
-- **Customer self-serve buy** in the CMS (today: staff-mediated in the CRM, matching
-  high-touch onboarding). When ready, add `/api/cms/domains/*` (requireCmsAuth +
-  verifySiteOwnership) mirroring the admin controller.
-- **`site_domain_purchases` table + renewal/expiry sweeper** (auto-renew, expiry
-  invoice line, transfer-out auth code). v1 records the purchase in
-  `billing_charges` metadata + `site_activity`; a dedicated table comes with renewals.
-- The `check_domain_availability_and_price` MCP capability as an alternate/preview
-  search backend.
+Why: an instant purchase never loses the name (or its price) to a staff delay,
+and the balance cap means we never spend money we haven't got covered. This is
+the standard prepaid-float reconciliation model.
 
----
-_Original spec (decisions + flow) retained below for reference._
+## 3. What a purchase actually does (shared orchestrator)
 
-## What exists today (CONNECT only)
+`lib/domainPurchase.js purchaseAndWire()` — used by BOTH the owner instant path
+and the staff CRM path (`controllers/admin/domainsController.registerDomain`).
+Never inline these steps; they drifted once.
 
-## What exists today (CONNECT only)
-Owners can **connect a domain they already own**; we cannot **sell** one.
-- `controllers/cms/domainController.js` (`/api/cms/site-domain`): connect / status /
-  disconnect. Connect → `attachCustomDomain(project, fqdn)` on the vertical's
-  Cloudflare Pages project, writes `sites.custom_domain`, returns `cnameTarget`
-  (`{project}.pages.dev`) + CF status. For `*.stemfra.com` hosts we add the CNAME
-  ourselves; for external domains the owner pastes the CNAME at their registrar.
-- `lib/cloudflarePages.js`: `attachCustomDomain` / `removeCustomDomain` /
-  `addCnameRecord` / `findDnsRecord` / `deleteCnameRecord` — full CF Pages + DNS API.
-- `config/cloudflare.js`: `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_ZONE_ID` (stemfra.com)
-  / `CLOUDFLARE_API_TOKEN`.
-- **All the DNS/SSL plumbing is done.** The only gap is **domain registration**
-  (search availability → buy → own/renew).
+1. **Porkbun `domain/create`** at the freshly-checked cost (WHOIS privacy on).
+   Draws from the prepaid balance.
+2. **Porkbun DNS**: apex ALIAS + `www` CNAME → `{project}.pages.dev` (serves
+   during NS propagation).
+3. **Cloudflare Pages attach** (`attachCustomDomain`) → SSL issuance.
+4. **Case 7 zone** (`lib/domainZone.js provisionDomainZone`): CF zone in our
+   account → Porkbun nameservers → the zone's pair → proxied apex+www CNAMEs →
+   Email Routing enable.
+5. `sites.custom_domain` written → the CMS + tenant site pick it up.
 
-## ⚠ Decisions needed from Peter (before building)
-1. **Registrar** (the load-bearing call). Cloudflare Registrar is at-cost and would
-   pair perfectly with our existing CF setup **but has NO public registration API**
-   (reseller/enterprise only) — so it can't back a self-serve buy flow. For
-   programmatic registration pick one with a real API:
-   - **Porkbun** — clean REST API, WHOIS privacy free, good pricing. _(Recommended
-     for v1: simplest API, no reseller contract.)_
-   - **Name.com** — full REST API, established.
-   - **Route53 Domains** — solid API but AWS-centric (we're not on AWS).
-   Then keep **Cloudflare for DNS + SSL** (point the new domain's nameservers at CF,
-   or just add it to our zone) so the existing attach flow is reused unchanged.
-2. **Who owns the registration?** Stemfra-as-reseller (we hold the registrar
-   account, auto-renew, bill the client) **vs** register into the client's own
-   registrar account. _(Recommend: Stemfra holds it — matches done-for-you; renewals
-   are ours to manage + bill.)_
-3. **Payment model.** A domain is a **billable line** — never take card numbers
-   ourselves. Options: (a) add it to the Stemfra invoice (Payoneer/Stripe System A),
-   or (b) a one-off charge. _(Recommend: add to the System-A invoice as a line item;
-   the free-domain-in-setup promise already exists on the pricing page.)_
-4. **Free-domain promise.** The pricing page says "Free custom domain included." Cap
-   the wholesale cost (~$10–15/yr standard TLDs); premium names = client pays the
-   difference. Confirm the cap + which TLDs are "included".
+Every post-purchase step is best-effort (a hiccup never loses the paid
+registration); failures land in the `steps` map + the `site_activity` audit row
+(`domain_registered`).
 
-## Proposed flow (once a registrar is chosen)
-1. **Search** — CMS Domain card gets a "Need a domain? Search" tab → `GET
-   /api/cms/domains/search?q=` → registrar availability+price API → list available
-   names + prices. _(Note: the environment exposes a `check_domain_availability_and_price`
-   capability — evaluate it as the search backend vs the registrar's own API.)_
-2. **Buy** — `POST /api/cms/domains/purchase { siteId, domain }` → create a billable
-   charge (don't register until paid, or register + invoice per decision #3) →
-   registrar `register` API → set nameservers to Cloudflare (or add to our zone) →
-   reuse `attachCustomDomain` + write `sites.custom_domain`. Audit to `site_activity`.
-3. **Lifecycle** — renewals (auto-renew + annual invoice line), WHOIS privacy on by
-   default, transfer-out support (give the auth code). Sweeper for upcoming expiries.
+## 4. Money: pricing, invoicing, balance
 
-## Schema (additive, when built)
-```sql
-CREATE TABLE site_domain_purchases (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  site_id uuid NOT NULL REFERENCES sites(id),
-  domain text NOT NULL UNIQUE,
-  registrar text NOT NULL,                 -- 'porkbun' | 'name_com' | ...
-  registrar_ref text,                      -- external registration id
-  status text NOT NULL,                    -- 'pending_payment'|'registered'|'active'|'expiring'|'failed'|'transferred_out'
-  amount_cents int, currency text DEFAULT 'USD',
-  billing_charge_id uuid REFERENCES billing_charges(id),  -- ties to System A
-  auto_renew boolean DEFAULT true,
-  registered_at timestamptz, expires_at timestamptz,
-  created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now()
-);
-```
+- **Retail formula** (`lib/registrar/porkbun.js retailCents`, 2026-08-10):
+  `cost + 10% + $2` (`DOMAIN_MARKUP_PCT` / `DOMAIN_MARKUP_FLAT_CENTS`). Applied
+  to the first-year (promo) cost AND the renewal cost, so the renewal price we
+  quote is honest from day one. Rationale: domains are an enabler (the 5%
+  commission is the revenue) — retail stays within ~$2-4 of at-cost registrars
+  (Cloudflare = at cost; e.g. .com: CF $10.46, our $14.19, Namecheap ~$15).
+  ⚠ Porkbun first-year promos renew much higher (.site $1.96 → $28.84 cost);
+  `checkDomain` now returns `renewalCostCents`/`renewalRetailCents` and the CMS
+  shows "renews at $X/yr" everywhere. **The renewal sweeper (still to build)
+  must invoice from the renewal cost, not year-one.**
+- **Invoice** = `billing_charges` `kind='adjustment'`, `provider='airwallex'`,
+  due +7d, metadata `{type:'domain_registration', domain, cost_cents,
+  renewal_cost_cents, order_id, pending_registration}`. The insert rings the
+  owner's bell (cms_notifications trigger); `billing.markRequested` emails the
+  branded invoice PDF **with the Airwallex bank-transfer panel** (invoice number
+  = payment reference; receipt upload under Billing → Invoices). Payoneer is
+  fully retired from this path (2026-08-10 — provider registry default, the
+  `billing_active_provider` setting, and both register paths now say airwallex).
+- **Balance monitor** (`lib/domainBalance.js` + CRM **Platform → Domains**):
+  Porkbun has no balance endpoint, so we read it via a native no-charge dryRun
+  probe (cached 10 min; forced refresh after every instant purchase). Below
+  `DOMAIN_MIN_BALANCE_CENTS` ($30): daily alert email to `NOTIFY_EMAIL`, CMS
+  flips to invoice-first, CRM page shows "Owner purchases: Paused" + a top-up
+  banner. Recovery is automatic.
 
-## Env (when built)
+## 5. Owner-facing UX states (CMS Settings → Domain)
+
+- **No domain**: "Your Stemfra address" ({sub}.stemfra.com) + "Find a new
+  domain" search (exact-match hero + a scrollable Cloudflare-style list of ~24
+  TLD alternates, each showing first-year + renewal retail; per-row Check does
+  the live availability call) + "Use a domain you own" BYO connect.
+- **Search → Register** confirm panel: mode-aware copy + the renewal price.
+- **Connecting (Stemfra-registered, DNS propagating)**: "We're setting
+  everything up" — we tell the owner we configured DNS/SSL/email automatically,
+  nothing to do, Check status button. NO registrar instructions (the server's
+  `status` endpoint returns `managed:true` when a domain_registration charge
+  exists for the domain).
+- **Connecting (BYO)**: the Render-style 3-step guide (record to add at their
+  registrar + Verify button).
+- **Connected** (either kind): the custom domain is the PRIMARY address card
+  ("argyleandsons.click · CONNECTED · live with SSL"), verification is
+  automatic (the card polls Cloudflare on load — no Verify button once live),
+  and the stemfra.com subdomain demotes to a footnote ("keeps working and shows
+  the same site"). The top-bar "Open" link uses the custom domain.
+
+## 6. Walkthrough (video-tutorial script)
+
+### A. Tenant: buying a domain (instant mode)
+1. CMS → sidebar **Account → Domain** (Settings → Domain).
+2. "Find a new domain": type a name (`myspa` or `myspa.com`) → **Search**.
+3. The exact match shows AVAILABLE/TAKEN + "$X first year · renews at $Y/yr";
+   scroll "More options" for other endings; **Check** any row for live
+   availability.
+4. **Register** → confirm panel restates price, renewal, WHOIS privacy + SSL →
+   **Register domain**.
+5. 🎉 "{domain} is registered" — the card flips to *Connecting*: "We're setting
+   everything up… no action needed."
+6. Bell rings + email arrives: the invoice PDF with the bank-transfer details
+   (pay by transfer, reference = invoice number, upload the receipt under
+   Billing → Invoices). Also visible under **Billing → Payment history**.
+7. Within ~an hour the card shows **CONNECTED · live with SSL**; the site
+   answers on the new domain AND the stemfra.com address.
+8. **Email forwarding** (same Settings group): create hello@{domain} → any
+   inbox, free, up to 20 addresses.
+
+### B. Tenant: connecting a domain they already own (BYO)
+1. Same page → "Use a domain you own" → enter it → **Connect**.
+2. Follow the 3-step guide: add the shown CNAME at their registrar (provider
+   dropdown adapts the instructions) → **Verify**.
+3. On success: same CONNECTED state. (No zone/email routing — we don't take
+   custody of BYO DNS.)
+
+### C. Staff: monitoring + the low-balance mode
+1. CRM → **Platform → Domains**: Porkbun balance vs the $30 threshold, every
+   registered domain (site mapping, status, expiry, auto-renew, WHOIS privacy),
+   and the "Owner purchases: Open/Paused" card.
+2. Balance < $30 → daily alert email + CMS purchases switch to invoice-first.
+   Top up at porkbun.com/account → Refresh → everything resumes.
+3. Invoice-first fulfilment: CRM → Sites → (site) → **Domain → Buy a domain**
+   tab → Check → **Register & connect** once the owner has paid. It reuses the
+   pending owner invoice (stamps the order id) — never a second charge.
+4. Payment arrives (bank transfer): CRM Billing → verify the receipt packet →
+   **Mark paid** → the owner gets the receipt email.
+
+## 7. Setup / env
+
 ```
 DOMAIN_REGISTRAR=porkbun
-DOMAIN_REGISTRAR_API_KEY=        # secret → GitHub Actions, never .env.example
-DOMAIN_REGISTRAR_API_SECRET=
+PORKBUN_API_KEY / PORKBUN_SECRET_API_KEY   # Account → API Access; account must be email+phone VERIFIED + balance funded
+DOMAIN_MARKUP_PCT=10                        # retail = cost +10% +$2
+DOMAIN_MARKUP_FLAT_CENTS=200
+DOMAIN_MIN_BALANCE_CENTS=3000               # $30 pause threshold
+CLOUDFLARE_API_TOKEN                        # needs: Zone:Zone:Edit, Zone:DNS:Edit,
+                                            # Zone:Email Routing Rules:Edit (all zones),
+                                            # Account:Email Routing Addresses:Edit
 ```
+Secrets → GitHub Actions `deploy.yml` env block (the deploy REPLACES the env
+panel). ⚠ 2026-08-10: the live CF token is missing the two Email Routing
+permissions — the `emailRouting` step of `provisionDomainZone` fails with auth
+error 10000 until Peter extends the token (then re-run email forwarding for
+already-registered domains).
 
-## Build order when greenlit
-1. Pick registrar (decision #1) + provision account/keys (Peter).
-2. `lib/registrar/<provider>.js` (search + register + renew) behind a thin interface
-   (mirror `lib/billing/` provider pattern so a second registrar can slot in).
-3. `site_domain_purchases` schema; `/api/cms/domains/search` + `/purchase`
-   (requireCmsAuth + verifySiteOwnership); tie purchase to a System-A charge.
-4. Reuse `attachCustomDomain` for DNS/SSL — no new CF code needed.
-5. CMS Domain card "Search & buy" tab + checkout-as-invoice-line.
-6. Renewal/expiry sweeper + WHOIS-privacy default + transfer-out.
+## 8. Gotchas (learned live)
 
-## Note
-This is **separate from System A/B payments** — a domain is the client's asset we
-buy on their behalf and bill back; it does not touch Stripe Connect.
+- `checkDomain` is rate-limited ~1/10s account-wide → one live check per
+  search, alternates priced from the cached public `/pricing/get`.
+- `domain/create` requires `cost` to match the current price → always re-check
+  immediately before registering.
+- Porkbun balance: no endpoint — native dryRun create returns `balance` free.
+- The first-year price can be a promo (`firstYearPromo:'yes'`); renewal cost
+  comes from `additional.renewal.price` / `regularPrice`.
+- `subscriptions.provider` CHECK now includes `'airwallex'` (extended
+  2026-08-10).
+- Both register paths must stay on `lib/domainPurchase.purchaseAndWire` +
+  `provisionDomainZone` — keep them shared.
+
+## 9. Deferred / next
+
+- **Renewal sweeper** (the big one): auto-renew is ON at Porkbun (draws from
+  the balance); we still need the yearly `billing_charges` line at
+  **renewal-cost retail** + expiry warnings. With it, a
+  `site_domain_purchases` table (v1 records purchases in charge metadata +
+  `site_activity`).
+- CRM Buy panel success state after Register & connect (still shows the form).
+- Transfers in/out; premium-domain handling (collect-first stays the rule).

@@ -6,9 +6,7 @@
 const supabase = require('../../config/supabase');
 const registrar = require('../../lib/registrar');
 const domainBalance = require('../../lib/domainBalance');
-const cf = require('../../lib/cloudflarePages');
-const { projectFor } = require('../../lib/verticalConfig');
-const { provisionDomainZone } = require('../../lib/domainZone');
+const { purchaseAndWire } = require('../../lib/domainPurchase');
 const { logSiteActivity } = require('../../lib/activity');
 
 const dueInDays = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
@@ -62,9 +60,8 @@ async function registerDomain(req, res) {
     const avail = await reg.checkDomain(domain);
     if (!avail.available) return res.status(409).json({ error: `${avail.domain} is not available`, availability: avail });
 
-    const dryRun = confirm !== true;
-    const result = await reg.register(avail.domain, { costCents: avail.costCents, whoisPrivacy: true, dryRun });
-    if (dryRun) {
+    if (confirm !== true) {
+      await reg.register(avail.domain, { costCents: avail.costCents, whoisPrivacy: true, dryRun: true });
       return res.json({
         ok: true, dryRun: true, domain: avail.domain,
         costCents: avail.costCents, retailCents: avail.retailCents,
@@ -72,22 +69,10 @@ async function registerDomain(req, res) {
       });
     }
 
-    // Real registration succeeded. Wire DNS + attach + bill (each best-effort so a
-    // post-purchase hiccup never loses the fact that we already paid for the domain).
-    const project = projectFor(site.vertical?.slug);
-    const target = `${project}.pages.dev`;
-    const steps = {};
-    try { await reg.createDnsRecord(avail.domain, { type: 'ALIAS', name: '', content: target }); steps.apex = 'ok'; }
-    catch (e) { steps.apex = e.message; }
-    try { await reg.createDnsRecord(avail.domain, { type: 'CNAME', name: 'www', content: target }); steps.www = 'ok'; }
-    catch (e) { steps.www = e.message; }
-    try { await cf.attachCustomDomain(project, avail.domain); steps.attach = 'ok'; }
-    catch (e) { steps.attach = e.message; }
-    // Case 7: Cloudflare zone + NS delegation + Email Routing (shared orchestrator —
-    // keep in step with cms/domainController.registerOwn).
-    try { const z = await provisionDomainZone(avail.domain, target); Object.assign(steps, z.steps); }
-    catch (e) { steps.zone = e.message; }
-    await supabase.from('sites').update({ custom_domain: avail.domain }).eq('id', siteId);
+    // Real purchase + full wiring via the shared orchestrator (lib/domainPurchase —
+    // the owner instant path uses the same one; never inline these steps again).
+    const { orderId, target, steps } = await purchaseAndWire({ site, availability: avail });
+    const result = { orderId };
 
     // Bill the customer our retail price (one-off). If the OWNER already
     // requested this domain from the CMS (the gated flow creates a pending
@@ -114,7 +99,9 @@ async function registerDomain(req, res) {
             subscription_id: sub.id, site_id: siteId, kind: 'adjustment',
             line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
             amount_cents: avail.retailCents, currency: sub.currency || 'USD',
-            due_date: dueInDays(7), status: 'due', provider: sub.provider || 'payoneer',
+            // Domain invoices collect by bank transfer to the Airwallex account
+            // (COMMISSION_MODEL.md §2) — never inherit a dormant provider stamp.
+            due_date: dueInDays(7), status: 'due', provider: 'airwallex',
             metadata: { type: 'domain_registration', domain: avail.domain, order_id: result.orderId, cost_cents: avail.costCents, registrar: process.env.DOMAIN_REGISTRAR || 'porkbun' },
           }).select('id').single();
           chargeId = ch?.id || null;
