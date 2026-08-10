@@ -4,11 +4,12 @@
 const express = require('express');
 const router = express.Router();
 const { requireStaffRole, PLATFORM_OPS } = require('../../middleware/staffAuth');
-const { healthcheck, search, requirements, registerDomain } = require('../../controllers/admin/domainsController');
+const { healthcheck, search, requirements, registerDomain, overview } = require('../../controllers/admin/domainsController');
 
 const gate = requireStaffRole(...PLATFORM_OPS);
 
 router.get('/healthcheck', gate, healthcheck);
+router.get('/overview', gate, overview);   // CRM Domains monitor: balance + domain list
 router.get('/search', gate, search);
 router.get('/requirements', gate, requirements);
 router.post('/:siteId/register', gate, registerDomain);

@@ -11,6 +11,7 @@ const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { projectFor } = require('../../lib/attachSiteDomain');
 const cf = require('../../lib/cloudflarePages');
 const registrar = require('../../lib/registrar');
+const domainBalance = require('../../lib/domainBalance');
 const { provisionDomainZone } = require('../../lib/domainZone');
 const { logSiteActivity } = require('../../lib/activity');
 const billing = require('../../lib/billing');
@@ -173,6 +174,11 @@ async function registerOwn(req, res) {
     const reg = registrar.active();
     if (!reg.isConfigured()) return res.status(503).json({ error: 'Domain registration is not available right now.', code: 'registrar_unconfigured' });
     if (!domain) return res.status(400).json({ error: 'domain is required' });
+
+    // Prepaid-balance guard: never take a domain invoice we cannot fulfill.
+    if (await domainBalance.purchasesSuspended()) {
+      return res.status(503).json({ error: 'Domain registration is paused for a short while. Please try again soon.', code: 'registrar_low_balance' });
+    }
 
     const { customDomain } = await loadVerticalAndDomain(siteId);
     if (customDomain) {

@@ -5,6 +5,7 @@
 // NOTE: config/supabase.js exports the client directly (service-role).
 const supabase = require('../../config/supabase');
 const registrar = require('../../lib/registrar');
+const domainBalance = require('../../lib/domainBalance');
 const cf = require('../../lib/cloudflarePages');
 const { projectFor } = require('../../lib/verticalConfig');
 const { provisionDomainZone } = require('../../lib/domainZone');
@@ -139,4 +140,41 @@ async function registerDomain(req, res) {
   }
 }
 
-module.exports = { healthcheck, search, requirements, registerDomain };
+// GET /api/admin/domains/overview — the CRM Domains monitor: prepaid balance
+// (+ low threshold + whether owner purchases are paused) and every domain on
+// the Porkbun account, mapped back to the site using it where possible.
+async function overview(req, res) {
+  try {
+    const reg = registrar.active();
+    if (!reg.isConfigured()) return res.status(503).json({ error: 'Registrar not configured', code: 'registrar_unconfigured' });
+
+    const [balanceCents, domains] = await Promise.all([
+      domainBalance.getBalanceCents({ force: req.query.refresh === '1' }).catch(() => null),
+      reg.listDomains ? reg.listDomains().catch(() => []) : [],
+    ]);
+
+    // Map registrar domains to the sites using them.
+    const names = domains.map(d => d.domain);
+    let siteByDomain = {};
+    if (names.length) {
+      const { data: sites } = await supabase.from('sites')
+        .select('id, subdomain, custom_domain, company:companies(name)')
+        .in('custom_domain', names);
+      for (const s of sites || []) {
+        siteByDomain[s.custom_domain] = { id: s.id, subdomain: s.subdomain, business: s.company?.name || s.subdomain };
+      }
+    }
+
+    res.json({
+      ok: true,
+      balanceCents,
+      minBalanceCents: domainBalance.MIN_BALANCE_CENTS,
+      purchasesSuspended: balanceCents != null && balanceCents < domainBalance.MIN_BALANCE_CENTS,
+      domains: domains.map(d => ({ ...d, site: siteByDomain[d.domain] || null })),
+    });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+}
+
+module.exports = { healthcheck, search, requirements, registerDomain, overview };
