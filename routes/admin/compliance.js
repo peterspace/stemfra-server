@@ -25,6 +25,8 @@ router.get('/filings', gate, listFilings);
 router.post('/filings', gate, upsertFiling);
 
 router.get('/settings', gate, getSettings);
-router.put('/settings', gate, putSetting);
+// POST (not PUT): the global CORS methods list omits PUT, so a PUT is blocked
+// after preflight. POST matches the other compliance write endpoints.
+router.post('/settings', gate, putSetting);
 
 module.exports = router;
