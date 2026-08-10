@@ -4,7 +4,7 @@
 const express = require('express');
 const { requireStaffRole, PLATFORM_ADMIN } = require('../../middleware/staffAuth');
 const {
-  getRegistry, getBooks,
+  getRegistry, getBooks, getTenants,
   listRegistrations, createRegistration, updateRegistration, deleteRegistration,
   listFilings, upsertFiling,
   getSettings, putSetting,
@@ -15,6 +15,7 @@ const gate = requireStaffRole(...PLATFORM_ADMIN);
 
 router.get('/registry', gate, getRegistry);
 router.get('/books', gate, getBooks);
+router.get('/tenants', gate, getTenants);
 
 router.get('/registrations', gate, listRegistrations);
 router.post('/registrations', gate, createRegistration);

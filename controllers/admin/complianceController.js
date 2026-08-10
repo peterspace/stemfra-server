@@ -144,6 +144,42 @@ async function getBooks(req, res) {
   }
 }
 
+// GET /api/admin/compliance/tenants — every tenant with its billing location
+// (country + state), so the registry can show the SaaS + digital-goods tax that
+// applies where each tenant sits + the nexus threshold. This is a LOCATION
+// reference (client-side maps to rates), so it includes ALL sites; the `isDemo`
+// flag marks the demo fleet (which never counts toward the nexus rollup).
+async function getTenants(_req, res) {
+  try {
+    const { data: sites } = await supabase
+      .from('sites')
+      .select('id, subdomain, status, company_id, owner_contact_id, metadata')
+      .in('status', ['live', 'previewing']);
+    const companyIds = [...new Set((sites || []).map((s) => s.company_id).filter(Boolean))];
+    const contactIds = [...new Set((sites || []).map((s) => s.owner_contact_id).filter(Boolean))];
+    const [{ data: companies }, { data: contacts }] = await Promise.all([
+      companyIds.length ? supabase.from('companies').select('id, name').in('id', companyIds) : Promise.resolve({ data: [] }),
+      contactIds.length ? supabase.from('contacts').select('id, country, state').in('id', contactIds) : Promise.resolve({ data: [] }),
+    ]);
+    const coById = Object.fromEntries((companies || []).map((c) => [c.id, c]));
+    const ctById = Object.fromEntries((contacts || []).map((c) => [c.id, c]));
+    const tenants = (sites || []).map((s) => {
+      const ct = ctById[s.owner_contact_id];
+      return {
+        siteId: s.id,
+        business: coById[s.company_id]?.name || s.subdomain,
+        subdomain: s.subdomain,
+        country: ct?.country || null,
+        state: ct?.state || null,
+        isDemo: s.metadata?.is_starter === true,
+      };
+    }).sort((a, b) => a.business.localeCompare(b.business));
+    return res.json({ tenants });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
 // ─── Registrations CRUD ──────────────────────────────────────────────────────
 async function listRegistrations(_req, res) {
   const { data, error } = await supabase.from('compliance_registrations').select('*').order('created_at', { ascending: false });
@@ -216,7 +252,7 @@ async function putSetting(req, res) {
 }
 
 module.exports = {
-  getRegistry, getBooks,
+  getRegistry, getBooks, getTenants,
   listRegistrations, createRegistration, updateRegistration, deleteRegistration,
   listFilings, upsertFiling,
   getSettings, putSetting,
