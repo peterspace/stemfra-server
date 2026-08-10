@@ -166,7 +166,7 @@ const upsertBookingCustomer = async (siteId, customer) => {
 // a CONFIRMED booking. Stamps confirmation_sent_at so it's idempotent (never
 // sends twice). Shared by placeBooking (paid/free) and finalizeBookingPayment
 // (paid-via-Checkout). Never throws — email is always best-effort.
-const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, startsAt, customerEmail, customerFirstName, emailFromName, attachIcs = true, customerTimeZone = null }) => {
+const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, startsAt, customerEmail, customerFirstName, emailFromName, attachIcs = true, customerTimeZone = null, meetLink = null }) => {
   try {
     if (customerEmail) {
       const bits = await getTenantEmailBits(siteId);
@@ -177,14 +177,18 @@ const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, start
       const local = customerTimeZone ? startsAt.setZone(customerTimeZone) : startsAt;
       const dateLabel = local.toFormat('cccc, LLLL d');
       const timeLabel = customerTimeZone ? local.toFormat('h:mm a ZZZZ') : local.toFormat('h:mm a');
-      // Add-to-calendar file (lib/ics.js). Skipped for support-site bookings,
-      // whose Google Calendar invite already IS the calendar entry — attaching
-      // both would double up on the customer's calendar.
-      const attachments = attachIcs
+      // Add-to-calendar file (lib/ics.js). Video calls (support site) carry
+      // the Meet link as the event LOCATION — this ICS is the visitor's only
+      // calendar entry now that Google-sent invites are suppressed (they
+      // arrived "from an unknown sender" and were never auto-added).
+      const attachments = attachIcs || meetLink
         ? [buildBookingIcsAttachment({
             uid: bookingId,
             summary: `${en(service.name) || 'Appointment'} at ${emailFromName}`,
-            description: 'Booked online. Need to change it? Just reply to this email.',
+            description: meetLink
+              ? `Join with Google Meet: ${meetLink}\n\nBooked online. Need to change it? Just reply to the confirmation email.`
+              : 'Booked online. Need to change it? Just reply to this email.',
+            location: meetLink || undefined,
             startIso: startsAt.toUTC().toISO(),
             endIso: startsAt.plus({ minutes: service.duration_minutes || 30 }).toUTC().toISO(),
           })]
@@ -195,7 +199,7 @@ const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, start
         to: customerEmail,
         attachments,
         subject: 'Your appointment is confirmed',
-        text: `Your appointment is confirmed for ${dateLabel} at ${timeLabel}.\n\nWe look forward to seeing you.`,
+        text: `Your appointment is confirmed for ${dateLabel} at ${timeLabel}.${meetLink ? `\n\nJoin with Google Meet: ${meetLink}` : ''}\n\nWe look forward to seeing you.`,
         html: emails.bookingConfirmation({
           businessName: emailFromName,
           businessLogoUrl: bits.logoUrl, businessAccent: bits.accent, businessFont: bits.font, businessPhotoUrl: bits.photoUrl,
@@ -208,6 +212,7 @@ const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, start
           dateLabel,
           timeLabel,
           durationLabel: service.duration_minutes ? `${service.duration_minutes} min` : null,
+          meetLink,
         }),
       });
       await supabase.from('site_bookings').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', bookingId);
@@ -373,16 +378,19 @@ const placeBooking = async ({
     }]).select().single();
   if (bookErr) return { ok: false, code: 500, message: bookErr.message };
 
+  // Support site: create the Calendar event + Meet link FIRST so the
+  // confirmation email (the visitor's ONLY notice — Google-sent invites are
+  // suppressed, they arrived "from an unknown sender") can carry the Join
+  // button and an ICS with the Meet link as location. Never throws; a Google
+  // outage just means a confirmation without the link (staff can resend).
+  const meet = await createSupportCallMeet({ site, booking, service, customer });
+
   await sendBookingConfirmationEmails({
     siteId, bookingId: booking.id, service, startsAt,
     customerEmail: customer.email, customerFirstName: customer.firstName, emailFromName,
-    attachIcs: !isSupportSite(site),
     customerTimeZone: custZone,
+    meetLink: meet?.meetLink || null,
   });
-
-  // Support site only: also create the Google Calendar event with a Meet link
-  // (invites the customer; fire-and-forget — the booking stands regardless).
-  createSupportCallMeet({ site, booking, service, customer });
 
   return {
     ok: true,

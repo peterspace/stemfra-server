@@ -197,11 +197,14 @@ async function checkOne(req, res) {
 // Creates the owner's domain invoice (bank transfer to the Airwallex account,
 // like every Stemfra invoice) + emails it. `pending` marks an invoice-first
 // charge that staff fulfill after payment (admin registerDomain reuses it).
+// `sub` is OPTIONAL: commission-era tenants have no subscriptions row
+// (subscription_id is nullable since the commission migration) — the charge
+// rides site_id alone, exactly like commission invoices.
 async function invoiceDomain({ siteId, sub, avail, orderId = null, pending }) {
   const { data: ch } = await supabase.from('billing_charges').insert({
-    subscription_id: sub.id, site_id: siteId, kind: 'adjustment',
+    subscription_id: sub?.id ?? null, site_id: siteId, kind: 'adjustment',
     line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
-    amount_cents: avail.retailCents, currency: sub.currency || 'USD',
+    amount_cents: avail.retailCents, currency: sub?.currency || 'USD',
     due_date: dueInDays(7), status: 'due', provider: 'airwallex',
     metadata: {
       type: 'domain_registration', domain: avail.domain, cost_cents: avail.costCents,
@@ -234,15 +237,16 @@ async function registerOwn(req, res) {
       return res.status(409).json({ error: `This site is already connected to ${customDomain}. Disconnect it first to register a new domain.` });
     }
 
-    // A subscription to invoice the domain against (created by the publish flow).
+    // Legacy subscription row, if one exists (pre-commission tenants). Under
+    // the commission model there is NO subscriptions row — the invoice rides
+    // site_id alone, so this is informational, never a gate (fixed 2026-08-10;
+    // the old status='active' gate dead-ended every commission-era tenant —
+    // ROADMAP task 57 gap b).
     const { data: sub } = await supabase
       .from('subscriptions')
       .select('id, currency, provider, status')
       .eq('site_id', siteId)
       .maybeSingle();
-    if (!sub) {
-      return res.status(402).json({ error: 'Set up your Stemfra plan first. Then we can add a domain to your invoice.', code: 'subscription_required' });
-    }
 
     // Fresh availability + exact cost (the registrar rejects a mismatched cost).
     const avail = await reg.checkDomain(domain);

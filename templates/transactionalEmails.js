@@ -63,7 +63,7 @@ const STEMFRA_SECURITY = `If you didn't initiate this, contact our support team 
 // ─── Tenant → visitor ─────────────────────────────────────────────────────────
 
 // Single-service appointment confirmation.
-function bookingConfirmation({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, overrideHeading, overrideSubheading, firstName, serviceName, dateLabel, timeLabel, durationLabel }) {
+function bookingConfirmation({ businessName, businessLogoUrl, businessEmail, businessUrl, businessAccent, businessFont, businessPhotoUrl, overrideHeading, overrideSubheading, firstName, serviceName, dateLabel, timeLabel, durationLabel, meetLink }) {
   return renderEmail({
     brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
     preheader: `${dateLabel} at ${timeLabel}. See you then.`,
@@ -74,7 +74,12 @@ function bookingConfirmation({ businessName, businessLogoUrl, businessEmail, bus
       { label: 'Date', value: dateLabel },
       { label: 'Time', value: timeLabel },
       durationLabel ? { label: 'Duration', value: durationLabel } : null,
+      meetLink ? { label: 'Where', value: 'Google Meet (video call)' } : null,
     ],
+    // Video calls carry their Join button right in the confirmation — the
+    // attached calendar file holds the same link, so no separate Google invite
+    // is ever sent (Gmail flags those as "from an unknown sender").
+    cta: meetLink ? { label: 'Join with Google Meet', url: meetLink } : undefined,
     note: `Need to change or cancel? Just reply to this email and ${businessName} will sort it out.`,
     security: tenantSecurityLine(businessName, businessEmail),
     reason: `You're receiving this because you booked an appointment with ${businessName}.`,

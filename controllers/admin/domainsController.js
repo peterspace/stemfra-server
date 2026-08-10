@@ -93,19 +93,19 @@ async function registerDomain(req, res) {
         chargeId = pending.id;
         steps.billing = 'reused pending owner invoice';
       } else {
+        // Commission-era tenants have no subscriptions row — the charge rides
+        // site_id alone (nullable subscription_id), like commission invoices.
         const { data: sub } = await supabase.from('subscriptions').select('id, currency, provider').eq('site_id', siteId).maybeSingle();
-        if (sub) {
-          const { data: ch } = await supabase.from('billing_charges').insert({
-            subscription_id: sub.id, site_id: siteId, kind: 'adjustment',
-            line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
-            amount_cents: avail.retailCents, currency: sub.currency || 'USD',
-            // Domain invoices collect by bank transfer to the Airwallex account
-            // (COMMISSION_MODEL.md §2) — never inherit a dormant provider stamp.
-            due_date: dueInDays(7), status: 'due', provider: 'airwallex',
-            metadata: { type: 'domain_registration', domain: avail.domain, order_id: result.orderId, cost_cents: avail.costCents, registrar: process.env.DOMAIN_REGISTRAR || 'porkbun' },
-          }).select('id').single();
-          chargeId = ch?.id || null;
-        }
+        const { data: ch } = await supabase.from('billing_charges').insert({
+          subscription_id: sub?.id ?? null, site_id: siteId, kind: 'adjustment',
+          line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
+          amount_cents: avail.retailCents, currency: sub?.currency || 'USD',
+          // Domain invoices collect by bank transfer to the Airwallex account
+          // (COMMISSION_MODEL.md §2) — never inherit a dormant provider stamp.
+          due_date: dueInDays(7), status: 'due', provider: 'airwallex',
+          metadata: { type: 'domain_registration', domain: avail.domain, order_id: result.orderId, cost_cents: avail.costCents, registrar: process.env.DOMAIN_REGISTRAR || 'porkbun' },
+        }).select('id').single();
+        chargeId = ch?.id || null;
       }
     } catch (e) { steps.billing = e.message; }
 
