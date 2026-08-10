@@ -18,7 +18,7 @@ async function listBookings(req, res) {
   try {
     let q = supabase
       .from('site_bookings')
-      .select('id, starts_at, status, payment_status, amount_cents, service_name_snapshot, site:sites(subdomain, company:companies(name)), customer:site_customers(first_name, last_name, email)')
+      .select('id, starts_at, status, payment_status, amount_cents, metadata, service_name_snapshot, site:sites(subdomain, company:companies(name)), customer:site_customers(first_name, last_name, email)')
       .order('starts_at', { ascending: false })
       .limit(200);
     if (req.query.siteId) q = q.eq('site_id', req.query.siteId);
@@ -30,6 +30,10 @@ async function listBookings(req, res) {
       status: b.status,
       paymentStatus: b.payment_status,
       amountCents: b.amount_cents,
+      // Pay-at-venue: online payment_status stays 'none'; the tenant marks it
+      // collected in person (metadata.collected). Surfaced so the CRM shows
+      // "At venue" / "Collected" instead of a bare "none" next to a price.
+      collected: b.metadata?.collected === true,
       service: i18n(b.service_name_snapshot),
       business: b.site?.company?.name || b.site?.subdomain || '—',
       subdomain: b.site?.subdomain,

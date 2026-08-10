@@ -19,6 +19,7 @@ const { startMembershipRenewalSweeper } = require('./lib/membershipRenewalSweepe
 const { startBookingCheckoutSweeper } = require('./lib/bookingCheckoutSweeper');
 const { startBookingAutoCollectSweeper } = require('./lib/bookingAutoCollectSweeper');
 const { startDomainRenewalSweeper } = require('./lib/domainRenewalSweeper');
+const { startNexusSweeper } = require('./lib/nexusSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
@@ -238,4 +239,8 @@ server.listen(PORT, () => {
   // T-7 reminders; expiry notices when the tenant turned auto-renew off.
   // Inert until a managed domain is within 35 days of expiry.
   startDomainRenewalSweeper();
+  // Nexus alerts (2026-08-10): email staff when Stemfra's real billed sales into
+  // a US state hit 80% of its economic-nexus threshold. Gated OFF
+  // (NEXUS_ALERTS_ENABLED=true); inert pre-launch (all sales are demo).
+  startNexusSweeper();
 });

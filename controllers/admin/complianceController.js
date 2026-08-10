@@ -72,7 +72,7 @@ async function getRegistry(_req, res) {
       if (!byJur.has(key)) {
         byJur.set(key, {
           jurisdiction: key, label: c.juris.label, country: c.juris.country,
-          billedCents: 0, invoiceCount: 0,
+          billedCents: 0, invoiceCount: 0, clientCount: 0, _sites: new Set(),
           saasCents: 0, domainsCents: 0, otherCents: 0,
           saasCount: 0, domainsCount: 0,
         });
@@ -81,11 +81,16 @@ async function getRegistry(_req, res) {
       const cents = Number(c.amount_cents) || 0;
       j.billedCents += cents;
       j.invoiceCount += 1;
+      if (c.site_id) j._sites.add(c.site_id);
       if (c.category === 'saas') { j.saasCents += cents; j.saasCount += 1; }
       else if (c.category === 'domains') { j.domainsCents += cents; j.domainsCount += 1; }
       else j.otherCents += cents;
     }
-    const rows = [...byJur.values()].sort((a, b) => b.billedCents - a.billedCents);
+    const rows = [...byJur.values()].map((j) => {
+      j.clientCount = j._sites.size;
+      delete j._sites;
+      return j;
+    }).sort((a, b) => b.billedCents - a.billedCents);
     return res.json({ windowDays: 365, rows });
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -256,4 +261,5 @@ module.exports = {
   listRegistrations, createRegistration, updateRegistration, deleteRegistration,
   listFilings, upsertFiling,
   getSettings, putSetting,
+  loadBillableCharges, // reused by the nexus sweeper
 };
