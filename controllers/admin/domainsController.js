@@ -88,20 +88,36 @@ async function registerDomain(req, res) {
     catch (e) { steps.zone = e.message; }
     await supabase.from('sites').update({ custom_domain: avail.domain }).eq('id', siteId);
 
-    // Bill the customer our retail price (one-off). Needs a subscription to hang
-    // the charge on; otherwise we return the cost for a manual billing line.
+    // Bill the customer our retail price (one-off). If the OWNER already
+    // requested this domain from the CMS (the gated flow creates a pending
+    // invoice before staff register), REUSE that charge instead of double
+    // billing — just stamp the order id and clear the pending flag.
     let chargeId = null;
     try {
-      const { data: sub } = await supabase.from('subscriptions').select('id, currency, provider').eq('site_id', siteId).maybeSingle();
-      if (sub) {
-        const { data: ch } = await supabase.from('billing_charges').insert({
-          subscription_id: sub.id, site_id: siteId, kind: 'adjustment',
-          line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
-          amount_cents: avail.retailCents, currency: sub.currency || 'USD',
-          due_date: dueInDays(7), status: 'due', provider: sub.provider || 'payoneer',
-          metadata: { type: 'domain_registration', domain: avail.domain, order_id: result.orderId, cost_cents: avail.costCents, registrar: process.env.DOMAIN_REGISTRAR || 'porkbun' },
-        }).select('id').single();
-        chargeId = ch?.id || null;
+      const { data: pending } = await supabase.from('billing_charges')
+        .select('id, metadata')
+        .eq('site_id', siteId)
+        .in('status', ['due', 'requested'])
+        .contains('metadata', { type: 'domain_registration', domain: avail.domain })
+        .maybeSingle();
+      if (pending) {
+        await supabase.from('billing_charges').update({
+          metadata: { ...(pending.metadata || {}), order_id: result.orderId, pending_registration: false },
+        }).eq('id', pending.id);
+        chargeId = pending.id;
+        steps.billing = 'reused pending owner invoice';
+      } else {
+        const { data: sub } = await supabase.from('subscriptions').select('id, currency, provider').eq('site_id', siteId).maybeSingle();
+        if (sub) {
+          const { data: ch } = await supabase.from('billing_charges').insert({
+            subscription_id: sub.id, site_id: siteId, kind: 'adjustment',
+            line_items: [{ label: `Domain registration — ${avail.domain} (1 yr)`, cents: avail.retailCents }],
+            amount_cents: avail.retailCents, currency: sub.currency || 'USD',
+            due_date: dueInDays(7), status: 'due', provider: sub.provider || 'payoneer',
+            metadata: { type: 'domain_registration', domain: avail.domain, order_id: result.orderId, cost_cents: avail.costCents, registrar: process.env.DOMAIN_REGISTRAR || 'porkbun' },
+          }).select('id').single();
+          chargeId = ch?.id || null;
+        }
       }
     } catch (e) { steps.billing = e.message; }
 
