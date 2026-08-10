@@ -389,6 +389,20 @@ async function aiMapColumns(headers, samples) {
   return map;
 }
 
+/** Shared mapping core (CMS owner route + CRM staff route). */
+async function resolveColumnMap(headers, samples) {
+  const preset = matchImportPreset(headers);
+  if (preset) return { source: 'preset', presetName: preset.name, map: preset.map };
+  try {
+    const aiMap = await aiMapColumns(headers, samples);
+    if (aiMap) return { source: 'ai', map: aiMap };
+  } catch (err) {
+    console.error('[customers.resolveColumnMap] AI mapping failed:', err.message);
+  }
+  // No preset, no AI: the client falls back to its local heuristic.
+  return { source: 'none', map: null };
+}
+
 // POST /api/cms/customers/import/map  { siteId, headers, samples } →
 // { source: 'preset'|'ai'|'none', presetName?, map }
 async function mapImportColumns(req, res) {
@@ -399,18 +413,7 @@ async function mapImportColumns(req, res) {
     }
     const site = await verifySiteOwnership(req.cmsUser.id, siteId);
     if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
-
-    const preset = matchImportPreset(headers);
-    if (preset) return res.json({ success: true, source: 'preset', presetName: preset.name, map: preset.map });
-
-    try {
-      const aiMap = await aiMapColumns(headers, samples);
-      if (aiMap) return res.json({ success: true, source: 'ai', map: aiMap });
-    } catch (err) {
-      console.error('[customers.mapImportColumns] AI mapping failed:', err.message);
-    }
-    // No preset, no AI: the client falls back to its local heuristic.
-    res.json({ success: true, source: 'none', map: null });
+    res.json({ success: true, ...(await resolveColumnMap(headers, samples)) });
   } catch (err) {
     console.error('[customers.mapImportColumns]', err.message);
     res.status(500).json({ success: false, message: 'Could not match the columns.' });
@@ -445,7 +448,17 @@ async function importCustomers(req, res) {
     if (rows.length > 20000) return res.status(413).json({ success: false, message: 'That file is too large — split it into batches of 20,000 or fewer.' });
     const site = await verifySiteOwnership(req.cmsUser.id, siteId);
     if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
+    const result = await runImport(siteId, rows, req.cmsUser?.email, site.subdomain);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[customers.import]', err.message);
+    res.status(500).json({ success: false, message: 'Could not import. No partial data was left behind for the failed batch.' });
+  }
+}
 
+/** Shared import core (CMS owner route + CRM staff route). */
+async function runImport(siteId, rows, actorEmail, siteSubdomain) {
+  {
     const { rows: classified } = await classify(siteId, rows);
 
     // New customers → batch insert.
@@ -490,16 +503,68 @@ async function importCustomers(req, res) {
 
     const skipped = classified.filter((r) => r.action === 'skip').length;
     await logSiteActivity({
-      siteId, actorName: req.cmsUser?.email, action: 'customers_imported',
-      entityType: 'site', entityId: siteId, entityName: site.subdomain,
+      siteId, actorName: actorEmail, action: 'customers_imported',
+      entityType: 'site', entityId: siteId, entityName: siteSubdomain,
       details: { created, merged, skipped },
     });
-    res.json({ success: true, created, merged, skipped });
+    return { created, merged, skipped };
+  }
+}
+
+// ─── Staff (CRM) variants: same cores, staff auth, any site ────────────────
+// The high-touch onboarding path — staff run the migration on a client's
+// behalf. Auth = requireStaffRole in routes/admin/customerImport.js; the site
+// just has to exist.
+async function loadSiteById(siteId) {
+  const { data } = await supabase.from('sites').select('id, subdomain').eq('id', siteId).maybeSingle();
+  return data;
+}
+
+async function adminMapImportColumns(req, res) {
+  try {
+    const { siteId, headers, samples } = req.body || {};
+    if (!siteId || !Array.isArray(headers) || !headers.length || headers.length > 120) {
+      return res.status(400).json({ success: false, message: 'Missing siteId or headers.' });
+    }
+    const site = await loadSiteById(siteId);
+    if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
+    res.json({ success: true, ...(await resolveColumnMap(headers, samples)) });
   } catch (err) {
-    console.error('[customers.import]', err.message);
+    console.error('[admin.customerImport.map]', err.message);
+    res.status(500).json({ success: false, message: 'Could not match the columns.' });
+  }
+}
+
+async function adminImportPreview(req, res) {
+  try {
+    const { siteId, rows } = req.body || {};
+    if (!siteId || !Array.isArray(rows)) return res.status(400).json({ success: false, message: 'Missing siteId or rows.' });
+    if (rows.length > 20000) return res.status(413).json({ success: false, message: 'That file is too large. Split it into batches of 20,000 or fewer.' });
+    const site = await loadSiteById(siteId);
+    if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
+    const { counts } = await classify(siteId, rows);
+    res.json({ success: true, ...counts });
+  } catch (err) {
+    console.error('[admin.customerImport.preview]', err.message);
+    res.status(500).json({ success: false, message: 'Could not preview the import.' });
+  }
+}
+
+async function adminImportCustomers(req, res) {
+  try {
+    const { siteId, rows } = req.body || {};
+    if (!siteId || !Array.isArray(rows)) return res.status(400).json({ success: false, message: 'Missing siteId or rows.' });
+    if (rows.length > 20000) return res.status(413).json({ success: false, message: 'That file is too large. Split it into batches of 20,000 or fewer.' });
+    const site = await loadSiteById(siteId);
+    if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
+    const result = await runImport(siteId, rows, req.staffUser?.email, site.subdomain);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[admin.customerImport]', err.message);
     res.status(500).json({ success: false, message: 'Could not import. No partial data was left behind for the failed batch.' });
   }
 }
 
 module.exports = {
-  mapImportColumns, setSuspended, sendReviewEmail, listCustomers, exportCustomers, importPreview, importCustomers };
+  mapImportColumns, setSuspended, sendReviewEmail, listCustomers, exportCustomers, importPreview, importCustomers,
+  adminMapImportColumns, adminImportPreview, adminImportCustomers };

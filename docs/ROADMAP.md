@@ -62,6 +62,19 @@ model** (`docs/COMMISSION_MODEL.md`)._
 5. **P10 case 42 "Remix" R2/R3** (AI theme composer engine) — R1 registry done; rest pending.
 6. **P10 case 1 remainder** — task videos + a "What's new" channel (guidance polish shipped).
 7. **VSL production** (P12 "Last") — deliberately last.
+8. **Memberships: Mindbody-parity items** (2026-08-10 comparison vs their
+   Membership Settings screen; Peter asked what we miss). We already have what
+   they lack for our model: pay-at-venue renewals collection, per-member
+   pause/suspend/cancel, MRR reporting. Worth adding LATER, in order:
+   (a) **member perks / discount %** on a plan (e.g. "members save 10% on
+   services") — store on the site_products row, show on the site tiers and at
+   owner collection time; cheap once membership tiers render beyond crossfit.
+   (b) **members-only booking** — per-service "members only" flag gating the
+   public booking flow behind member sign-in; pairs with the existing
+   magic-link member accounts, needs member context in BookingForm.
+   (c) plan sort order in the CMS if plan lists grow. SKIPPED deliberately:
+   membership icons, self-sign-in restrictions and non-member purchase toggles
+   (tied to Mindbody's commerce model, N/A under pay-at-venue).
 8. ✅ **Front Desk widget rollout to all 6 verticals — DONE 2026-07-31.** This entry
    was written 2026-07-29, two days before the rollout landed, and stayed stale.
    **Re-verified independently 2026-08-03**, not taken from the doc's own claim:
@@ -888,9 +901,28 @@ call must become optional/minimal; Stacy + interactive tours carry onboarding.
    site whose services are the call types and whose team is support staff, so
    owner-side CMS, marketing Concierge, AND CRM staff all book through the
    same site_bookings rails (CRM books on behalf of a client who stalled).
-4. **Marketing booking page stays, reframed for SALES/special needs** (custom
-   websites per the pricing page); Concierge can offer it. Setup calls are no
-   longer the default onboarding path.
+4. ✅ **Marketing booking page CONSOLIDATED onto the support engine 2026-08-09**
+   (client 2a59c471): /book-a-call keeps its hero + two-step calendar design but
+   books the sales Consultation call through the public /api/site-bookings flow
+   (coordinates via /api/concierge/call-config) — one support calendar, Meet +
+   host free/busy, visitor-timezone slots + picker, duration from config (30
+   min). Business name/vertical/notes ride in customer_notes → Meet event
+   description. ⚠ RETIRE /api/setup-call server-side once this deploys clean
+   (client no longer calls it).
+5. ✅ **Concierge widget rebuilt on the Front Desk architecture 2026-08-09**
+   (client a68cef5e, all three phases in one arc per Peter): docked booking
+   drawer (month grid greyed by real availability — closes the Calendly
+   month-hints gap for Stemfra calls — visitor-tz slots + zone picker, details
+   step, in-thread receipt), options drawer for 5+ quick replies, Chat options
+   menu (Start over) + minimize chevron, seeded AI-identity disclosure,
+   Claude-style rewind, auto-grow composer (touch-aware Enter, IME guard),
+   emoji picker (code-split), linkified paths, privacy footer link. Shared tz
+   helpers in stemfra_client src/app/lib/timezone.js.
+6. **Tour types settled 2026-08-09 (platform 21200c7)**: main walkthrough is
+   fully PASSIVE (Next auto-navigates; no do-it steps); do-it mechanics live
+   only in Stacy checklist mini-tours (guided editing = mini-tour + Stacy
+   drafting). Mini-tour instruction label restyled (hand-pointer icon, default
+   cursor) so it cannot be read as a button.
 
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
