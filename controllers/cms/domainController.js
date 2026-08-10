@@ -302,4 +302,121 @@ async function registerOwn(req, res) {
   }
 }
 
-module.exports = { connect, status, disconnect, searchDomains, checkOne, registerOwn };
+// ─── Owner domain management (Namecheap-style Manage, 2026-08-10) ────────────
+
+// True when this site's custom_domain was registered through Stemfra (a
+// domain_registration charge exists) — the only domains we can manage at the
+// registrar. BYO domains live at the owner's own registrar.
+async function isManagedDomain(siteId, domain) {
+  const { data } = await supabase.from('billing_charges').select('id')
+    .eq('site_id', siteId)
+    .contains('metadata', { type: 'domain_registration', domain })
+    .limit(1);
+  return !!(data && data.length);
+}
+
+// GET /api/cms/site-domain/manage?siteId= — registrar record for the site's
+// managed domain: expiry, auto-renew, and the renewal retail price.
+async function manage(req, res) {
+  try {
+    const site = await verifySiteOwnership(req.cmsUser.id, req.query.siteId);
+    if (!site) return res.status(403).json({ error: 'You do not have access to this site.' });
+    const { customDomain } = await loadVerticalAndDomain(req.query.siteId);
+    if (!customDomain) return res.json({ domain: null });
+    const managed = await isManagedDomain(req.query.siteId, customDomain);
+    if (!managed) return res.json({ domain: customDomain, managed: false });
+
+    const reg = registrar.active();
+    const record = reg.getDomain ? await reg.getDomain(customDomain) : null;
+    // Renewal retail from the cached pricing table (no rate-limited call).
+    let renewalRetailCents = null;
+    try {
+      const tld = customDomain.split('.').slice(1).join('.');
+      const p = (await reg.getPricing())[tld]?.renewal;
+      renewalRetailCents = p != null ? reg.retailCents(Math.round(Number(p) * 100)) : null;
+    } catch { /* pricing best-effort */ }
+
+    res.json({
+      domain: customDomain, managed: true,
+      status: record?.status || null,
+      expireDate: record?.expireDate || null,
+      autoRenew: record?.autoRenew ?? null,
+      whoisPrivacy: record?.whoisPrivacy ?? null,
+      renewalRetailCents,
+    });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+}
+
+// POST /api/cms/site-domain/auto-renew { siteId, enabled } — the owner's
+// renew / do-not-renew choice, applied straight at the registrar. Turning it
+// off means the domain expires at the end of the paid term (no more renewal
+// invoices); turning it back on resumes yearly renewal.
+async function setAutoRenew(req, res) {
+  try {
+    const { siteId, enabled } = req.body || {};
+    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
+    if (!site) return res.status(403).json({ error: 'You do not have access to this site.' });
+    const { customDomain } = await loadVerticalAndDomain(siteId);
+    if (!customDomain) return res.status(409).json({ error: 'No domain is connected to this site.' });
+    if (!(await isManagedDomain(siteId, customDomain))) {
+      return res.status(409).json({ error: 'This domain is managed at your own registrar, so its renewal is controlled there.' });
+    }
+    const reg = registrar.active();
+    if (!reg.updateAutoRenew) return res.status(503).json({ error: 'Renewal management is not available right now.' });
+    await reg.updateAutoRenew(customDomain, enabled === true);
+
+    logSiteActivity({
+      siteId, action: enabled === true ? 'domain_auto_renew_on' : 'domain_auto_renew_off',
+      actorName: req.cmsUser.email || 'owner', entityType: 'site', entityId: siteId,
+      details: { domain: customDomain },
+    });
+    res.json({ ok: true, domain: customDomain, autoRenew: enabled === true });
+  } catch (e) {
+    res.status(502).json({ error: e.message, porkbun: e.porkbun || undefined });
+  }
+}
+
+// GET /api/cms/site-domain/portfolio — every domain across ALL the owner's
+// sites (the tenant-facing overview list). One row per site with a domain.
+async function portfolio(req, res) {
+  try {
+    const contactId = await require('../../middleware/cmsAuth').resolveContactId(req.cmsUser.id);
+    if (!contactId) return res.json({ domains: [] });
+    const { data: sites } = await supabase.from('sites')
+      .select('id, subdomain, custom_domain, company:companies(name)')
+      .eq('owner_contact_id', contactId)
+      .not('custom_domain', 'is', null);
+    const rows = sites || [];
+    if (!rows.length) return res.json({ domains: [] });
+
+    // One registrar listing covers every managed domain (no per-domain calls).
+    const reg = registrar.active();
+    let registrarByDomain = {};
+    try {
+      const all = reg.listDomains ? await reg.listDomains() : [];
+      registrarByDomain = Object.fromEntries(all.map(d => [d.domain, d]));
+    } catch { /* registrar listing best-effort */ }
+
+    const domains = await Promise.all(rows.map(async (s) => {
+      const rec = registrarByDomain[s.custom_domain] || null;
+      const managed = rec ? await isManagedDomain(s.id, s.custom_domain) : false;
+      return {
+        siteId: s.id,
+        business: s.company?.name || s.subdomain,
+        subdomain: s.subdomain,
+        domain: s.custom_domain,
+        managed,
+        status: rec?.status || null,
+        expireDate: rec?.expireDate || null,
+        autoRenew: rec?.autoRenew ?? null,
+      };
+    }));
+    res.json({ domains });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+}
+
+module.exports = { connect, status, disconnect, searchDomains, checkOne, registerOwn, manage, setAutoRenew, portfolio };

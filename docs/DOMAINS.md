@@ -171,12 +171,33 @@ already-registered domains).
 - Both register paths must stay on `lib/domainPurchase.purchaseAndWire` +
   `provisionDomainZone` — keep them shared.
 
-## 9. Deferred / next
+## 9. Manage + renewals (SHIPPED 2026-08-10, round 3)
 
-- **Renewal sweeper** (the big one): auto-renew is ON at Porkbun (draws from
-  the balance); we still need the yearly `billing_charges` line at
-  **renewal-cost retail** + expiry warnings. With it, a
-  `site_domain_purchases` table (v1 records purchases in charge metadata +
-  `site_activity`).
+- **Owner Manage panel** (CMS Settings → Domain, managed domains only):
+  renewal date + renewal retail price + **auto-renew toggle** applied live at
+  Porkbun (`POST /domain/updateAutoRenew`, v3.15) with an honest expiry
+  consequence confirm; transfer-out = contact support (Porkbun has no
+  auth-code API — dashboard only). Endpoints: `GET /api/cms/site-domain/manage`,
+  `POST /auto-renew`, `GET /portfolio` (every domain across the owner's sites —
+  the "All your domains" list renders when they have 2+).
+- **Renewal sweeper** (`lib/domainRenewalSweeper.js`, daily, env-gated
+  `DOMAIN_RENEWAL_SWEEPER_ENABLED`): auto-renew ON → T-30 renewal invoice at
+  RENEWAL retail (`kind='adjustment'`, metadata `type='domain_renewal'`,
+  emailed like every invoice) + T-7 dunning + staff alert; auto-renew OFF →
+  T-30/T-7 "your domain will expire" notices. Send-once stamps per expiry
+  cycle at `sites.metadata.domain_renewal[expireDate]`. Porkbun itself
+  performs the renewal from the prepaid balance; our job is collecting.
+- **Subscription gate REMOVED** (same day): domain invoices ride `site_id`
+  with nullable `subscription_id` — commission-era tenants (who have no
+  subscriptions row) can buy domains; ROADMAP task 57 gap (b) closed.
+- Registrar lib additions: `getDomain`, `updateAutoRenew`, `renewDomain`
+  (+dryRun), `listDomains({expiringWithinDays, autoRenew})`.
+
+## 10. Deferred / next
+
 - CRM Buy panel success state after Register & connect (still shows the form).
-- Transfers in/out; premium-domain handling (collect-first stays the rule).
+- Transfers in/out via API where Porkbun supports it; premium-domain handling
+  (collect-first stays the rule).
+- Porkbun **sandbox keys** (`pk1_sb_`) for lifecycle tests + **outbound
+  webhooks** (registration/renewal events) + per-key spend caps — nice second
+  safety net under the $30 balance monitor.

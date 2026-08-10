@@ -18,6 +18,7 @@ const { startLifecycleSweeper } = require('./lib/lifecycleSweeper');
 const { startMembershipRenewalSweeper } = require('./lib/membershipRenewalSweeper');
 const { startBookingCheckoutSweeper } = require('./lib/bookingCheckoutSweeper');
 const { startBookingAutoCollectSweeper } = require('./lib/bookingAutoCollectSweeper');
+const { startDomainRenewalSweeper } = require('./lib/domainRenewalSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
@@ -232,4 +233,8 @@ server.listen(PORT, () => {
   // marked collected within 24h of its scheduled time is auto-marked collected
   // (enters the commission basis). Skips demo sites → inert until a real tenant.
   startBookingAutoCollectSweeper();
+  // Domain renewals (2026-08-10): T-30 renewal invoice at renewal retail +
+  // T-7 reminders; expiry notices when the tenant turned auto-renew off.
+  // Inert until a managed domain is within 35 days of expiry.
+  startDomainRenewalSweeper();
 });
