@@ -503,7 +503,7 @@ function noShowFollowup({ businessName, businessLogoUrl, businessUrl, businessAc
 // a compact info box + the full invoice/receipt as an ATTACHED PDF. The itemized
 // detail lives in the PDF (lib/invoicePdf.js), so the email body stays clean.
 
-function platformInvoice({ businessName, greetingName, amountLabel, dueLabel, paymentInstructions, dashboardUrl, payUrl, invoiceRef }) {
+function platformInvoice({ businessName, greetingName, amountLabel, dueLabel, paymentInstructions, dashboardUrl, payUrl, hostedUrl, invoiceRef, payRef }) {
   const dash = dashboardUrl || `${CMS_URL}/billing`;
   return renderEmail({
     preheader: `Your Stemfra invoice: ${amountLabel}${dueLabel ? `, due ${dueLabel}` : ''}.`,
@@ -513,21 +513,30 @@ function platformInvoice({ businessName, greetingName, amountLabel, dueLabel, pa
     rows: [
       businessName ? { label: 'Account', value: businessName } : null,
       { label: 'Invoice', value: invoiceRef },
+      // Recon R4: the bare 8-char code tenants include with the transfer so the
+      // payment confirms automatically (fits USD bank memo limits).
+      payRef ? { label: 'Payment reference', value: payRef } : null,
       dueLabel ? { label: 'Due by', value: dueLabel } : null,
     ],
     amount: { label: 'Amount due', value: amountLabel },
     bodyHtml: paymentInstructions ? quoteBlock(paymentInstructions, 'How to pay') : '',
-    // Settle → the provider's hosted pay link when we have it; else the CMS
-    // billing page. Ghost secondary always goes to the account.
-    cta: payUrl ? { label: 'Settle invoice', url: payUrl } : { label: 'Settle invoice', url: dash },
+    // Primary CTA priority: the canonical Airwallex hosted invoice ("View
+    // invoice online", which becomes a card checkout once Airwallex Payments is
+    // activated) → a provider hosted pay link → the CMS billing page. Ghost
+    // secondary always goes to the account.
+    cta: hostedUrl ? { label: 'View invoice online', url: hostedUrl }
+      : payUrl ? { label: 'Settle invoice', url: payUrl }
+      : { label: 'Settle invoice', url: dash },
     cta2: { label: 'View account', url: dash },
-    note: 'Payment is accepted securely by card or bank transfer. Should you prefer another arrangement, simply reply to this email.',
+    // Card checkout is not live yet (we collect OUT_OF_BAND until Airwallex
+    // Payments/KYB is approved); say "bank transfer" until then, flip back after.
+    note: 'Payment is accepted securely by bank transfer. Should you prefer another arrangement, simply reply to this email.',
     reason: 'You are receiving this because you hold a Stemfra subscription.',
     footerLinks: BILLING_LINKS,
   });
 }
 
-function platformDunning({ businessName, greetingName, amountLabel, dueLabel, daysOverdue, paymentInstructions, dashboardUrl, payUrl, invoiceRef }) {
+function platformDunning({ businessName, greetingName, amountLabel, dueLabel, daysOverdue, paymentInstructions, dashboardUrl, payUrl, hostedUrl, invoiceRef }) {
   const dash = dashboardUrl || `${CMS_URL}/billing`;
   return renderEmail({
     preheader: `Reminder: your Stemfra invoice for ${amountLabel} is past due.`,
@@ -544,7 +553,9 @@ function platformDunning({ businessName, greetingName, amountLabel, dueLabel, da
     ],
     amount: { label: 'Amount due', value: amountLabel },
     bodyHtml: paymentInstructions ? quoteBlock(paymentInstructions, 'How to pay') : '',
-    cta: payUrl ? { label: 'Settle invoice', url: payUrl } : { label: 'Settle invoice', url: dash },
+    cta: hostedUrl ? { label: 'View invoice online', url: hostedUrl }
+      : payUrl ? { label: 'Settle invoice', url: payUrl }
+      : { label: 'Settle invoice', url: dash },
     cta2: { label: 'View account', url: dash },
     note: 'Already paid, or need more time? Simply reply to this email and we will sort it out.',
     reason: 'Payment reminder for your Stemfra subscription.',
@@ -567,6 +578,61 @@ function platformReceipt({ businessName, amountLabel, paidLabel, dashboardUrl, i
     cta: { label: 'View account', url: dashboardUrl || `${CMS_URL}/billing/history` },
     note: 'A copy is attached as a PDF for your records.',
     reason: 'Keep this receipt for your records.',
+    footerLinks: BILLING_LINKS,
+  });
+}
+
+// Recon R4 (2026-08-11): a settled payment was recalled by the tenant's bank
+// (ACH reversal) or the transfer never went through (rejection). The invoice is
+// open again; this is the re-deposit ask. Firm but polite.
+function platformPaymentReturned({ businessName, greetingName, amountLabel, invoiceRef, payRef, dashboardUrl, rejected }) {
+  const dash = dashboardUrl || `${CMS_URL}/billing/invoices`;
+  return renderEmail({
+    preheader: rejected
+      ? `Your transfer for invoice ${invoiceRef} did not go through.`
+      : `Your bank returned the payment for invoice ${invoiceRef}.`,
+    eyebrow: rejected ? 'Payment not received' : 'Payment returned',
+    heading: `Hi ${greetingName || 'there'},`,
+    paragraphs: [
+      rejected
+        ? `Your bank transfer for invoice ${invoiceRef}${businessName ? ` (${businessName})` : ''} did not go through, so the invoice is still open.`
+        : `Your bank returned the transfer for invoice ${invoiceRef}${businessName ? ` (${businessName})` : ''}, so the invoice is open again.`,
+      `Please send a fresh transfer for the exact invoice amount with the payment reference ${payRef}. The bank details are on the invoice and in your dashboard under Billing, Invoices. If this is unexpected, simply reply to this email and we will look into it together.`,
+    ],
+    rows: [
+      businessName ? { label: 'Account', value: businessName } : null,
+      { label: 'Invoice', value: invoiceRef },
+      payRef ? { label: 'Payment reference', value: payRef } : null,
+    ],
+    amount: amountLabel ? { label: 'Amount due', value: amountLabel } : null,
+    cta: { label: 'View invoice', url: dash },
+    note: 'Transfer fees are not part of your invoice; choose the option where you as the sender cover them.',
+    reason: 'A payment on one of your Stemfra invoices did not complete.',
+    footerLinks: BILLING_LINKS,
+  });
+}
+
+// Recon R3 (2026-08-11): staff ask a tenant for a payment receipt on a specific
+// invoice (dispute resolution, or the payment provider requests evidence).
+// Receipts are no longer part of the normal flow; this is the polite extra step.
+function platformReceiptRequest({ businessName, greetingName, amountLabel, invoiceRef, dashboardUrl }) {
+  const dash = dashboardUrl || `${CMS_URL}/billing/invoices`;
+  return renderEmail({
+    preheader: `A quick favor: your payment receipt for invoice ${invoiceRef}.`,
+    eyebrow: 'Receipt requested',
+    heading: `Hi ${greetingName || 'there'},`,
+    paragraphs: [
+      `To help us verify your payment for invoice ${invoiceRef}${businessName ? ` (${businessName})` : ''}, could you share the transfer receipt from your bank? It speeds up confirmation on our side.`,
+      'You can upload it in your dashboard under Billing, Invoices. A photo or PDF from your banking app works perfectly.',
+    ],
+    rows: [
+      businessName ? { label: 'Account', value: businessName } : null,
+      { label: 'Invoice', value: invoiceRef },
+      amountLabel ? { label: 'Amount', value: amountLabel } : null,
+    ],
+    cta: { label: 'Upload receipt', url: dash },
+    note: 'Already sent it, or have a question? Simply reply to this email.',
+    reason: 'We asked for a payment receipt on one of your Stemfra invoices.',
     footerLinks: BILLING_LINKS,
   });
 }
@@ -667,6 +733,8 @@ module.exports = {
   platformInvoice,
   platformDunning,
   platformReceipt,
+  platformReceiptRequest,
+  platformPaymentReturned,
   staffHandoffNotification,
   staffOrphanPaymentAlert,
   staffVoiceSupportNotification,

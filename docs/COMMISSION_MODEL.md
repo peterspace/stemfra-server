@@ -214,6 +214,15 @@ never marking bookings collected to dodge the 5%), a background rule auto-record
 - SMS Wave 2 (A2P v2 vetting).
 - buy-through-us collect-first domain purchase (needs card processing).
 
+> **2026-08-11 — rounding policy (Peter, final after a same-day reversal):** the
+> commission stays **EXACT 5% to the cent** ($42.70 stays $42.70) — the brand
+> promise is "flat 5%, no hidden charges", so the rate math is never rounded.
+> **Domain retail** (a price we set, not a rate) rounds UP to the next whole
+> dollar (`lib/registrar/porkbun.js retailCents`) so transfer-paid domain
+> invoices are clean numbers. Card payments will absorb decimals when they
+> arrive. Payments auto-confirm via the Reconciliation Engine (cent amounts
+> match fine — uniqueness even helps) — see `docs/RECONCILIATION.md`.
+
 ## 7b. Build log — Batch 1 core (2026-07-27, SHIPPED + verified)
 
 Provider-agnostic commission **metering** (ledger only; no charging). Verified end-to-end
@@ -308,7 +317,16 @@ against a live seed site (forge-and-bell): $325/mo membership + $190 June online
 - ⬜ **Remaining (Batch 2a):** none — the manual Airwallex invoicing loop is complete
   (meter → invoice PDF → CMS bank panel + receipt upload → CRM compliance packet →
   mark paid). Batch 2b (auto-debit) stays blocked on Airwallex card KYB.
-- ✅ **Airwallex invoice MIRROR (2026-08-10, verified live).** `lib/airwallexBilling.js`
+- ✅ **Airwallex invoice MIRROR (2026-08-10, verified live).**
+  > ⭐ **EXTENDED 2026-08-12 → the mirror is now the tenant's CANONICAL invoice,
+  > delivered inside our branded email (hybrid). Full current design + the tax
+  > lifecycle live in [`AIRWALLEX_INVOICING.md`](./AIRWALLEX_INVOICING.md) — read
+  > that first.** Changes since this 2026-08-10 note: named products (Platform
+  > commission / Domain registration) replace the single "Stemfra services";
+  > `memo` now carries the real bank details; the invoice email attaches the
+  > Airwallex PDF + a "View invoice online" link; nickname = business name. The
+  > "bank instructions NOT YET AVAILABLE" line below is obsolete.
+  `lib/airwallexBilling.js`
   mirrors every issued charge into Airwallex Billing as an official **OUT_OF_BAND**
   invoice via their API (billing customer per owner contact, cached at
   `contacts.billing_profile.awx_customer_id`; shared "Stemfra services" product id in

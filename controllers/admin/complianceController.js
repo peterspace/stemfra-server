@@ -24,7 +24,7 @@ const monthOf = (iso) => (iso ? String(iso).slice(0, 7) : null); // 'YYYY-MM'
 //  1. charge.metadata.demo_seed = true  (the 26 seeded demo invoices)
 //  2. the charge's site has metadata.is_starter = true (the whole demo fleet)
 // Each returned row carries its resolved billing jurisdiction + tax category.
-async function loadBillableCharges({ sinceIso = null, statuses = ['requested', 'paid'] } = {}) {
+async function loadBillableCharges({ sinceIso = null, statuses = ['requested', 'paid'], includeDemo = false } = {}) {
   let q = supabase
     .from('billing_charges')
     .select('id, site_id, kind, line_items, amount_cents, currency, status, created_at, paid_at, metadata')
@@ -34,7 +34,9 @@ async function loadBillableCharges({ sinceIso = null, statuses = ['requested', '
   const { data: charges, error } = await q;
   if (error) throw new Error(error.message);
 
-  const rows = (charges || []).filter((c) => c.metadata?.demo_seed !== true);
+  // Demo exclusion (default): drop demo_seed charges + charges on starter sites.
+  // includeDemo=true bypasses BOTH — a preview mode only (never for real nexus).
+  const rows = (charges || []).filter((c) => includeDemo || c.metadata?.demo_seed !== true);
   const siteIds = [...new Set(rows.map((r) => r.site_id).filter(Boolean))];
   const { data: sites } = siteIds.length
     ? await supabase.from('sites').select('id, subdomain, owner_contact_id, metadata').in('id', siteIds)
@@ -49,7 +51,8 @@ async function loadBillableCharges({ sinceIso = null, statuses = ['requested', '
   const out = [];
   for (const c of rows) {
     const site = siteById[c.site_id];
-    if (!site || site.metadata?.is_starter === true) continue; // exclude the demo fleet
+    if (!site) continue;
+    if (!includeDemo && site.metadata?.is_starter === true) continue; // exclude the demo fleet
     const contact = contactById[site.owner_contact_id] || null;
     out.push({
       ...c,
@@ -62,10 +65,11 @@ async function loadBillableCharges({ sinceIso = null, statuses = ['requested', '
 
 // GET /api/admin/compliance/registry — per-jurisdiction rolling-12-month rollup.
 // The client applies taxability flags + thresholds + status chips (constants).
-async function getRegistry(_req, res) {
+async function getRegistry(req, res) {
   try {
+    const includeDemo = req.query?.includeDemo === 'true' || req.query?.includeDemo === '1';
     const since = new Date(Date.now() - 365 * 86400000).toISOString();
-    const charges = await loadBillableCharges({ sinceIso: since, statuses: ['requested', 'paid'] });
+    const charges = await loadBillableCharges({ sinceIso: since, statuses: ['requested', 'paid'], includeDemo });
     const byJur = new Map();
     for (const c of charges) {
       const key = c.juris.jurisdiction;
@@ -91,7 +95,7 @@ async function getRegistry(_req, res) {
       delete j._sites;
       return j;
     }).sort((a, b) => b.billedCents - a.billedCents);
-    return res.json({ windowDays: 365, rows });
+    return res.json({ windowDays: 365, rows, includeDemo });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

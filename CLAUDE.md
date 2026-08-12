@@ -133,10 +133,42 @@ On success: streams the file directly into `cloudinary.uploader.upload_stream` (
 
 Server side of the CRM Compliance page (staff-gated `PLATFORM_ADMIN`, same as billing). `controllers/admin/complianceController.js` + `routes/admin/compliance.js` (mounted in index.js). Spec: `docs/COMPLIANCE_ENGINE.md`. The controller only aggregates money + dates; all tax-law positions live in the CRM's `src/lib/complianceCatalog.js`.
 
-- **`GET /registry`** — per-jurisdiction rolling-12-month rollup of `billing_charges` (status requested/paid), grouped by the client's billing state via `sites.owner_contact_id → contacts.country/state`, split into SaaS (commission + subscription fees) vs domains vs other. **`GET /books?year=`** — monthly PAID revenue by category + monthly `expenses` by category (a tax P&L). **BOTH exclude demo data**: `charge.metadata.demo_seed=true` AND charges whose site has `metadata.is_starter=true` (so the 26 seeded demo invoices + the demo fleet never count toward nexus or the P&L). Today both return empty (all charges are demo/starter → genuinely pre-revenue → 0 nexus).
+- **`GET /registry`** — per-jurisdiction rolling-12-month rollup of `billing_charges` (status requested/paid), grouped by the client's billing state via `sites.owner_contact_id → contacts.country/state`, split into SaaS (commission + subscription fees) vs domains vs other. **`?includeDemo=true`** (2026-08-10) folds the demo + starter fleet back in — a PREVIEW mode for the CRM Nexus-tracking toggle so staff can see how the table renders pre-revenue; `loadBillableCharges({includeDemo})` bypasses BOTH demo exclusions. Defaults OFF (real clients only); never use it for real nexus determination. **`GET /books?year=`** — monthly PAID revenue by category + monthly `expenses` by category (a tax P&L). **BOTH exclude demo data**: `charge.metadata.demo_seed=true` AND charges whose site has `metadata.is_starter=true` (so the 26 seeded demo invoices + the demo fleet never count toward nexus or the P&L). Today both return empty (all charges are demo/starter → genuinely pre-revenue → 0 nexus).
 - **`lib/geo.js`** — country + US-state human-name→code maps + `jurisdictionFor(country, state)` → a stable `US-NY` key + label. `contacts.country/state` store HUMAN NAMES. Independent of the `airwallexBilling.js` country map (do not touch that file).
 - CRUD: **`GET/POST /registrations`, `PATCH/DELETE /registrations/:id`** (`compliance_registrations`); **`GET/POST /filings`** (upsert by obligation_key+period, `compliance_filings`); **`GET /settings` + `POST /settings`** (`compliance_settings`, holds the ETBUS determination + action checklist). ⚠ **Settings is POST, not PUT** — the global CORS `methods` list (index.js `app.use(cors({methods:[…]}))`) omits PUT, so a PUT is blocked after a successful OPTIONS preflight. Use POST/PATCH for admin writes, or add PUT to that list.
 - **Additive tables** (migration `compliance_engine_v1`, staff RLS via `is_stemfra_staff()`): `compliance_registrations`, `compliance_filings`, `compliance_settings`. All access is server-mediated (service role); the RLS policies are defense-in-depth.
+
+## Billing Reconciliation Engine (`/api/admin/recon/*` + `/api/awx/webhook`, 2026-08-11)
+
+Auto-matches Airwallex deposits against unpaid `billing_charges` so invoices
+confirm themselves (tenants no longer upload receipts; receipts are
+dispute-only). **Spec + build log: `docs/RECONCILIATION.md` — read it first.**
+
+- **`lib/reconEngine.js`** — deposit fetch (30-day window chunking; the AWX list
+  caps ranges at 31 days), tiered matcher (T1 reference / T2 exact / T2-near
+  fee-tolerant auto-pay; ambiguity → review), `claimCharge` (tenant "I've
+  paid"), reversal handling (un-pays + emails), staff `applyDeposit`/
+  `setDepositStatus`. Auto-pay goes through `lib/billing markPaid`, so receipt
+  email + AWX mirror settle + pay-and-publish ride along. `recon_deposits`
+  table = dedup ledger + review/unmatched/ignored states.
+- **`lib/reconSweeper.js`** — self-scheduling backstop; gates: env
+  `RECON_ENABLED=true` (NOT in deploy.yml yet — add at arm time) then
+  `crm_settings.billing_recon {enabled, dry_run, interval_minutes,
+  lookback_days, near_tolerance_cents}` (CRM-adjustable, re-read every cycle).
+- **`routes/awxWebhook.js`** (`/api/awx/webhook`, `express.raw` before json) —
+  `deposit.pending/settled/rejected/reversed`; HMAC-SHA256(x-timestamp + raw
+  body) vs `x-signature` with `AIRWALLEX_WEBHOOK_SECRET` (env + deploy.yml;
+  dashboard webhook `stemfra-deposit-recon` registered by Peter).
+- **`routes/admin/recon.js`** (PLATFORM_ADMIN) — deposits list, resolve,
+  ignore/restore, settings, on-demand sweep, per-charge `request-receipt`
+  (toggles `metadata.receipt_requested` + `platformReceiptRequest` email). CRM
+  surface: the Billing page's Reconciliation tab (stemfra-ops).
+- **CMS side**: `POST /api/cms/billing/charges/:id/claim` ("I've paid" → live
+  targeted check → paid or Processing); receipt upload hidden unless requested.
+- **Rounding policy (final)**: commission = EXACT 5% to the cent (brand
+  promise); domain retail rounds UP to whole dollars (`lib/registrar/porkbun.js`).
+- Invoice PDF + email print the 8-char **payment reference** (bare code; USD
+  bank memos cap at 10 chars, so `INV-…` would truncate and break matching).
 
 ## Document export endpoints (`/api/export/*`, 2026-07-20)
 

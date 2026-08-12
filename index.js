@@ -20,6 +20,7 @@ const { startBookingCheckoutSweeper } = require('./lib/bookingCheckoutSweeper');
 const { startBookingAutoCollectSweeper } = require('./lib/bookingAutoCollectSweeper');
 const { startDomainRenewalSweeper } = require('./lib/domainRenewalSweeper');
 const { startNexusSweeper } = require('./lib/nexusSweeper');
+const { startReconSweeper } = require('./lib/reconSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
@@ -107,6 +108,8 @@ app.use(cors({
 // Stripe webhook MUST be registered before express.json() — signature
 // verification needs the raw, unparsed request body.
 app.use('/api/stripe/webhook', express.raw({ type: '*/*' }), require('./routes/stripeWebhook'));
+// Airwallex deposit webhook (recon) — same raw-body requirement for HMAC verify.
+app.use('/api/awx/webhook', express.raw({ type: '*/*' }), require('./routes/awxWebhook'));
 
 // Document export (stemfra_business, staff-only) — registered before the global
 // 10kb json parser because it receives multi-MB HTML+CSS payloads; the route
@@ -178,6 +181,7 @@ app.use('/api/admin/templates', require('./routes/admin/templates'));
 app.use('/api/admin/subscriptions', require('./routes/admin/subscriptions'));
 app.use('/api/admin/billing', require('./routes/admin/billing'));
 app.use('/api/admin/compliance', require('./routes/admin/compliance'));
+app.use('/api/admin/recon', require('./routes/admin/recon'));
 app.use('/api/admin/bookings', require('./routes/admin/bookings'));
 app.use('/api/admin/memberships', require('./routes/admin/memberships'));
 app.use('/api/admin/mockups', require('./routes/admin/mockups'));
@@ -243,4 +247,5 @@ server.listen(PORT, () => {
   // a US state hit 80% of its economic-nexus threshold. Gated OFF
   // (NEXUS_ALERTS_ENABLED=true); inert pre-launch (all sales are demo).
   startNexusSweeper();
+  startReconSweeper();
 });

@@ -184,6 +184,30 @@ async function invoicePdf(req, res) {
   streamInvoicePdf(res, { charge, contact, billingProfile: contact?.billing_profile || {}, provider: charge.provider, bank });
 }
 
+// GET /api/cms/billing/charges/:chargeId/hosted-invoice
+// Returns a FRESH hosted-invoice URL for the mirrored Airwallex invoice (the
+// canonical "View invoice online" page — see docs/AIRWALLEX_INVOICING.md). The
+// hosted link is a short-lived signed URL, so we re-mint it on every call. 404
+// when the charge was never mirrored → the CMS falls back to the PDF preview.
+async function hostedInvoice(req, res) {
+  const { data: charge } = await supabase.from('billing_charges')
+    .select('id, site_id, metadata').eq('id', req.params.chargeId).maybeSingle();
+  if (!charge) return res.status(404).json({ error: 'Invoice not found' });
+  const site = await verifySiteOwnership(req.cmsUser.id, charge.site_id);
+  if (!site) return res.status(403).json({ error: 'Not your invoice' });
+  const awxId = charge.metadata?.awx_invoice_id;
+  if (!awxId) return res.status(404).json({ error: 'No hosted invoice' });
+  try {
+    const { awx } = require('../../lib/airwallexBilling');
+    const inv = await awx(`/api/v1/billing/invoices/${awxId}`, { method: 'GET' });
+    if (!inv?.hosted_url) return res.status(404).json({ error: 'No hosted invoice' });
+    return res.json({ url: inv.hosted_url });
+  } catch (e) {
+    console.error('[cms.hostedInvoice]', e.message);
+    return res.status(502).json({ error: 'Could not load the hosted invoice' });
+  }
+}
+
 // POST /api/cms/billing/charges/:chargeId/receipt { receiptUrl }
 // Owner confirms an invoice payment by attaching a payment receipt (image/PDF uploaded
 // first via /api/cms/site-uploads/upload). Stored on the charge for staff source-of-funds
@@ -210,4 +234,36 @@ async function submitReceipt(req, res) {
   return res.json({ charge: data });
 }
 
-module.exports = { getBilling, updateBillingContact, changePlan, cancelSubscription, reactivateSubscription, invoicePdf, submitReceipt };
+// POST /api/cms/billing/charges/:chargeId/claim — "I've paid" (recon R4).
+// Stamps payment_claimed_at + runs an on-demand check of Airwallex deposits for
+// THIS charge. Returns { status: 'paid' } when a settled deposit unambiguously
+// matches, else { status: 'processing' } (bank transfers can take 1 to 2
+// business days; the sweep + webhook keep watching). Owner + ownership gated.
+async function claimPayment(req, res) {
+  const { data: charge } = await supabase.from('billing_charges')
+    .select('*').eq('id', req.params.chargeId).maybeSingle();
+  if (!charge) return res.status(404).json({ error: 'Invoice not found' });
+  const site = await verifySiteOwnership(req.cmsUser.id, charge.site_id);
+  if (!site) return res.status(403).json({ error: 'Not your invoice' });
+  if (charge.status === 'paid') return res.json({ status: 'paid' });
+  if (!['due', 'requested'].includes(charge.status)) return res.status(400).json({ error: 'This invoice is not payable' });
+
+  logSiteActivity({
+    siteId: charge.site_id, action: 'invoice_payment_claimed', actorName: req.cmsUser.email,
+    entityType: 'billing_charge', entityId: charge.id,
+  });
+  try {
+    const { claimCharge } = require('../../lib/reconEngine');
+    const { readReconSettings } = require('../../lib/reconSweeper');
+    const s = await readReconSettings().catch(() => ({}));
+    const out = await claimCharge(charge, { nearToleranceCents: s.near_tolerance_cents });
+    return res.json(out);
+  } catch (e) {
+    // The check itself failing (e.g. Airwallex down) still leaves the claim
+    // stamped — the sweep picks it up. Show the tenant "processing".
+    console.error('[cms claim] check failed:', e.message);
+    return res.json({ status: 'processing' });
+  }
+}
+
+module.exports = { getBilling, updateBillingContact, changePlan, cancelSubscription, reactivateSubscription, invoicePdf, hostedInvoice, submitReceipt, claimPayment };

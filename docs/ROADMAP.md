@@ -75,6 +75,17 @@ model** (`docs/COMMISSION_MODEL.md`)._
    (c) plan sort order in the CMS if plan lists grow. SKIPPED deliberately:
    membership icons, self-sign-in restrictions and non-member purchase toggles
    (tied to Mindbody's commerce model, N/A under pay-at-venue).
+9. **Airwallex HYBRID invoicing — SHIPPED 2026-08-12** (branded email carries the
+   canonical Airwallex invoice: link + PDF; see `docs/AIRWALLEX_INVOICING.md`).
+   **Remaining near-term tasks** (all in that doc §9): (a) **tax-aware ledger +
+   recon-on-total** — add `tax_cents` etc.; recon matches `amount_cents +
+   tax_cents`; defaults to 0 (no behavior change now), build before we register
+   for sales tax anywhere; (b) **`invoice.paid` webhook** — REQUIRED when
+   Airwallex Payments/card goes live (a hosted-link card payment must flip our
+   `billing_charges`; today we only handle `deposit.*`); (c) confirm Airwallex
+   tax filing-partner vs manual filing; (d) optional `pay.stemfra.com` custom
+   domain ($10/mo Beta). Also queued: (optional) final live e2e via `markRequested`
+   on a demo site; the Airwallex-email observation experiment.
 8. ✅ **Front Desk widget rollout to all 6 verticals — DONE 2026-07-31.** This entry
    was written 2026-07-29, two days before the rollout landed, and stayed stale.
    **Re-verified independently 2026-08-03**, not taken from the doc's own claim:
@@ -817,14 +828,26 @@ violet PrimaryButton standardization, refined Select dropdown + category creatio
 CMS boot spinner, card active states, FAQ+legal onboarding steps).
 
 **Pending (queued after the UI pass, agreed with Peter 2026-08-07):**
-1. **Phone validation + Google address autocomplete slice** — Location editor +
-   Stacy contact card: libphonenumber validation with the tenant's country (known
-   from onboarding), resolved-number echo (PhoneField's showResolved pattern),
-   parallel `phone_e164` in location_map content for tel: hrefs; Google Places
-   Autocomplete on the address fields (session pricing ≈ free at our volume;
-   PETER ACTION: Google Cloud project + billing + domain-restricted API key).
-   Later: a "Business location/country" setting under Billing that drives
-   formatting app-wide (the Google-account model).
+1. **Phone validation + Google address autocomplete slice** —
+   ✅ **Address autocomplete DONE 2026-08-11** (verified live): Google Places
+   `PlaceAutocompleteElement` on the Location editor's Street-address field
+   (`stemfra_cms` `lib/googleMaps.ts` + `components/AddressAutocomplete.tsx`);
+   project **stemfra-maps** + referrer-restricted key set up; `VITE_GOOGLE_MAPS_KEY`
+   in CMS `.env.local`. ⚠ PROD: set that env var in the CMS Cloudflare Pages
+   build env (see SESSION_HANDOFF). **STILL PENDING:** libphonenumber phone
+   validation with the tenant's country (known from onboarding), resolved-number
+   echo (PhoneField's showResolved pattern), parallel `phone_e164` in location_map
+   content for tel: hrefs; and later a "Business location/country" setting under
+   Billing that drives formatting app-wide (the Google-account model) — which
+   should also feed the autocomplete's country bias (currently hardcoded 'us').
+1b. **Billing Reconciliation Engine (AGREED 2026-08-11, spec written, NOT built)**
+   — auto-match Airwallex deposits against unpaid `billing_charges` so invoices
+   confirm themselves (webhook-primary `deposit.settled` + CRM-adjustable sweep
+   backstop; T1 reference / T2 unique-amount auto-pay; ambiguous → CRM review
+   queue; `deposit.reversed` un-pays; receipt upload hidden by default, CRM
+   re-enables per invoice for disputes). Full spec + pinned Airwallex API facts:
+   **[`RECONCILIATION.md`](RECONCILIATION.md)**. Build order R1 dry-run engine →
+   R2 webhook (PETER: dashboard registration + secret) → R3 CRM → R4 CMS.
 2. **Dashboard analytics upgrade** — Airwallex-inspired: a richer balance/revenue
    chart block on the CMS dashboard (inspiration screenshot 2026-08-07).
 3. **Supademo 30-second pilot workflow** — then Phases A/B per the plan doc;
@@ -923,6 +946,43 @@ call must become optional/minimal; Stacy + interactive tours carry onboarding.
    only in Stacy checklist mini-tours (guided editing = mini-tour + Stacy
    drafting). Mini-tour instruction label restyled (hand-pointer icon, default
    cursor) so it cannot be read as a button.
+
+## P17 — Platform subscriptions & expense receipts (CRM + n8n) (NEW, queued 2026-08-11)
+
+Not previously in the roadmap (confirmed 2026-08-11 — this is a genuinely new
+item, not a rediscovery of an existing one). Goal: give Stemfra staff a single
+place to see every recurring third-party bill the platform itself pays, with
+the receipts automatically collected as accounting evidence.
+
+1. **CRM subscriptions registry (stemfra-ops)** — a new page listing every
+   third-party integration/subscription Stemfra pays for to run the platform
+   (Twilio, Cloudinary, ElevenLabs, Airwallex, Hostinger, Supabase, OpenAI,
+   Porkbun, Resend, Google Workspace, etc.): vendor, plan/tier, monthly cost,
+   billing cadence, renewal date, and the receipt(s) matched to it. A manual
+   "Add subscription" button covers anything not yet auto-discovered. This is
+   platform OPEX bookkeeping — distinct from `subscriptions`/`site_subscriptions`
+   (client-facing billing, System A/B) and from `expenses` (already used by the
+   Compliance Engine's books view) — likely backed by its own table rather than
+   overloading either.
+2. **n8n AI receipt-harvester workflow** — fetches receipts from the three
+   Gmail accounts `peter.space.io@gmail.com`, `support@stemfra.com`,
+   `peter@stemfra.com`, auto-matches each receipt to a subscription row (vendor
+   name + amount + cadence heuristics), and lands unmatched or ambiguous
+   receipts in a **review queue** modeled on the Lead-Gen `needs_review` flow
+   (see [[leadgen_module_architecture]]) rather than auto-filing them blind.
+   Each receipt gets a **"not a Stemfra expense — exclude"** toggle so a
+   personal purchase in the same inbox never gets counted as platform OPEX.
+   Dedupe by Gmail message-id so re-runs never double-count a receipt.
+3. **Google Drive archive** — matched (and confirmed) receipts are copied into
+   a Drive folder on the `support@stemfra.com` account, for accounting
+   evidence of business expenses (feeds the same P&L instinct as the
+   Compliance Engine's books view, but for what Stemfra spends, not what it
+   earns).
+
+Per the standing rule, n8n changes are drafted as workflow/node code and
+handed to Peter to paste into n8n directly (state checked via Peter or the
+n8n Executions tab) — never curl the webhook to test it live. This item is
+documentation only; nothing has been built yet.
 
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
