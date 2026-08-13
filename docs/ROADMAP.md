@@ -49,6 +49,20 @@ the demo, before reviewing that theme.
 - ✅ **On-map Google-style info card (Maps Option B)** — see task 13 below. Card on the Mapbox
   tiles (name/address + Directions + Open in Maps), rating row coded but data-gated (no Places
   call yet); future live-Google-rating is documented under task 13.
+  ✅ **Map-tile regression FIXED** — the card wrapper set the mapbox container to `absolute
+  inset-0`, but mapbox-gl.css forces `.mapboxgl-map{position:relative}` → `inset-0` gave 0 height →
+  tiles clipped to nothing. Now an in-flow `h-full w-full` block (LocationMap.tsx). Verified DOM.
+- ✅ **CMS IA (Peter): Style / SEO / Front desk moved from the Account group to the Website group**
+  in the sidebar (they're website-presentation concerns). Account keeps Publish/Domain/Social.
+  Route paths unchanged, so Stacy + the tour (URL/`data-tour`-driven) are unaffected. `Sidebar.tsx`.
+- ✅ **Global search: "address" (+ location/map/directions/phone) is now searchable** → "Business
+  address & location" (Home Location section) + "Billing details". Added a `keywords` field to the
+  search index (`GlobalSearch.tsx`).
+- ✅ **Phone default now = business country from the ADDRESS (billing first, then location), not
+  timezone.** Location section gained a structured `country` (ISO-2) with a CMS Country dropdown
+  that syncs from the billing address; `useBusinessLocation` (6 templates) exposes it; ContactPages
+  use `loc.country || countryFromTimeZone(...)`. PhoneField now follows a late-async defaultCountry.
+  Verified: argyle contact → 🇬🇧 +44 with location country=GB (overriding US timezone), then 🇺🇸 +1.
 
 
 **Genuinely OPEN engineering tasks:**
