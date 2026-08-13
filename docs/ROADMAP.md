@@ -39,6 +39,16 @@ the demo, before reviewing that theme.
   already have carousels — only the newly-converted spa grids get arrows-below.**
 - ✅ **Ellaris services** "Read More" moved off the photo into the text row (outlined, on the price line).
 - ✅ **Gift-cert tiers clickable → pre-filled enquiry** (`/contact?gift=<tier>` → ContactForm `initialMessage`) on spa/massage/salons.
+- ✅ **Phone picker: full ISO country list + dynamic default from business country.** The
+  full list was already there (Intl.DisplayNames names every country). Added the dynamic
+  default: new `countryFromTimeZone(tz)` (IANA zone → ISO country; `sites.time_zone` is the
+  reliable signal, not the free-text address) so a US shop shows +1, Nigeria +234, Russia +7.
+  Threaded `defaultCountry` PhoneField → ContactForm → all 6 template ContactPages. Verified
+  barbers (argyle/America_New_York → US +1). All CMS phone pickers already share PhoneField,
+  so the full list applies everywhere; the dynamic default is contact-form only for now.
+- ✅ **On-map Google-style info card (Maps Option B)** — see task 13 below. Card on the Mapbox
+  tiles (name/address + Directions + Open in Maps), rating row coded but data-gated (no Places
+  call yet); future live-Google-rating is documented under task 13.
 
 
 **Genuinely OPEN engineering tasks:**
@@ -277,7 +287,26 @@ the demo, before reviewing that theme.
     ⚠ REMAINING — PETER ACTION for prod: add `VITE_MAPBOX_TOKEN` to each of the 6
     Cloudflare Pages template projects' env (build-time var), else prod keeps the
     Google embed fallback (harmless, just unstyled). Optional hardening: restrict
-    the token to *.stemfra.com + localhost in the Mapbox dashboard.) Original:** Pattern + credentials come from unekride:
+    the token to *.stemfra.com + localhost in the Mapbox dashboard.)
+    ✅ **On-map info card SHIPPED 2026-08-13** (Option B, Peter's call): a
+    Google-Maps-style overlay card on the tiles — business name + address +
+    **Directions** (accent-filled, Google Maps dir link) + **Open in Maps**
+    (outline, Google Maps search link), bottom-left, cleaner than Google's own.
+    Built into `LocationMap` (`MapInfoCard`), so BOTH map variants get it free;
+    `name` threaded from LocationCardDefault + LocationCardDarkPanel. Verified via
+    DOM on argyle (name + both hrefs correct). **Rating row is coded but
+    data-gated** — `LocationMap` accepts `rating`/`reviewCount` and renders the
+    star row ONLY when passed; nothing passes them yet, so there is NO paid Places
+    call and no owner false-claim.
+    🟡 **FUTURE (Peter agreed 2026-08-13): live Google rating on the card.** Wire
+    Google Places API (Place Details → rating + user_ratings_total) so the star
+    row lights up with the REAL Google rating. Needs: a server endpoint (key stays
+    server-side, we already hold a Places key from AddressAutocomplete), a per-site
+    Google Place ID resolved once from the address (the "Google Business Profile
+    linkage"), 24h caching to bound API cost, and reading Google's Places docs
+    first (standing "third-party docs first" rule). Deferred now purely to avoid
+    the per-pageview API cost; the card layout already reserves the slot, so
+    lighting it up is just passing the two props.) Original:** Pattern + credentials come from unekride:
     `unekride-customer-mobile/components/BookingMap.web.tsx` (mapbox-gl in the
     browser, PUBLIC token — safe to ship; style URLs streets-v12 / dark-v11 with
     a theme hot-swap). Token lives in
