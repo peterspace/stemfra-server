@@ -8,6 +8,39 @@ linked docs; this is "what's next and why."_
 _Verified against code + DB + env, not just doc claims. Active arc = **P13 commission
 model** (`docs/COMMISSION_MODEL.md`)._
 
+### 🎨 Theme polish — About Us + Contact page review (ACTIVE arc, started 2026-08-13)
+A cross-vertical walkthrough with Peter: review the **About Us** and **Contact** pages of
+every active theme, **vertical by vertical, default theme (★) first**, then the next theme
+after Peter's review, until the vertical is done, then the next vertical. Open each theme
+in the browser theme-by-theme (repoint a demo site to the theme via the CMS picker — zero
+data migration — or use the theme's own demo site). **Document + commit each change; do NOT
+push to GitHub until Peter confirms.**
+
+Review order + checklist (default ★ first; tick a theme once its About + Contact are approved):
+- [ ] **barbers** — ★ Classic NYC · Manhattan  _(shared barbers AboutPage/ContactPage, variant-driven)_
+- [ ] **salons** — ★ Sorrel · Beauty House
+- [ ] **crossfit** — ★ Box · Arclight (crossfit-volt) · BlackFly · 212
+- [ ] **yoga** — ★ Sanctuary · Sawiet
+- [ ] **massage** — ★ Escape · Umbra (massage-zenhaven) · Reverie
+- [ ] **spa** — ★ Ellaris · Lumora · Respira
+- boutique_gyms (Facility ★ / Signal) exist in the catalog but the app (`stemfra_gyms`) is deferred — skip unless asked.
+
+**Logistics:** some themes have no live demo site (e.g. `respira-spa`/`lumora-spa` are not in
+the DB — only `ellaris-spa` is live). Repoint an existing demo site to the theme, or recreate
+the demo, before reviewing that theme.
+
+**Done in this arc so far:**
+- ✅ **Grey→colour-on-hover removed repo-wide** (`group-hover:grayscale-0` / `hover:grayscale-0`)
+  from all 6 archetypes that had it: TeamGrid `BwPortraits`/`Editorial`/`Carousel`/`BlackFly`,
+  `GalleryMasonry`, `MembershipRuledGrid`. Photos stay B&W; other hovers (e.g. `group-hover:scale-105`) kept.
+- ✅ **Spa home Team → marquee** (Ellaris `bw-portraits` + Respira `soft-tiles` via the new shared
+  `TeamGrid/TeamMarquee`: scroll-snap cards + arrows BELOW + "View All"; the `/teachers` page stays a
+  grid). Lumora already used `soft-carousel`. **Note (Peter): do NOT move arrows below on themes that
+  already have carousels — only the newly-converted spa grids get arrows-below.**
+- ✅ **Ellaris services** "Read More" moved off the photo into the text row (outlined, on the price line).
+- ✅ **Gift-cert tiers clickable → pre-filled enquiry** (`/contact?gift=<tier>` → ContactForm `initialMessage`) on spa/massage/salons.
+
+
 **Genuinely OPEN engineering tasks:**
 1. ✅ **Task 59 — CRM Site Monitor DONE (2026-07-29, verified in-browser).** Observe-only
    per-site activity/performance: server `GET /api/admin/sites/monitor`
