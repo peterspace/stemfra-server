@@ -17,7 +17,7 @@ data migration — or use the theme's own demo site). **Document + commit each c
 push to GitHub until Peter confirms.**
 
 Review order + checklist (default ★ first; tick a theme once its About + Contact are approved):
-- [ ] **barbers** — ★ Classic NYC · Manhattan  _(shared barbers AboutPage/ContactPage, variant-driven)_
+- [ ] **barbers** — ✅ Classic NYC (About "About Us" + white header; Contact "Contact Us") · [ ] Manhattan  _(shared barbers AboutPage/ContactPage, variant-driven)_
 - [ ] **salons** — ★ Sorrel · Beauty House
 - [ ] **crossfit** — ★ Box · Arclight (crossfit-volt) · BlackFly · 212
 - [ ] **yoga** — ★ Sanctuary · Sawiet
