@@ -29,6 +29,20 @@ Review order + checklist (default ★ first; tick a theme once its About + Conta
 the DB — only `ellaris-spa` is live). Repoint an existing demo site to the theme, or recreate
 the demo, before reviewing that theme.
 
+**🔍 Sub-arc — Hardcoded-content audit (precursor to the About/Contact review; Peter, 2026-08-14):**
+Before reviewing About + Contact for each theme, **audit that theme's app + variants for text/images/
+content that a tenant CANNOT edit in the CMS** (hardcoded strings, fallback-default literals, hardcoded
+image URLs, hardcoded nav/footer/chip arrays). Document per vertical, then decide what to make editable —
+exactly the barbers pass below. **Process per vertical:** scan → present the list → Peter picks which to
+make editable → build (current text = defaults so nothing changes until edited) → then the About/Contact review.
+- ✅ **barbers DONE** — audit produced (Layout/pages/lib + barbers-used archetype variants). Peter's call:
+  make editable everything EXCEPT nav labels + footer legal links; skip generic UI chrome (forms/booking).
+  Shipped in 2 phases → `metadata.labels` (header CTA, footer heading/copyright/texture image, team-years
+  label, featured badge, chat chips) via a new CMS **"Buttons & labels"** panel (Settings → Style) +
+  section content (home location button, contact Visit/Phone labels, review-panel captions). All default
+  to current text. **Standing decision:** nav labels + footer legal links stay hardcoded; UI chrome (section D) untouched.
+- [ ] **salons** · [ ] **crossfit** · [ ] **yoga** · [ ] **massage** · [ ] **spa** — same audit + make-editable pass, one vertical at a time (default theme first). Reuse the `metadata.labels` + CMS "Buttons & labels" pattern where the same chrome exists (each vertical app has its own Layout, so the panel/labels are per-app).
+
 **Done in this arc so far:**
 - ✅ **Grey→colour-on-hover removed repo-wide** (`group-hover:grayscale-0` / `hover:grayscale-0`)
   from all 6 archetypes that had it: TeamGrid `BwPortraits`/`Editorial`/`Carousel`/`BlackFly`,
