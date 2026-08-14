@@ -41,7 +41,16 @@ make editable → build (current text = defaults so nothing changes until edited
   label, featured badge, chat chips) via a new CMS **"Buttons & labels"** panel (Settings → Style) +
   section content (home location button, contact Visit/Phone labels, review-panel captions). All default
   to current text. **Standing decision:** nav labels + footer legal links stay hardcoded; UI chrome (section D) untouched.
-- [ ] **salons** · [ ] **crossfit** · [ ] **yoga** · [ ] **massage** · [ ] **spa** — same audit + make-editable pass, one vertical at a time (default theme first). Reuse the `metadata.labels` + CMS "Buttons & labels" pattern where the same chrome exists (each vertical app has its own Layout, so the panel/labels are per-app).
+- ✅ **All 5 remaining verticals SCANNED (2026-08-14)** — salons · crossfit · yoga · massage · spa.
+  Consolidated findings + per-vertical make-editable recommendations documented in
+  **[`docs/HARDCODED_AUDIT.md`](HARDCODED_AUDIT.md)**. Includes a **cross-cutting bug list**
+  (wrong-vertical clone leftovers: 'Lila Studio'/'Calm Roots Massage'/'Massage Studio' brand leaks,
+  "Switching to another gym" on yoga, "Est. 2019/Serving Austin" on massage, yoga BookPage leftovers
+  on massage+spa, "Sukhasana"/"Serenity Spa" footer labels) — fix those regardless of the editability decision.
+- [ ] **Awaiting Peter's per-vertical pick** (salons → crossfit → yoga → massage → spa): choose the
+  make-editable set → build `metadata.labels` + a per-app CMS "Buttons & labels" panel + section editors
+  (defaults = current text) → then the About/Contact review for that vertical. Reuse the barbers pattern
+  (each vertical app has its own Layout, so the panel/labels are per-app).
 
 **Done in this arc so far:**
 - ✅ **Grey→colour-on-hover removed repo-wide** (`group-hover:grayscale-0` / `hover:grayscale-0`)
