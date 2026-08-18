@@ -132,6 +132,7 @@ app.get('/health', (req, res) => {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/contact',  contactRoutes);
 app.use('/api/onboarding', require('./routes/onboarding'));
+app.use('/api/claim', require('./routes/claim')); // public claim funnel (2026-08-19)
 app.use('/api/setup-call', require('./routes/setupCall'));  // public: marketing "Book a setup call" (video + Meet)
 app.use('/api/starters',   require('./routes/starters'));   // public Starter catalog (clone-to-onboard)
 app.use('/api/marketing',  require('./routes/marketing'));  // public marketing-site reads (hero mockups)

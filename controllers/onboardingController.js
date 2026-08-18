@@ -28,7 +28,7 @@ async function signup(req, res) {
     const {
       name, email, password, company, vertical, starterId, city, template,
       firstName, lastName, country, state, bookingProvider, paymentMethods, tier, goals, feesAccepted,
-      hasDomain, domain, hasStripe, termsAccepted,
+      hasDomain, domain, hasStripe, termsAccepted, claimToken,
     } = req.body || {};
     const result = await onboardCustomer({
       name, email, password, company, vertical: vertical || null, starterId: starterId || null,
@@ -46,6 +46,7 @@ async function signup(req, res) {
       // forms (CMS /signup + stemfra.com/start) send the combined tick.
       termsAccepted: !!termsAccepted, requireTerms: true,
       clientIp: ip, userAgent: req.headers['user-agent'] || null,
+      claimToken: typeof claimToken === 'string' ? claimToken : null,
     });
 
     res.json({

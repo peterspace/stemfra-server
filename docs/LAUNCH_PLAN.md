@@ -85,7 +85,36 @@ COMMISSION_MODEL.md. NOTHING is pushed to GitHub until Peter approves._
     unlinked `/youtube` banner-review page; discard = drop the draft). Main builds fine either way.
 13. Supabase auth SMTP + branded templates (Part A/B) — after the tasks, per Peter.
 
-## Marketing funnel (UNDER DISCUSSION — no code yet; Peter's ideas + Claude's read)
+## Marketing funnel — BUILT 2026-08-19 (no traffic yet; Peter's call when to send)
+
+**Shipped (client + server + CMS, committed, deploy = push):**
+- **Prospecting email** (`templates/transactionalEmails.js prospectClaimEmail`, touch 1 + 2; previews
+  `/dev/preview/claim-1|2`): approved v7 (Bentley brochure anatomy, hero-fold mockup, "Built for you",
+  offer box, "Click Claim…", CLAIM MY WEBSITE, 5% note). Caller supplies `claimUrl` + `unsubscribeUrl`
+  from `lib/claimTokens.js` (`claimUrlFor(leadId)`, `unsubscribeUrlFor(leadId)`).
+- **Signed lead tokens** (`lib/claimTokens.js`, HMAC, no PII in URLs; secret `CLAIM_TOKEN_SECRET` →
+  falls back to `N8N_WEBHOOK_SECRET`).
+- **Offer resolver** (`lib/claimOffer.js`): greeting (skips generic "Owner"), business, vertical →
+  FEATURED demo from the DB flag (fallback demoLinks FLAGSHIP) + its hero-fold mockup, honest bonus
+  deadline (send time + 7d, never resets), CMS signup URL prefilled (`starter`, `claim`, `company`,
+  `first`, `last`, `email`). Bonus copy = `BONUS` const (today: free custom domain first year).
+- **Public endpoints** (`routes/claim.js`): `GET /api/claim/:token` (offer), `POST /api/claim/:token/event`
+  (first-party funnel events → new `marketing_events` table; cta/signup_start also flip the lead warm),
+  `GET /api/claim/unsubscribe/:token` (do_not_email + page).
+- **Claim page** `stemfra.com/claim/:token` (`stemfra_client/src/app/pages/Claim.jsx`, noindex, served via
+  `_redirects` `/claim/* → /claim/index.html 200`): sticky claim bar with countdown + bonus (or "still
+  free" when expired), hero (Built for you / Congratulations {name}, this website is yours) with the
+  mockup, LIVE demo in a browser frame (try a booking), offer checklist + 5% line, how it works, CTAs →
+  CMS signup. Events: claim_page_view / claim_cta_click / claim_see_live_click.
+- **CMS signup** reads `claim` + prefill params, sends `claimToken`; `onboardCustomer` marks the lead
+  `won` / `converted`, links `contact_id`, logs `signup_complete`.
+- Verified locally end to end with a real lead token (page → CTA → CMS prefilled).
+
+**Not yet:** the sequence (#2) that SENDS touch 1/2 with these links (next), Mark's knowledge (#7),
+per-prospect hero render (brand override + capture; only if opens without clicks), CRM funnel view
+over `marketing_events`, the demo's own promo popup inside the frame (consider `?embed=1` to mute).
+
+### Original discussion (kept for the record)
 
 **Peter's proposal:** cold email = 3 bullets on the offer + a hero screenshot + a link
 to a personalized dedicated page (name in the URL/page) that lets the prospect **try
