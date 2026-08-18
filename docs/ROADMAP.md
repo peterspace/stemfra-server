@@ -17,13 +17,17 @@ data migration — or use the theme's own demo site). **Document + commit each c
 push to GitHub until Peter confirms.**
 
 Review order + checklist (default ★ first; tick a theme once its About + Contact are approved):
-- [ ] **barbers** — ✅ Classic NYC (About "About Us" + white header; Contact "Contact Us") · [ ] Manhattan  _(shared barbers AboutPage/ContactPage, variant-driven)_
-- [ ] **salons** — ★ Sorrel · Beauty House
-- [ ] **crossfit** — ★ Box · Arclight (crossfit-volt) · BlackFly · 212
-- [ ] **yoga** — ★ Sanctuary · Sawiet
-- [ ] **massage** — ★ Escape · Umbra (massage-zenhaven) · Reverie
-- [ ] **spa** — ★ Ellaris · Lumora · Respira
+- ✅ **barbers** — DONE (Peter, 2026-08-17: fine as-is now that chrome is CMS-editable; titles/text tuned from the CMS)
+- ✅ **salons** — DONE (2026-08-17, same call)
+- ✅ **crossfit** — DONE (2026-08-17, same call)
+- ✅ **yoga** — DONE (2026-08-17, same call)
+- [ ] **massage** — ★ Escape · Umbra (massage-zenhaven) · Reverie  ← **ACTIVE FOCUS** (Peter gave these pages least attention)
+- [ ] **spa** — ★ Ellaris · Lumora · Respira  ← **ACTIVE FOCUS**
 - boutique_gyms (Facility ★ / Signal) exist in the catalog but the app (`stemfra_gyms`) is deferred — skip unless asked.
+
+_2026-08-17 (Peter): About/Contact for barbers · salons · crossfit · yoga marked DONE — now that every part
+of those pages is CMS-editable, Peter will adjust titles/text from the dashboard. The review now focuses ONLY
+on **massage + spa**, whose About/Contact pages got the least attention._
 
 **Logistics:** some themes have no live demo site (e.g. `respira-spa`/`lumora-spa` are not in
 the DB — only `ellaris-spa` is live). Repoint an existing demo site to the theme, or recreate
@@ -47,10 +51,16 @@ make editable → build (current text = defaults so nothing changes until edited
   (wrong-vertical clone leftovers: 'Lila Studio'/'Calm Roots Massage'/'Massage Studio' brand leaks,
   "Switching to another gym" on yoga, "Est. 2019/Serving Austin" on massage, yoga BookPage leftovers
   on massage+spa, "Sukhasana"/"Serenity Spa" footer labels) — fix those regardless of the editability decision.
-- [ ] **Awaiting Peter's per-vertical pick** (salons → crossfit → yoga → massage → spa): choose the
-  make-editable set → build `metadata.labels` + a per-app CMS "Buttons & labels" panel + section editors
-  (defaults = current text) → then the About/Contact review for that vertical. Reuse the barbers pattern
-  (each vertical app has its own Layout, so the panel/labels are per-app).
+- ✅ **make-editable pass DONE for ALL 5 remaining verticals (2026-08-17, local only, not pushed)** —
+  salons · crossfit · yoga · massage · spa. The barbershop-only "Buttons & labels" panel was refactored into
+  ONE **vertical-aware, config-driven** component (`stemfra_cms/.../ButtonsLabelsSection.tsx`: `VERTICAL_FIELDS`
+  keyed by template-slug prefix; per-field `kind:'image'` + `when(av)` gating). Each vertical's chrome labels
+  (header CTA · footer description/column-headings/copyright/accent photo+caption · chat chips · home team/
+  location/hero-gift CTAs, per the audit) now write to `site_theme_settings.metadata.labels`, and each template
+  Layout/HomePage reads them with current text as the default (blank = unchanged). Standing decision honoured:
+  nav labels + footer legal links + forms stay hardcoded. Verified per vertical (typecheck + template render +
+  CMS panel field set); the write loop is the proven barbers `useUpsertThemeSettings` path. See SESSION_HANDOFF
+  2026-08-17. **NEXT in this arc: the per-vertical About/Contact page review (default theme first).**
 
 **Done in this arc so far:**
 - ✅ **Grey→colour-on-hover removed repo-wide** (`group-hover:grayscale-0` / `hover:grayscale-0`)
