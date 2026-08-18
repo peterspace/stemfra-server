@@ -5,6 +5,7 @@
 // Spec: stemfra_server/docs/COMPLIANCE_ENGINE.md. Tax LAW lives in the client
 // constants catalog + taxGuidance; this file only aggregates money + dates.
 const supabase = require('../../config/supabase');
+const { isNonProductionSite, siteKind } = require('../../lib/testData');
 const { jurisdictionFor } = require('../../lib/geo');
 
 // Product tax category of a charge (see spec §3):
@@ -52,7 +53,7 @@ async function loadBillableCharges({ sinceIso = null, statuses = ['requested', '
   for (const c of rows) {
     const site = siteById[c.site_id];
     if (!site) continue;
-    if (!includeDemo && site.metadata?.is_starter === true) continue; // exclude the demo fleet
+    if (!includeDemo && isNonProductionSite(site)) continue; // exclude the demo fleet + test sites (lib/testData.js)
     const contact = contactById[site.owner_contact_id] || null;
     out.push({
       ...c,
@@ -180,7 +181,8 @@ async function getTenants(_req, res) {
         subdomain: s.subdomain,
         country: ct?.country || null,
         state: ct?.state || null,
-        isDemo: s.metadata?.is_starter === true,
+        isDemo: isNonProductionSite(s),
+        kind: siteKind(s),
       };
     }).sort((a, b) => a.business.localeCompare(b.business));
     return res.json({ tenants });

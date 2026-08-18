@@ -306,6 +306,19 @@ legal page changes materially: bump the version in `legalDocs.js` AND the page's
 "Last updated" line together.** Deploy order for a change to the requirement:
 client + platform (forms) BEFORE server (the check).
 
+## Test / demo data isolation (2026-08-18, launch task #9)
+
+`lib/testData.js` is the ONE predicate: `siteKind(site)` = `'test'` (`metadata.is_test`)
+| `'demo'` (`metadata.is_starter`, the public Starter fleet) | `'real'`; `isNonProductionSite`
+= demo OR test. Every money/metrics consumer routes through it (commission meter,
+booking auto-collect + membership-renewal sweepers, compliance/books, admin sites
+list + monitor). Never re-derive `is_starter` in a new consumer. Test tenants are
+flagged by staff (`POST /api/admin/sites/:id/test-flag`) or automatically at signup
+when the owner email is on `TEST_EMAIL_DOMAINS` (env; default stemfra.com,
+example.com). `leads.is_test` marks CRM test leads. Cleanup = `lib/testDataCleanup.js`
+via `scripts/cleanup-test-data.js` (dry-run default, `--apply`) or
+`POST /api/admin/test-data/cleanup` (PLATFORM_ADMIN; `{apply:true}` to purge).
+
 ## Future architecture: planned CMS service split
 
 All CMS endpoints live under `/api/cms/*` and CMS-only code is isolated under `routes/cms/` + `controllers/cms/`. `middleware/cmsAuth.js` is also CMS-only. This isolation is intentional: it establishes a clean seam so that, when the moment is right, the CMS becomes its own service without a refactor.

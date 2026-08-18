@@ -5,6 +5,8 @@
 // onboarding handoff.
 const crypto = require('crypto');
 const supabase = require('../../config/supabase');
+const { logSiteActivity } = require('../../lib/activity');
+const { siteKind, setSiteTestFlag } = require('../../lib/testData');
 const { onboardCustomer } = require('../../lib/onboardSite');
 const { attachSiteDomain, detachSiteDomain, projectFor } = require('../../lib/attachSiteDomain');
 const cf = require('../../lib/cloudflarePages');
@@ -22,7 +24,7 @@ async function listSites(req, res) {
     const showDeleted = req.query.deleted === 'true';
     let q = supabase
       .from('sites')
-      .select('id, subdomain, custom_domain, status, deleted_at, went_live_at, created_at, booking_mode, booking_config, payments_enabled, company:companies(name), vertical:verticals(slug, display_name), owner:contacts!owner_contact_id(full_name, email), subscriptions(status)')
+      .select('id, subdomain, custom_domain, status, deleted_at, went_live_at, created_at, booking_mode, booking_config, payments_enabled, metadata, company:companies(name), vertical:verticals(slug, display_name), owner:contacts!owner_contact_id(full_name, email), subscriptions(status)')
       .order('created_at', { ascending: false });
     q = showDeleted ? q.not('deleted_at', 'is', null) : q.is('deleted_at', null);
     const { data, error } = await q;
@@ -47,6 +49,8 @@ async function listSites(req, res) {
       wentLiveAt: s.went_live_at,
       deletedAt: s.deleted_at || null,
       createdAt: s.created_at,
+      // Test/demo isolation (launch task #9): 'real' | 'demo' (Starter fleet) | 'test'.
+      kind: siteKind(s),
     }));
     res.json({ sites });
   } catch (err) {
@@ -205,6 +209,21 @@ async function removeCustomDomain(req, res) {
 // POST /api/admin/sites/:siteId/delete { reason?, force? } — staff soft-delete.
 // Detaches CF host(s), cancels billing, 90-day grace then sweeper hard-purges.
 // force=true bypasses the unpaid-charge guardrail (e.g. test sites).
+// POST /api/admin/sites/:siteId/test-flag { isTest: boolean } — mark/unmark a
+// tenant as TEST data (launch task #9): excluded from commission invoices,
+// sweepers, compliance/books, monitor KPIs; purgeable by the cleanup tool.
+async function setTestFlag(req, res) {
+  try {
+    const metadata = await setSiteTestFlag(req.params.siteId, !!req.body?.isTest);
+    try {
+      await logSiteActivity({ siteId: req.params.siteId, action: req.body?.isTest ? 'site_marked_test' : 'site_unmarked_test', actorName: req.staffUser?.email || 'staff', entityType: 'site', entityId: req.params.siteId, details: {} });
+    } catch { /* best-effort audit */ }
+    res.json({ ok: true, kind: metadata.is_test ? 'test' : metadata.is_starter ? 'demo' : 'real' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 async function deleteSite(req, res) {
   try {
     const actorName = req.staffUser?.email || req.staffUser?.full_name || 'staff';
@@ -228,4 +247,4 @@ async function restore(req, res) {
   }
 }
 
-module.exports = { listSites, provision, cloneAdmin, attach, detach, publish, unpublish, readiness, setCustomDomain, removeCustomDomain, deleteSite, restore };
+module.exports = { listSites, provision, cloneAdmin, attach, detach, publish, unpublish, readiness, setCustomDomain, removeCustomDomain, deleteSite, restore, setTestFlag };

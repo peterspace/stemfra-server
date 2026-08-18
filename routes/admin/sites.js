@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireStaffRole, PLATFORM_OPS } = require('../../middleware/staffAuth');
-const { listSites, provision, cloneAdmin, attach, detach, publish, unpublish, readiness, setCustomDomain, removeCustomDomain, deleteSite, restore } = require('../../controllers/admin/sitesController');
+const { listSites, provision, cloneAdmin, attach, detach, publish, unpublish, readiness, setCustomDomain, removeCustomDomain, deleteSite, restore, setTestFlag } = require('../../controllers/admin/sitesController');
 const { monitor } = require('../../controllers/admin/siteMonitorController');
 
 const gate = requireStaffRole(...PLATFORM_OPS);
@@ -20,5 +20,6 @@ router.post('/:siteId/custom-domain', gate, setCustomDomain);
 router.delete('/:siteId/custom-domain', gate, removeCustomDomain);
 router.post('/:siteId/delete', gate, deleteSite);
 router.post('/:siteId/restore', gate, restore);
+router.post('/:siteId/test-flag', gate, setTestFlag);
 
 module.exports = router;

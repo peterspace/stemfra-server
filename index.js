@@ -176,6 +176,7 @@ app.use('/api/cms/billing', require('./routes/cms/billing'));
 app.use('/api/cms/support', require('./routes/cms/support'));
 app.use('/api/cms/assistant', cmsAssistantRouter);
 app.use('/api/admin/sites', require('./routes/admin/sites'));
+app.use('/api/admin/test-data', require('./routes/admin/testData')); // launch task #9
 app.use('/api/admin/domains', require('./routes/admin/domains'));
 app.use('/api/admin/templates', require('./routes/admin/templates'));
 app.use('/api/admin/subscriptions', require('./routes/admin/subscriptions'));

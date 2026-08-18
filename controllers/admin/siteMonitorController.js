@@ -19,6 +19,7 @@
 // (group-by RPC) — the response shape stays the same.
 // Single-var supabase require per convention.
 const supabase = require('../../config/supabase');
+const { siteKind } = require('../../lib/testData');
 
 const ZONE = 'stemfra.com';
 const CAPS = { bookings: 10000, leads: 10000, activity: 5000, chats: 5000, news: 5000 };
@@ -50,7 +51,7 @@ async function monitor(req, res) {
     // 1) The site list (non-deleted) — the frame every metric hangs off.
     const { data: siteRows, error: sErr } = await supabase
       .from('sites')
-      .select('id, subdomain, custom_domain, status, went_live_at, created_at, company:companies(name), vertical:verticals(slug, display_name), owner:contacts!owner_contact_id(full_name, email)')
+      .select('id, subdomain, custom_domain, status, went_live_at, created_at, metadata, company:companies(name), vertical:verticals(slug, display_name), owner:contacts!owner_contact_id(full_name, email)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (sErr) throw new Error(sErr.message);
@@ -123,6 +124,7 @@ async function monitor(req, res) {
         vertical: s.vertical?.display_name || s.vertical?.slug || null,
         subdomain: s.subdomain,
         status: s.status,
+        kind: siteKind(s), // 'real' | 'demo' | 'test' (launch task #9)
         liveUrl: `https://${s.subdomain}.${ZONE}`,
         ownerName: s.owner?.full_name || null,
         ownerEmail: s.owner?.email || null,
