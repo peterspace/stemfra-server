@@ -718,10 +718,14 @@ function staffOrphanPaymentAlert({ amountLabel, paymentIntentId, siteId }) {
 // and unsubscribeUrl. Plain-text alternative built by the caller from `text`.
 function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel = 'business', heroImageUrl, claimUrl, demoUrl, unsubscribeUrl, senderName = 'Mark', bonusLine }) {
   const first = touch === 1;
+  const who = firstName || businessName;
   const subject = first
     ? `${businessName}, this website is for you`
-    : `Did you forget your website, ${firstName || businessName}?`;
-  const heading = first ? `Your new website, ${businessName}` : `Your website is still waiting, ${firstName || businessName}`;
+    : `Did you forget your website, ${who}?`;
+  // v2 (Peter, 2026-08-19): the lead-in sits ABOVE the hero image at headline
+  // size ("Built for you" / "Still yours, Marcus"), the logo sits on white
+  // without a band (Bentley), and there is no second headline under the image.
+  const leadIn = first ? 'Built for you' : `Still yours, ${who}`;
   const paragraphs = first ? [
     `Hi ${firstName || 'there'}, we built a website for ${businessName}: online booking, reminders and an AI front desk, already set up for a ${verticalLabel}. It is free to claim and free to publish. We only earn a flat 5% on the bookings it brings you.`,
     bonusLine || 'Take a look, try a booking, and claim it when it feels right.',
@@ -731,13 +735,14 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
   ];
   const html = renderEmail({
     brand: { stemfra: true },
+    headerStyle: 'light',
     align: 'center',
     ctaFirst: true,
+    leadIn,
     heroImageUrl,
     heroImageAlt: `${businessName} website`,
     heroImageUrlHref: claimUrl,
-    eyebrow: first ? 'Built for you' : 'Still yours',
-    heading,
+    heading: '',
     preheader: first ? 'Free to claim, free to publish. We only earn when you do.' : 'Your website is still waiting to be claimed.',
     paragraphs,
     cta: { label: 'Claim this website', url: claimUrl },
@@ -746,7 +751,7 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
     unsubscribeUrl,
     footerLinks: [{ label: 'stemfra.com', url: 'https://stemfra.com' }, { label: 'Privacy', url: 'https://stemfra.com/privacy/' }, { label: 'Terms', url: 'https://stemfra.com/terms/' }],
   });
-  const text = [heading, '', ...paragraphs, '', `Claim this website: ${claimUrl}`, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '', `Unsubscribe: ${unsubscribeUrl}`].join('\n');
+  const text = [leadIn, '', ...paragraphs, '', `Claim this website: ${claimUrl}`, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '', `Unsubscribe: ${unsubscribeUrl}`].join('\n');
   return { subject, html, text };
 }
 
