@@ -725,11 +725,15 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
   // v3 (Peter, 2026-08-19): logo on white → hero image (clean edge) → headline
   // ("Built for you" / "Still yours, Marcus") → one line → "Take a look!" → CTA.
   const heading = first ? 'Built for you' : `Still yours, ${who}`;
+  // Peter's copy (2026-08-19). The 5% line stays as ONE short sentence: it
+  // qualifies the prospect (no "what's the catch" bounce) without selling price.
   const paragraphs = first ? [
-    `Hi ${firstName || 'there'}, we built a website for ${businessName}: online booking, reminders and an AI front desk, already set up for a ${verticalLabel}. It is free to claim and free to publish. We only earn a flat 5% on the bookings it brings you.`,
+    `Hi ${firstName || 'there'}, we built a website for ${businessName} with online booking, an AI front desk, and SMS and email alerts, so you never miss a booking. It is already set up for you, so you can run your business with ease. It is free to claim and free to publish.`,
+    'We only earn a flat 5% on the bookings it brings you.',
     bonusLine || 'Take a look!',
   ] : [
-    `Hi ${firstName || 'there'}, your ${businessName} website is still yours to claim: booking, reminders and an AI front desk, free to publish. We only earn a flat 5% on the bookings it brings you.`,
+    `Hi ${firstName || 'there'}, your ${businessName} website is still yours to claim, with online booking, an AI front desk, and SMS and email alerts already set up. It is free to claim and free to publish.`,
+    'We only earn a flat 5% on the bookings it brings you.',
     bonusLine || 'Take a look!',
   ];
   const html = renderEmail({
