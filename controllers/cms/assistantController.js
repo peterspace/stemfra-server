@@ -136,7 +136,8 @@ async function send(req, res) {
     if (!STACY_N8N_URL) return res.status(503).json({ error: 'Stacy is not configured on the server yet.' });
 
     const userMsg = { role: 'user', content: String(message).trim(), ts: new Date().toISOString() };
-    const context = await buildSiteContext(siteId);
+    // Stacy gets the CMS map (where to change what); the public Front Desk does not.
+    const context = await buildSiteContext(siteId, { includeCmsMap: true });
     const history = (conv.messages || []).slice(-12); // recent turns only
 
     let reply = '';
