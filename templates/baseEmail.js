@@ -205,7 +205,7 @@ function stemfraDocument({ eyebrow, heading, preheader, paragraphs = [], bodyHtm
       </td></tr>` : ''}
 
       ${heroImg}
-      <tr><td style="background:${S.card};padding:${heroImageUrl ? (heading || eyebrow ? '40px' : '8px') : '52px'} 60px 44px;${ta}">
+      <tr><td style="background:${S.card};padding:${heroImageUrl ? (heading || eyebrow ? '30px' : '8px') : '52px'} 60px 44px;${ta}">
         ${eyebrow ? `<div style="font-family:${SFONT};font-weight:400;font-size:11px;letter-spacing:0.28em;color:${S.band};text-transform:uppercase;${ta}">${escapeHtml(eyebrow)}</div>` : ''}
         ${heading ? `<div style="font-family:${SFONT};font-weight:300;font-size:30px;line-height:1.25;color:${S.ink};margin-top:${eyebrow ? '18px' : '0'};${ta}">${escapeHtml(heading)}</div>` : ''}
         ${ctaFirst && cta ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center">${sButtons(cta, cta2)}</td></tr></table>` : ''}
