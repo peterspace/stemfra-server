@@ -155,6 +155,23 @@ router.post('/trigger', async (req, res) => {
     triggered_at: new Date().toISOString(),
   };
 
+  // Coverage ledger (launch task #6): ONE leadgen_runs row per run, created
+  // BEFORE the webhook so even a failed/empty run counts as "we tried this
+  // city". `run_id` rides on the payload so n8n can stamp `leads.leadgen_run_id`
+  // on every lead it inserts (n8n-workflows/leadgen-system-prompt.txt + the
+  // Supabase insert node; Peter pastes). Derived counts on /coverage use it.
+  let runId = null;
+  try {
+    const { data: run, error } = await supabase.from('leadgen_runs').insert({
+      system, vertical, country: country || null, country_name: country_name || null,
+      state_code: state_code || null, state_name: state_name || null, city: city || null,
+      search_query: payload.search_query, max_results: maxResults, min_score: minScore,
+      requested_by: user.id, status: 'requested',
+    }).select('id').single();
+    if (error) console.error('[leadgen] coverage run insert failed:', error.message);
+    else { runId = run.id; payload.run_id = runId; }
+  } catch (e) { console.error('[leadgen] coverage run insert threw:', e.message); }
+
   try {
     // Fire the n8n webhook. n8n runs the workflow and writes leads to Supabase
     // itself; we don't wait for the full scrape to finish (it can take a while),
@@ -181,24 +198,16 @@ router.post('/trigger', async (req, res) => {
     if (!r.ok) {
       const text = await r.text().catch(() => '');
       console.error('[leadgen] n8n webhook returned', r.status, text);
+      if (runId) await supabase.from('leadgen_runs').update({ status: 'failed', notes: `n8n ${r.status}` }).eq('id', runId).then(() => {}, () => {});
       return res.status(502).json({
         success: false,
         message: `Lead-gen workflow could not be started (n8n responded ${r.status}).`,
       });
     }
 
-    // Log the run to the activity feed (best-effort, fail silent)
-    await supabase.from('activity_feed').insert([{
-      entity_type: 'leadgen_run',
-      action: 'triggered',
-      details: {
-        system, vertical, city,
-        country, country_name, state_code, state_name,
-        search_query: payload.search_query,
-        max_results: maxResults, min_score: minScore,
-      },
-      created_by: user.id,
-    }]).catch(() => {});
+    // (The old activity_feed 'leadgen_run' insert was removed 2026-08-18: it never
+    // landed, entity_type CHECK rejects it, so 0 rows in 2 months. The
+    // leadgen_runs row above is the run record now.)
 
     return res.status(202).json({
       success: true,
@@ -444,6 +453,114 @@ router.post('/refine-template', async (req, res) => {
     console.error('[leadgen] refine-template error:', err.message);
     return res.status(502).json({ success: false, message: 'Could not refine the template right now.' });
   }
+});
+
+// ─── Coverage (launch task #6) ────────────────────────────────────────────────
+// State-by-state record of where lead-gen has run. Runs come from /trigger
+// (automatic) or POST /runs (a manually logged sweep, e.g. Mark's call list);
+// per-run lead counts are DERIVED from leads.leadgen_run_id (found / contacted
+// / converted) so nothing is double-entered.
+
+const CONTACTED_STATUSES = new Set(['sent', 'opened', 'replied', 'called', 'bounced']);
+
+// GET /api/leadgen/coverage?vertical=&country=&days=
+router.get('/coverage', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  const { vertical = null, country = null, days = null } = req.query || {};
+  try {
+    let q = supabase.from('leadgen_runs').select('*').order('requested_at', { ascending: false }).limit(1000);
+    if (vertical) q = q.eq('vertical', vertical);
+    if (country) q = q.eq('country', country);
+    if (days && Number(days) > 0) q = q.gte('requested_at', new Date(Date.now() - Number(days) * 86400_000).toISOString());
+    const { data: runs, error } = await q;
+    if (error) throw error;
+
+    const ids = (runs || []).map((r) => r.id);
+    const stats = {};
+    if (ids.length) {
+      const { data: leads } = await supabase
+        .from('leads')
+        .select('leadgen_run_id, outreach_status, outreach_sent_at, stage, review_status')
+        .in('leadgen_run_id', ids);
+      for (const l of leads || []) {
+        const st = (stats[l.leadgen_run_id] ||= { found: 0, approved: 0, contacted: 0, converted: 0 });
+        st.found += 1;
+        if (l.review_status === 'approved') st.approved += 1;
+        if (l.outreach_sent_at || CONTACTED_STATUSES.has(l.outreach_status)) st.contacted += 1;
+        if (l.stage === 'won') st.converted += 1;
+      }
+    }
+
+    // Per area rollup (vertical · country · state · city).
+    const areas = {};
+    const enriched = (runs || []).map((r) => {
+      const st = stats[r.id] || { found: 0, approved: 0, contacted: 0, converted: 0 };
+      const found = r.leads_found ?? st.found;
+      const key = [r.vertical, r.country || '', r.state_code || r.state_name || '', (r.city || '').toLowerCase()].join('|');
+      const a = (areas[key] ||= {
+        vertical: r.vertical, country: r.country, state_code: r.state_code, state_name: r.state_name, city: r.city,
+        runs: 0, last_run_at: null, found: 0, approved: 0, contacted: 0, converted: 0,
+      });
+      a.runs += 1;
+      if (!a.last_run_at || r.requested_at > a.last_run_at) a.last_run_at = r.requested_at;
+      a.found += found; a.approved += st.approved; a.contacted += st.contacted; a.converted += st.converted;
+      return { ...r, found, approved: st.approved, contacted: st.contacted, converted: st.converted };
+    });
+
+    // Per state rollup for the map/list.
+    const states = {};
+    for (const a of Object.values(areas)) {
+      const k = `${a.vertical}|${a.country || ''}|${a.state_code || a.state_name || ''}`;
+      const s = (states[k] ||= { vertical: a.vertical, country: a.country, state_code: a.state_code, state_name: a.state_name, cities: 0, runs: 0, found: 0, contacted: 0, converted: 0, last_run_at: null });
+      s.cities += 1; s.runs += a.runs; s.found += a.found; s.contacted += a.contacted; s.converted += a.converted;
+      if (!s.last_run_at || (a.last_run_at && a.last_run_at > s.last_run_at)) s.last_run_at = a.last_run_at;
+    }
+
+    return res.json({ success: true, runs: enriched, areas: Object.values(areas), states: Object.values(states) });
+  } catch (err) {
+    console.error('[leadgen] coverage failed:', err.message);
+    return res.status(500).json({ success: false, message: 'Could not load coverage.' });
+  }
+});
+
+// POST /api/leadgen/runs — log a run manually (a hand-built list, a call sweep).
+router.post('/runs', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  const { vertical, country = 'US', country_name = null, state_code = null, state_name = null, city = null, leads_found = null, notes = null, requested_at = null, system = 'manual' } = req.body || {};
+  const known = KNOWN_VERTICALS instanceof Set ? KNOWN_VERTICALS.has(vertical) : Array.isArray(KNOWN_VERTICALS) ? KNOWN_VERTICALS.includes(vertical) : true;
+  if (!vertical || !known) return res.status(400).json({ success: false, message: 'vertical is required.' });
+  if (!city && !state_code && !state_name) return res.status(400).json({ success: false, message: 'city or state is required.' });
+  const row = {
+    system: ['cold', 'warm', 'manual'].includes(system) ? system : 'manual',
+    vertical, country, country_name, state_code, state_name, city,
+    leads_found: Number.isFinite(Number(leads_found)) && leads_found !== null && leads_found !== '' ? Number(leads_found) : null,
+    notes: notes ? String(notes).slice(0, 2000) : null,
+    status: 'completed', completed_at: new Date().toISOString(), requested_by: user.id,
+    ...(requested_at ? { requested_at } : {}),
+  };
+  try {
+    const { data, error } = await supabase.from('leadgen_runs').insert(row).select('*').single();
+    if (error) return res.status(500).json({ success: false, message: error.message });
+    return res.json({ success: true, run: data });
+  } catch (err) { console.error('[leadgen] log run failed:', err.message); return res.status(500).json({ success: false, message: 'Could not log the run.' }); }
+});
+
+// PATCH /api/leadgen/runs/:id — status / notes / explicit count.
+router.patch('/runs/:id', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  const { status, notes, leads_found } = req.body || {};
+  const patch = {};
+  if (status && ['requested', 'completed', 'failed', 'empty'].includes(status)) { patch.status = status; if (status !== 'requested') patch.completed_at = new Date().toISOString(); }
+  if (notes !== undefined) patch.notes = notes ? String(notes).slice(0, 2000) : null;
+  if (leads_found !== undefined) patch.leads_found = leads_found === null || leads_found === '' ? null : Number(leads_found);
+  try {
+    const { data, error } = await supabase.from('leadgen_runs').update(patch).eq('id', req.params.id).select('*').single();
+    if (error) return res.status(500).json({ success: false, message: error.message });
+    return res.json({ success: true, run: data });
+  } catch (err) { console.error('[leadgen] update run failed:', err.message); return res.status(500).json({ success: false, message: 'Could not update the run.' }); }
 });
 
 module.exports = router;

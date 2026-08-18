@@ -187,22 +187,28 @@ For a real end-to-end test, kick off a run from `crm.stemfra.com` (Lead Pipeline
 
 ---
 
-## Activity feed entry
+## Coverage ledger (`leadgen_runs`, 2026-08-18, launch task #6)
 
-Every triggered run writes:
+Every triggered run writes ONE `leadgen_runs` row BEFORE the webhook fires
+(system, vertical, country/state/city, search_query, max_results, min_score,
+requested_by, status `requested` → `failed` when n8n rejects). The row's id rides
+on the n8n payload as **`run_id`**.
 
-```js
-{
-  entity_type: 'leadgen_run',
-  action:      'triggered',
-  details:     { system, vertical, city, country, country_name, state_code, state_name, search_query, max_results, min_score },
-  created_by:  <user.id>,
-}
-```
+**⚠ n8n change (Peter pastes):** in the cold + warm workflows' Supabase insert
+node, add the column `leadgen_run_id` = `{{ $('Webhook').item.json.body.run_id }}`
+(the trigger payload). That is what links each scraped lead to the run, so the
+CRM Coverage tab can derive found / approved / contacted / won per city without
+any double entry. Until the paste, runs still record coverage; counts read 0.
 
-Best-effort — wrapped in `.catch(() => {})` so an activity-log failure never breaks the actual trigger.
+Endpoints (staff JWT): `GET /api/leadgen/coverage?vertical=&country=&days=` →
+`{ runs, areas, states }` (areas = vertical·country·state·city rollup, states =
+per-state rollup); `POST /api/leadgen/runs` (log a manual sweep: vertical +
+state and/or city, optional leads_found/notes/requested_at); `PATCH
+/api/leadgen/runs/:id` (status/notes/leads_found). CRM: Lead Pipeline →
+**Coverage** tab (`stemfra-ops/src/components/leadgen/Coverage.jsx`).
 
----
+(The former `activity_feed` 'leadgen_run' insert never landed: the table's
+`entity_type` CHECK rejected it silently for two months. Removed.)
 
 ## Files touched by this module
 
