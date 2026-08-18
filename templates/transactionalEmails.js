@@ -716,21 +716,13 @@ function staffOrphanPaymentAlert({ amountLabel, paymentIntentId, siteId }) {
 // with a nudge subject + a ghost "See it live" CTA (Bentley's "Enquire to buy").
 // Sent as mark@stemfra.com; the sequencer supplies claimUrl (signed lead token)
 // and unsubscribeUrl. Plain-text alternative built by the caller from `text`.
-// Bentley-style soft edge: fade the mockup's edges to transparent so it melts
-// into the white card (baked into the IMAGE via Cloudinary, because email
-// clients drop CSS shadows/masks). Non-Cloudinary URLs pass through untouched.
-function softenHeroImage(url) {
-  if (!url || !/res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(url)) return url;
-  return url.replace('/image/upload/', '/image/upload/w_1080,c_fill,q_auto/e_gradient_fade:symmetric,x_0.045/e_gradient_fade:symmetric,y_0.05/');
-}
-
 function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel = 'business', heroImageUrl, claimUrl, demoUrl, unsubscribeUrl, senderName = 'Mark', bonusLine }) {
   const first = touch === 1;
   const who = firstName || businessName;
   const subject = first
     ? `${businessName}, this website is for you`
     : `Did you forget your website, ${who}?`;
-  // v3 (Peter, 2026-08-19): logo on white → feathered hero image → headline
+  // v3 (Peter, 2026-08-19): logo on white → hero image (clean edge) → headline
   // ("Built for you" / "Still yours, Marcus") → one line → "Take a look!" → CTA.
   const heading = first ? 'Built for you' : `Still yours, ${who}`;
   const paragraphs = first ? [
@@ -744,7 +736,7 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
     brand: { stemfra: true },
     headerStyle: 'light',
     align: 'center',
-    heroImageUrl: softenHeroImage(heroImageUrl),
+    heroImageUrl,
     heroImageAlt: `${businessName} website`,
     heroImageUrlHref: claimUrl,
     heading,
