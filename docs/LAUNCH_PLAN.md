@@ -26,7 +26,7 @@ COMMISSION_MODEL.md. NOTHING is pushed to GitHub until Peter approves._
 |---|---|---|---|
 | 1 | **VSL video for email marketing** | ⬜ | Was P12 "deliberately last"; now leads the sequence. Demo = the tenant website (with the on-site guided tour, demo-only). Assets on hand: ElevenLabs voice pipeline (Jessica @0.95, GUIDED_TOURS.md), mockup/screenshot pipeline (MARKETING_MOCKUPS.md), 9 demo sites. Script + storyboard first. |
 | 2 | **Prospecting sequence = max 3 contacts until decision** (1 VSL email → 2 Mark call → 3 follow-up email; 1/week) | ⬜ | Re-sequence the sequencer + Template Manager cadence in OUTREACH.md (today: A1→A2→read-gated call→A8→A20). n8n prompt paste via Peter. |
-| 3 | **Update Stacy + all CMS routes** | ✅ code (2026-08-18) · ⏳ Peter: paste S5 prompt | `lib/cmsRoutes.js` reconciled with the CURRENT IA: Payments routes → in-nav `/billing/payments`; +labels/analytics/customers/reports/subscribers/promotions/schedule/billing*/support/whatsNew/giftContent/privacy; all 53 entries verified to resolve. `siteCompleteness` now deep-links address/phone→Location, headline→Hero. **NEW `CMS_GUIDE`** (37 owner-tasks → sidebar `where` + route) → Stacy's context as `cms_map` (Stacy-only; Front Desk never gets it) so she answers "where do I change X?" from real routes. CMS `StacyPanel` ROUTE_LABEL rewritten to the current IA wording (Website →/Account → Billing …). **Peter action:** paste `n8n-workflows/stacy-build-prompt-S5.js` into the Stacy Build Prompt node (adds the CMS-map guidance clause; replaces the stale "(Content, Services, Settings)" line). |
+| 3 | **Update Stacy + all CMS routes** | ✅ DONE (code pushed + deployed 2026-08-18; Peter pasted S5) | `lib/cmsRoutes.js` reconciled with the CURRENT IA: Payments routes → in-nav `/billing/payments`; +labels/analytics/customers/reports/subscribers/promotions/schedule/billing*/support/whatsNew/giftContent/privacy; all 53 entries verified to resolve. `siteCompleteness` now deep-links address/phone→Location, headline→Hero. **NEW `CMS_GUIDE`** (37 owner-tasks → sidebar `where` + route) → Stacy's context as `cms_map` (Stacy-only; Front Desk never gets it) so she answers "where do I change X?" from real routes. CMS `StacyPanel` ROUTE_LABEL rewritten to the current IA wording (Website →/Account → Billing …). **Peter action:** paste `n8n-workflows/stacy-build-prompt-S5.js` into the Stacy Build Prompt node (adds the CMS-map guidance clause; replaces the stale "(Content, Services, Settings)" line). |
 | 4 | **Re-walk the CMS tour** | ⬜ | P15 spotlight tour (GUIDED_TOURS.md) after the IA moves + the new panels. |
 | 5 | **Legal pages: terms of use + booking policy, privacy, cookies** | ⬜ | Content EXISTS on all 18 customer sites (verified 2026-08-17: privacy ~1.4k / terms ~1.1-1.3k / cookies 903 chars) but is generic brand-swapped boilerplate; privacy already carries the AI-chat clause. Needs a real review for a DE LLC + the marketing site's own /terms /privacy /refund /fees. Also: capture terms ACCEPTANCE (timestamp + version) at signup/claim. |
 | 6 | **CRM: record lead-gen city/state coverage** (state by state across the US; start = 100 barbershop leads) | ⬜ | New coverage record (vertical · state · city · run date · leads found/contacted/converted) + a CRM Coverage view. Lives in stemfra_server + stemfra-ops (check no parallel session on ops first). Doc it in OUTREACH.md / LEADGEN.md. |
@@ -38,10 +38,14 @@ COMMISSION_MODEL.md. NOTHING is pushed to GitHub until Peter approves._
 ## Release checklist (my additions to Peter's 10, ordered)
 
 **Must, before the 100-lead test:**
-1. **Push + deploy every repo** (client 13 / platform 17 / server 7 ahead). "Local-done is
-   not shipped" (the sms-consent lesson). Then post-deploy healthchecks
-   (`/health`, `/api/cms/site-uploads/healthcheck`, `/api/export/healthcheck`,
-   `/api/public-config`).
+1. **Push + deploy every repo.** ✅ server + client pushed + deployed 2026-08-18 (Argyle prod
+   fix; healthchecks all 200). ⏳ **platform still 19 commits ahead, NOT pushed** (make-editable
+   arc, Worker, Functions X-Forwarded-Host, StacyPanel labels) — deploy it before the Worker
+   rollout. "Local-done is not shipped" (the sms-consent lesson). Post-deploy healthchecks:
+   `/health`, `/api/cms/site-uploads/healthcheck`, `/api/export/healthcheck`, `/api/public-config`.
+   ⚠ **Client build rule (learned 2026-08-18):** every real client route MUST be in
+   `routes.js PRERENDER_PATHS` (404.html disables the Pages SPA fallback), and never commit a
+   `routes.js` that imports an untracked file (a week of silent build failures).
 2. **`COMMISSION_SCHEDULER_ENABLED=true`** in deploy.yml at launch or invoicing never
    runs; decide the flip date. `RECON_ENABLED` is NOT in deploy.yml yet (add at arm time).
 3. **Domain routing at scale (the wildcard Worker) — ✅ BUILT 2026-08-18, awaiting
@@ -67,15 +71,17 @@ COMMISSION_MODEL.md. NOTHING is pushed to GitHub until Peter approves._
 7. **Resend ceiling** — free tier = 100 emails/day shared across ALL transactional +
    auth mail (outreach goes via Gmail/n8n, not Resend). A launch week can exceed it;
    upgrade before, not after a bounce.
-8. **GSC "Validate fix"** on the two canonical/redirect reasons after the client deploy.
+8. **GSC "Validate fix"** on the two canonical/redirect reasons — the fixes are LIVE (2026-08-18);
+   Peter clicks Validate in Search Console.
 
 **Should, before real tenants:**
 9. Uptime + error alerting on api.stemfra.com (`/health`), the CMS and the template
    Pages projects; a written rollback (Supabase PITR/branch + redeploy previous SHA).
 10. `support@stemfra.com` routing + the Voice support-intent path checked live.
 11. `frontdesk_enabled` default for NEW tenants decided (on for demos; on/off for real).
-12. The 2 foreign uncommitted files in stemfra_client (`GlobalAssistant.jsx`, `Youtube.jsx`):
-    commit or discard before the client push.
+12. The 2 foreign uncommitted files in stemfra_client (`GlobalAssistant.jsx`, `Youtube.jsx` +
+    the two `/youtube` lines in `routes.js`): still LOCAL, Peter's call (commit = a public
+    unlinked `/youtube` banner-review page; discard = drop the draft). Main builds fine either way.
 13. Supabase auth SMTP + branded templates (Part A/B) — after the tasks, per Peter.
 
 ## Marketing funnel (UNDER DISCUSSION — no code yet; Peter's ideas + Claude's read)
