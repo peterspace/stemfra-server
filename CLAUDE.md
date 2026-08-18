@@ -291,6 +291,21 @@ Two server surfaces tell an owner "go here to fix X" in the browser CMS: the
   isn't blind to it (the one manual step; everything data-shaped after that is
   automatic). Front Desk (Agent 2) reuses this builder, so both agents benefit.
 
+## Legal documents + acceptance ledger (2026-08-18, launch task #5)
+
+`lib/legalDocs.js` = ONE registry of the legal documents (Terms / Privacy / Fees /
+Refund / SMS), their CURRENT version (= the "Last updated" date on the
+stemfra_client page) and URL, plus `recordLegalAcceptance()` → the additive
+`legal_acceptances` table. Public signup (`POST /api/onboarding/signup`, both
+the CMS `/signup` and `stemfra.com/start` forms) MUST send `termsAccepted:true`
+(one tick = Terms + Privacy + Fees) or gets `400 terms_required`; the server
+stamps `accepted_at` + versions + ip + user-agent itself (never the client).
+`GET /api/public-config` exposes `legal` so forms link the same documents. Staff
+paths pass `requireTerms:false` (accept-at-first-login is a follow-up). **When a
+legal page changes materially: bump the version in `legalDocs.js` AND the page's
+"Last updated" line together.** Deploy order for a change to the requirement:
+client + platform (forms) BEFORE server (the check).
+
 ## Future architecture: planned CMS service split
 
 All CMS endpoints live under `/api/cms/*` and CMS-only code is isolated under `routes/cms/` + `controllers/cms/`. `middleware/cmsAuth.js` is also CMS-only. This isolation is intentional: it establishes a clean seam so that, when the moment is right, the CMS becomes its own service without a refactor.

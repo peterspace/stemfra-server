@@ -28,7 +28,7 @@ async function signup(req, res) {
     const {
       name, email, password, company, vertical, starterId, city, template,
       firstName, lastName, country, state, bookingProvider, paymentMethods, tier, goals, feesAccepted,
-      hasDomain, domain, hasStripe,
+      hasDomain, domain, hasStripe, termsAccepted,
     } = req.body || {};
     const result = await onboardCustomer({
       name, email, password, company, vertical: vertical || null, starterId: starterId || null,
@@ -42,6 +42,10 @@ async function signup(req, res) {
       hasDomain: !!hasDomain,
       domain: typeof domain === 'string' ? domain : null,
       hasStripe: ['yes', 'no', 'unsure'].includes(hasStripe) ? hasStripe : null,
+      // Legal acceptance is REQUIRED on the public path (task #5). Both signup
+      // forms (CMS /signup + stemfra.com/start) send the combined tick.
+      termsAccepted: !!termsAccepted, requireTerms: true,
+      clientIp: ip, userAgent: req.headers['user-agent'] || null,
     });
 
     res.json({
@@ -52,7 +56,7 @@ async function signup(req, res) {
       loginUrl: CMS_URL,
     });
   } catch (err) {
-    const statusByCode = { bad_input: 400, weak_password: 400, email_taken: 409 };
+    const statusByCode = { bad_input: 400, weak_password: 400, email_taken: 409, terms_required: 400 };
     if (statusByCode[err.code]) return res.status(statusByCode[err.code]).json({ error: err.message, code: err.code });
     console.error('[onboarding.signup]', err.message);
     res.status(500).json({ error: 'Could not complete signup. Please try again.' });
