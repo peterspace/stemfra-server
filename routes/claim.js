@@ -2,10 +2,10 @@
 //   GET  /api/claim/:token              → the personalized offer for the Claim page
 //   POST /api/claim/:token/event        → first-party funnel event (marketing_events)
 //   GET  /api/claim/unsubscribe/:token  → one-click unsubscribe (do_not_email) + tiny page
-// Tokens are signed (lib/claimTokens.js): no lead id or PII travels in URLs.
+// Tokens = leads.claim_token (random UUID, lib/claimTokens.js): no PII in URLs.
 const express = require('express');
 const supabase = require('../config/supabase');
-const { verifyClaimToken } = require('../lib/claimTokens');
+const { leadForClaimToken } = require('../lib/claimTokens');
 const { resolveClaimOffer } = require('../lib/claimOffer');
 const router = express.Router();
 
@@ -16,12 +16,7 @@ function limited(ip, max = 120) {
 }
 const ipOf = (req) => (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || null;
 
-async function loadLead(token) {
-  const leadId = verifyClaimToken(token);
-  if (!leadId) return null;
-  const { data } = await supabase.from('leads').select('*').eq('id', leadId).maybeSingle();
-  return data || null;
-}
+const loadLead = (token) => leadForClaimToken(token);
 
 router.get('/unsubscribe/:token', async (req, res) => {
   const lead = await loadLead(req.params.token);

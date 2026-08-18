@@ -98,7 +98,7 @@ const send = (res, html) => res.set('Content-Type', 'text/html').send(html);
 const CLAIM_SAMPLE = {
   firstName: 'Marcus', businessName: 'Argyle & Sons', verticalLabel: 'barbershop',
   heroImageUrl: 'https://res.cloudinary.com/dvdbec2fe/image/upload/v1784070724/stemfra_assets/mockups/sources/n9ulhce5xkyo3vhn9opk.webp',
-  claimUrl: 'https://stemfra.com/claim/demo-token', demoUrl: 'https://argyle-and-sons.stemfra.com', unsubscribeUrl: 'https://stemfra.com/unsubscribe/demo-token',
+  claimUrl: 'https://stemfra.com/claim/00000000-0000-4000-8000-000000000000', demoUrl: 'https://argyle-and-sons.stemfra.com', unsubscribeUrl: 'https://api.stemfra.com/api/claim/unsubscribe/00000000-0000-4000-8000-000000000000',
 };
 router.get('/claim-1', (_req, res) => send(res, tx.prospectClaimEmail({ ...CLAIM_SAMPLE, touch: 1 }).html));
 router.get('/claim-2', (_req, res) => send(res, tx.prospectClaimEmail({ ...CLAIM_SAMPLE, touch: 2 }).html));
