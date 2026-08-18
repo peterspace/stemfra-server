@@ -731,14 +731,14 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
   const SF = "'Helvetica Neue',Helvetica,Arial,sans-serif";
   const checkRow = (t) => `<tr><td style="padding:7px 0;font-family:${SF};font-size:15px;line-height:1.4;color:#211c18;text-align:left;"><span style="display:inline-block;width:24px;color:#8a8f8c;">&#10003;</span>${escapeHtml(t)}</td></tr>`;
   const checklist = (items) => `
-    <table cellpadding="0" cellspacing="0" role="presentation" style="margin:22px auto 0;width:360px;max-width:100%;background:#f3f1ec;border:1px solid #e3ded4;"><tr><td style="padding:16px 26px;text-align:left;">
+    <table cellpadding="0" cellspacing="0" role="presentation" style="margin:22px auto 0;width:360px;max-width:100%;border:1px solid #211c18;"><tr><td style="padding:16px 26px;text-align:left;">
       <table cellpadding="0" cellspacing="0" role="presentation" style="margin:0;text-align:left;">${items.map(checkRow).join('')}</table>
     </td></tr></table>`;
   const para = (t) => `<p style="margin:22px 0 0;font-family:${SF};font-weight:300;font-size:15px;line-height:1.75;color:#5a5f5c;text-align:center;">${escapeHtml(t)}</p>`;
   const features = ['Free hosting', 'Online booking', 'AI front desk', 'SMS and email alerts'];
   const bodyHtml = first
-    ? para(`Hi ${firstName || 'there'}, we built a website for your business, ${businessName}, with:`) + checklist(features) + para('It is already set up for you, so you never miss a client.')
-    : para(`Hi ${firstName || 'there'}, your ${businessName} website is still yours to claim, with:`) + checklist(features) + para('It is already set up for you, so you never miss a client.');
+    ? para(`Hi ${firstName || 'there'}, we built a website for your business, ${businessName}.`) + checklist(features) + para('It is already set up for you, so you never miss a client.')
+    : para(`Hi ${firstName || 'there'}, your ${businessName} website is still yours to claim.`) + checklist(features) + para('It is already set up for you, so you never miss a client.');
   const paragraphs = [];
   const note = 'We only earn 5% on the bookings it brings you.';
   const html = renderEmail({
@@ -749,17 +749,18 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
     heroImageAlt: `${businessName} website`,
     heroImageUrlHref: claimUrl,
     heading,
+    headingWeight: 500,
     preheader: first ? 'Free to claim, free to publish. We only earn when you do.' : 'Your website is still waiting to be claimed.',
     paragraphs,
     bodyHtml,
     note,
-    cta: { label: 'Claim this website', url: claimUrl },
+    cta: { label: 'Claim', url: claimUrl },
     cta2: first ? undefined : { label: 'See it live', url: demoUrl || claimUrl },
     reason: `You are receiving this because ${senderName} at Stemfra reached out to ${businessName}. Not for you? Unsubscribe below and we will not email again.`,
     unsubscribeUrl,
     footerLinks: [{ label: 'stemfra.com', url: 'https://stemfra.com' }, { label: 'Privacy', url: 'https://stemfra.com/privacy/' }, { label: 'Terms', url: 'https://stemfra.com/terms/' }],
   });
-  const text = [heading, '', `Hi ${firstName || 'there'}, we built a website for your business, ${businessName}, with:`, ...features.map((f) => `- ${f}`), '', 'It is already set up for you, so you never miss a client.', '', `Claim this website: ${claimUrl}`, note, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '', `Unsubscribe: ${unsubscribeUrl}`].join('\n');
+  const text = [heading, '', `Hi ${firstName || 'there'}, we built a website for your business, ${businessName}.`, ...features.map((f) => `- ${f}`), '', 'It is already set up for you, so you never miss a client.', '', `Claim this website: ${claimUrl}`, note, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '', `Unsubscribe: ${unsubscribeUrl}`].join('\n');
   return { subject, html, text };
 }
 
