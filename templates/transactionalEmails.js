@@ -739,12 +739,10 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
   const para = (t, tight = false) => `<p style="margin:${tight ? '6px' : '22px'} 0 0;font-family:${SF};font-weight:300;font-size:15px;line-height:1.75;color:#5a5f5c;text-align:left;">${escapeHtml(t)}</p>`;
   const features = ['Free hosting', 'Online booking', 'AI front desk', 'SMS and email alerts'];
   const bodyHtml = first
-    ? para(`Hi ${firstName || 'there'}, we built a website for your business, ${businessName}.`)
-      + para('It is already set up for you, so you never miss a client.', true)
+    ? para(`Hi ${firstName || 'there'}, we built a website for your business, ${businessName}. It is already set up for you, so you never miss a client.`)
       + checklist(features)
       + para('Click "Claim" if you need this website.')
-    : para(`Hi ${firstName || 'there'}, your ${businessName} website is still yours to claim.`)
-      + para('It is already set up for you, so you never miss a client.', true)
+    : para(`Hi ${firstName || 'there'}, your ${businessName} website is still yours to claim. It is already set up for you, so you never miss a client.`)
       + checklist(features)
       + para('Click "Claim" if you need this website.');
   const paragraphs = [];
@@ -767,7 +765,7 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
     unsubscribeUrl,
     footerLinks: [{ label: 'stemfra.com', url: 'https://stemfra.com' }, { label: 'Privacy', url: 'https://stemfra.com/privacy/' }, { label: 'Terms', url: 'https://stemfra.com/terms/' }],
   });
-  const text = [heading, '', `Hi ${firstName || 'there'}, we built a website for your business, ${businessName}.`, 'It is already set up for you, so you never miss a client.', '', ...features.map((f) => `- ${f}`), '', 'Click "Claim" if you need this website.', '', `Claim my website: ${claimUrl}`, note, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '', `Unsubscribe: ${unsubscribeUrl}`].join('\n');
+  const text = [heading, '', `Hi ${firstName || 'there'}, we built a website for your business, ${businessName}. It is already set up for you, so you never miss a client.`, '', ...features.map((f) => `- ${f}`), '', 'Click "Claim" if you need this website.', '', `Claim my website: ${claimUrl}`, note, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '', `Unsubscribe: ${unsubscribeUrl}`].join('\n');
   return { subject, html, text };
 }
 
