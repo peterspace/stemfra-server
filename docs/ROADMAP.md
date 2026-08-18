@@ -5,8 +5,23 @@ The order below IS the recommended build sequence. Per-feature detail lives in t
 linked docs; this is "what's next and why."_
 
 ## 📌 WHERE WE STAND (2026-07-29 audit — read this before the per-arc detail)
-_Verified against code + DB + env, not just doc claims. Active arc = **P13 commission
-model** (`docs/COMMISSION_MODEL.md`)._
+_Verified against code + DB + env, not just doc claims._
+
+### 🚀 ACTIVE ARC (2026-08-18): LAUNCH — phased, barbershop first → **[`LAUNCH_PLAN.md`](LAUNCH_PLAN.md)**
+Peter's 10 launch tasks (VSL video · 3-contact prospecting sequence · Stacy+routes refresh ·
+CMS tour re-walk · legal pages · lead-gen city/state coverage in the CRM · Mark voice refresh ·
+end-to-end barbershop via UI · demo/test-data isolation · release checklist) + the release
+checklist + the marketing-funnel discussion live THERE. Read it after this block.
+- **PENDING (Peter, dashboard) — do AFTER the launch tasks:** Supabase auth-email SMTP (Part A)
+  + paste the 4 branded templates (Part B) per `SUPABASE_AUTH_EMAILS.md`. The HTML exports in
+  `docs/supabase-auth-templates/` were regenerated 2026-08-18 (they were stale from Jul 13, pre-
+  redesign) and are em-dash-free; nothing to regenerate, just paste when ready.
+- **PREREQ for the self-serve funnel:** the `*.stemfra.com` wildcard Worker (item "Domain routing
+  at scale" below, agreed 2026-08-07, still PENDING) — Pages caps 100 custom domains/project and
+  every provisioned site burns a slot.
+- Suspended until approval (NOT launch): Airwallex `invoice.paid` webhook + tax-aware ledger.
+
+_Previous active arc = **P13 commission model** (`docs/COMMISSION_MODEL.md`), shipped; theme-polish arc below closed 2026-08-17._
 
 ### 🎨 Theme polish — About Us + Contact page review (ACTIVE arc, started 2026-08-13)
 A cross-vertical walkthrough with Peter: review the **About Us** and **Contact** pages of
@@ -127,17 +142,20 @@ make editable → build (current text = defaults so nothing changes until edited
    Yes I own one + optional domain input); answer normalized (lowercase, proto/www/path
    stripped) into `sites.metadata.onboarding.domain {has_domain, domain}` for the
    Settings → Domain card + staff to act on post-signup. Subdomain default + BYO connect
-   + CMS search/buy UI were already DONE. **Remaining: collect-first buy-through-us only**
-   (waits on a payment rail).
-   ⚠ **2026-08-04 audit — two code-vs-policy gaps in the existing register path**
-   (`routes/cms/siteDomain.js` register): (a) it implements FRONT-THEN-BILL (register
-   at Porkbun, then a `billing_charges` invoice) while the P13 policy here says
-   collect-first/never-front — the shelved variant is the one wired; (b) its gate
-   checks `subscriptions.status='active'`, which NO commission-era tenant has
-   (subscriptions are retired), so owner self-serve domain buying is effectively
-   dead-gated for every new tenant. Both resolve together when collect-first lands
-   on a payment rail; until then the path is inert for new tenants, which is safe
-   but worth knowing before demoing it.
+   + CMS search/buy UI were already DONE.
+   ✅ **DOMAIN BUY-THROUGH-US IS LIVE END-TO-END (superseded the 2026-08-04 audit
+   note; re-verified against code 2026-08-18).** First real purchase
+   `argyleandsons.click` on 2026-08-10 (Porkbun order 11293757). Both audit gaps
+   were FIXED in `controllers/cms/domainController.js registerOwn`: (a) the retired
+   `subscriptions.status='active'` gate is gone — the subscription row is now
+   OPTIONAL (commission-era tenants have none; the invoice rides `billing_charges`
+   with `subscription_id` nullable); (b) "front-then-bill vs collect-first" is now
+   the deliberate **prepaid-float model** in `docs/DOMAINS.md`: INSTANT purchase while
+   the Porkbun balance is ≥ $30 (buy → wire DNS/SSL/email → invoice after), auto-
+   flipping to INVOICE-FIRST below the threshold (invoice → staff register after
+   payment). Shared orchestrator `lib/domainPurchase.js purchaseAndWire()` used by
+   both the owner and staff paths. Safe to demo. **Genuinely remaining:** nothing
+   blocking; year-2 renewal billing sweeper + transfers/DNS-record visibility deferred.
 4. ✅ **P12 Wave 2 Task 9 — owner SMS alerts — DONE 2026-08-06** (A2P campaign
    approved 2026-08-03, Peter confirmed via the Twilio email). `lib/ownerSmsAlerts.js`
    (consent-gated on `cms_notification_prefs.prefs.sms` from the SmsAlertsCard;
@@ -184,12 +202,16 @@ make editable → build (current text = defaults so nothing changes until edited
    privacy clause present on **18/18** live+previewing sites (SQL over
    site_pages/site_sections); `metadata.classes` + `expires_days` on **3/3** active
    class packs (only lila-studio sells them, so nothing else was in scope).
-   **Genuinely still open** (verification gaps, not rollout work) in
-   `stemfra_platform/docs/FRONTDESK.md` §9: the member path has never been exercised
-   through a live signed-in chat; multi-line slot cards never rendered (no site sets
-   locations); Shift+Enter and paste were reasoned, not demonstrated; and Lira Yoga
-   still carries 6 duplicate/stale service rows that make `/list services` show 12
-   rows where 6 are noise.
+   **BUILD IS COMPLETE — nothing left to code (re-confirmed 2026-08-18).** What
+   `stemfra_platform/docs/FRONTDESK.md` §9 still lists are LIVE-VERIFICATION items that
+   cannot be driven from a dev machine (a real agent turn needs the prod n8n host,
+   which is unproxied and unreachable from a laptop; the workflow itself is live and
+   its Build Prompt node was diffed against the repo file 2026-08-03 — matches).
+   → **Fold into the LAUNCH TEST (Peter, 2026-08-18)**, not the roadmap: (a) member
+   reschedule/cancel through a real signed-in chat (crossfit/massage/spa); (b) a
+   multi-line slot card (needs a site that sets locations); (c) one human Shift+Enter
+   keypress + a paste. (Lira Yoga's 6 stale service rows were deactivated 2026-08-03,
+   FRONTDESK.md §9 #11.)
 
 9. ✅ **BOOKABILITY HYGIENE CLOSED 2026-08-04 (Peter approved all groups).** Data:
    Group B — 30 priced massage/spa modalities flipped bookable + 96 staff links
@@ -331,10 +353,14 @@ make editable → build (current text = defaults so nothing changes until edited
     BOTH map-showing variants — Default/streets + DarkPanel/dark — with the
     Google-embed fallback kept, so no-token sites are untouched. Verified live on
     argyle/Classic NYC. Token in each template's .env.local (gitignored).
-    ⚠ REMAINING — PETER ACTION for prod: add `VITE_MAPBOX_TOKEN` to each of the 6
-    Cloudflare Pages template projects' env (build-time var), else prod keeps the
-    Google embed fallback (harmless, just unstyled). Optional hardening: restrict
-    the token to *.stemfra.com + localhost in the Mapbox dashboard.)
+    ✅ **RESOLVED (verified 2026-08-18): NO per-Pages action needed.** The token is
+    served by the SERVER — `GET /api/public-config` (`routes/publicConfig.js`, mounted
+    in index.js) returns `MAPBOX_PUBLIC_TOKEN` from `deploy.yml`, and `LocationMap`
+    fetches it at runtime (the build-time `VITE_MAPBOX_TOKEN` is only an override).
+    Prod confirmed returning a `pk.` token. One source of record; rotating it reaches
+    every site on the next fetch, no Pages rebuilds. (An earlier version of this line
+    said "add to 6 CF Pages projects" and outlived the 2026-08-04 fix.) Optional
+    hardening still stands: restrict the token to *.stemfra.com + localhost in Mapbox.)
     ✅ **On-map info card SHIPPED 2026-08-13** (Option B, Peter's call): a
     Google-Maps-style overlay card on the tiles — business name + address +
     **Directions** (accent-filled, Google Maps dir link) + **Open in Maps**
@@ -965,10 +991,19 @@ CMS boot spinner, card active states, FAQ+legal onboarding steps).
    real domain through the CMS Porkbun flow and walk the new 3-step connect
    card end to end against Cloudflare (first real registration; Porkbun
    account email/phone verification + funded balance are prerequisites).
-6. **Domain scale infra (PENDING, build before the self-serve funnel):** the
-   *.stemfra.com wildcard Worker + move custom domains to Cloudflare for SaaS
-   Custom Hostnames — full architecture + triggers in item 4 above. Its own
-   focused arc; zero owner-facing change.
+6. **Domain scale infra — (a) wildcard Worker ✅ BUILT 2026-08-18, awaiting deploy;
+   (b) Custom Hostnames still pending.** The `*.stemfra.com` tenant-router Worker
+   lives at `stemfra_platform/workers/tenant-router/` (README = runbook + rollout +
+   rollback). Verified locally against real Supabase + Pages origins (barbers →
+   stemfra-barbers, spa → stemfra-spa, unknown → branded noindex 404, infra hosts
+   pass through). Also shipped: `functions/robots.txt.ts` + `sitemap.xml.ts` honor
+   `X-Forwarded-Host`; `attachSiteDomain` gained `TENANT_WILDCARD_ROUTING=true`
+   (skips per-subdomain Pages attach); `stemfra_server/scripts/setup-tenant-wildcard.js`
+   (dry-run-default: wildcard A record + no-worker bypass routes for the 6 non-tenant
+   hosts api/cms/crm/www/bazeride/blazeride — dry-run verified). **Peter actions to go
+   live (in order):** deploy platform → run the setup script `--apply` → `wrangler
+   deploy` with a Workers-scoped token → verify → flip `TENANT_WILDCARD_ROUTING=true`
+   in deploy.yml. Full architecture + triggers in item 4 below.
 4. **Domain routing at scale (AGREED direction 2026-08-07; build BEFORE the
    self-serve funnel launches):** our BYO connect flow already implements the
    "Cloudflare for SaaS" pattern via Pages custom domains (owner keeps

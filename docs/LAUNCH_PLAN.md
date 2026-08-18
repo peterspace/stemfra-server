@@ -1,0 +1,127 @@
+# Stemfra Launch Plan (phased, barbershop first)
+
+_Created 2026-08-18 from Peter's launch plan. This is the ACTIVE launch arc. Phase 1
+= barbershops (100-lead test run this week), then vertical by vertical. Status marks
+are updated as items ship. Companion docs: ROADMAP.md (backlog), OUTREACH.md
+(prospecting), VOICE_AGENT.md (Mark), STACY.md, GUIDED_TOURS.md, DOMAINS.md,
+COMMISSION_MODEL.md. NOTHING is pushed to GitHub until Peter approves._
+
+## Standing decisions (Peter, 2026-08-18)
+- **Phased launch, barbershop first.** 100 barbershop leads = the test run.
+- Airwallex `invoice.paid` webhook + tax-aware ledger: **suspended until approval**;
+  NOT part of the launch (stays in ROADMAP). Does not affect the tested bank-transfer
+  invoicing loop.
+- Owner SMS alerts + the Front Desk live-verification items (member reschedule/cancel
+  in a signed-in chat, multi-line slot card, human Shift+Enter/paste): **tested during
+  the launch test**, not pre-built.
+- Supabase auth-email SMTP + branded templates (Part A/B in SUPABASE_AUTH_EMAILS.md):
+  **do AFTER the launch-plan tasks** in case something changes. Regenerated exports are
+  current + em-dash-free (2026-08-18); still a Peter dashboard action.
+- The **product demo video demos the TENANT'S WEBSITE**, not the CMS (the CMS is the
+  tool they manage it with).
+
+## The 10 launch tasks
+
+| # | Task | Status | Notes / where it lives |
+|---|---|---|---|
+| 1 | **VSL video for email marketing** | ⬜ | Was P12 "deliberately last"; now leads the sequence. Demo = the tenant website (with the on-site guided tour, demo-only). Assets on hand: ElevenLabs voice pipeline (Jessica @0.95, GUIDED_TOURS.md), mockup/screenshot pipeline (MARKETING_MOCKUPS.md), 9 demo sites. Script + storyboard first. |
+| 2 | **Prospecting sequence = max 3 contacts until decision** (1 VSL email → 2 Mark call → 3 follow-up email; 1/week) | ⬜ | Re-sequence the sequencer + Template Manager cadence in OUTREACH.md (today: A1→A2→read-gated call→A8→A20). n8n prompt paste via Peter. |
+| 3 | **Update Stacy + all CMS routes** | ⬜ | Single source `lib/cmsRoutes.js` (checklist + Stacy import it) must match the CURRENT CMS IA (Style/SEO/Front desk moved to Website group; Payments under Billing; new Buttons & labels panel; new gift-certificates page). Stacy prompt = n8n paste (`n8n-workflows/stacy-build-prompt-S3.js`). |
+| 4 | **Re-walk the CMS tour** | ⬜ | P15 spotlight tour (GUIDED_TOURS.md) after the IA moves + the new panels. |
+| 5 | **Legal pages: terms of use + booking policy, privacy, cookies** | ⬜ | Content EXISTS on all 18 customer sites (verified 2026-08-17: privacy ~1.4k / terms ~1.1-1.3k / cookies 903 chars) but is generic brand-swapped boilerplate; privacy already carries the AI-chat clause. Needs a real review for a DE LLC + the marketing site's own /terms /privacy /refund /fees. Also: capture terms ACCEPTANCE (timestamp + version) at signup/claim. |
+| 6 | **CRM: record lead-gen city/state coverage** (state by state across the US; start = 100 barbershop leads) | ⬜ | New coverage record (vertical · state · city · run date · leads found/contacted/converted) + a CRM Coverage view. Lives in stemfra_server + stemfra-ops (check no parallel session on ops first). Doc it in OUTREACH.md / LEADGEN.md. |
+| 7 | **Update Mark voice call** | ⬜ | VOICE_AGENT.md phases 0-2 shipped; refresh knowledge for the commission offer + the new 3-contact sequence; verify the identified-caller path. |
+| 8 | **Create a new barbershop END TO END via UI** (email → dedicated page → signup → onboarding → CMS → publish → domain) | ⬜ | The real dress rehearsal. ⚠ Prerequisite below (domain-routing cap). Flag this tenant as TEST (task 9). |
+| 9 | **Demo/test data isolated from real-user data** (leads, sites, payments, monitor, reports) | ⬜ | Partly exists: `charge.metadata.demo_seed` + `sites.metadata.is_starter` are excluded from Compliance/books. Extend to ONE honest flag honored everywhere (CRM leads/site-monitor/billing/reports + CMS leads) + a "clean up test data" tool. |
+| 10 | **Release-checklist advice** | ✅ | See below. |
+
+## Release checklist (my additions to Peter's 10, ordered)
+
+**Must, before the 100-lead test:**
+1. **Push + deploy every repo** (client 13 / platform 17 / server 7 ahead). "Local-done is
+   not shipped" (the sms-consent lesson). Then post-deploy healthchecks
+   (`/health`, `/api/cms/site-uploads/healthcheck`, `/api/export/healthcheck`,
+   `/api/public-config`).
+2. **`COMMISSION_SCHEDULER_ENABLED=true`** in deploy.yml at launch or invoicing never
+   runs; decide the flip date. `RECON_ENABLED` is NOT in deploy.yml yet (add at arm time).
+3. **Domain routing at scale (the wildcard Worker) — ✅ BUILT 2026-08-18, awaiting
+   Peter's deploy.** Pages caps custom domains at **100 per project (Free)** and
+   `attachSiteDomain` attached EVERY `{subdomain}.stemfra.com` as a Pages custom domain,
+   so every provisioned site burned a slot. Now: `stemfra_platform/workers/tenant-router/`
+   (ONE `*.stemfra.com` wildcard Worker: host → vertical → the vertical's Pages bundle;
+   new site = DB row only, unlimited subdomains). Verified locally against real origins.
+   **Rollout (README in the worker dir):** deploy platform (Functions honor
+   X-Forwarded-Host) → `scripts/setup-tenant-wildcard.js --apply` (wildcard DNS + bypass
+   routes; dry-run verified) → `wrangler deploy` (Workers-scoped token) → verify → set
+   `TENANT_WILDCARD_ROUTING=true` in deploy.yml. Rollback = delete the Worker route.
+   **Decision (Peter 2026-08-18): provision ON CLAIM (after commitment), not per lead** —
+   so the 100-lead test is safe even before the Worker is live. Cloudflare-for-SaaS
+   Custom Hostnames for BYO domains = the (b) follow-on, not launch-blocking.
+4. **Provisioning seeds the new sections for NEW sites** — the gift-certificates page +
+   the Umbra flagship bands (found 2026-08-17): today a fresh site falls back to
+   hardcoded defaults until seeded. Add to `provisionSite`/the seed clone.
+5. **Measurement from day 1** — the marketing event tracking (below) must exist before
+   the first email goes out, or the test run teaches nothing.
+6. **Terms acceptance capture** at signup/claim (timestamp + terms version) — required
+   by the "accept our terms of use" step in the claim flow (task 5).
+7. **Resend ceiling** — free tier = 100 emails/day shared across ALL transactional +
+   auth mail (outreach goes via Gmail/n8n, not Resend). A launch week can exceed it;
+   upgrade before, not after a bounce.
+8. **GSC "Validate fix"** on the two canonical/redirect reasons after the client deploy.
+
+**Should, before real tenants:**
+9. Uptime + error alerting on api.stemfra.com (`/health`), the CMS and the template
+   Pages projects; a written rollback (Supabase PITR/branch + redeploy previous SHA).
+10. `support@stemfra.com` routing + the Voice support-intent path checked live.
+11. `frontdesk_enabled` default for NEW tenants decided (on for demos; on/off for real).
+12. The 2 foreign uncommitted files in stemfra_client (`GlobalAssistant.jsx`, `Youtube.jsx`):
+    commit or discard before the client push.
+13. Supabase auth SMTP + branded templates (Part A/B) — after the tasks, per Peter.
+
+## Marketing funnel (UNDER DISCUSSION — no code yet; Peter's ideas + Claude's read)
+
+**Peter's proposal:** cold email = 3 bullets on the offer + a hero screenshot + a link
+to a personalized dedicated page (name in the URL/page) that lets the prospect **try
+the live demo website**, then **"Claim this website"** → onboarding; a Hostinger-style
+**countdown** (e.g. 24h bonus); links to more templates + terms/privacy on the marketing
+site; **native event tracking** (page view → CTA click → signup start → onboarding
+complete) via utm/reference per lead, optionally Microsoft Clarity for behaviour, NO
+Facebook SDK; the guided tour on the tenant site visible on demo sites only (usable in
+the video); the demo video shows the tenant website, not the CMS.
+
+**Claude's read (opinion, for the discussion):**
+- **Strongly agree with the shape.** This is the parked "preview-then-publish"
+  conversion engine (platform CLAUDE.md), now concrete. Free-to-experience, claim to
+  own, 5% commission = the right frame.
+- **Prefer option B (dedicated page ON stemfra.com hosting the preview) over option A
+  (popup injected into the demo sites).** B keeps the demo sites clean product, gives
+  one place for terms acceptance + analytics + brand, and needs no demo-only mode in
+  the tenant templates. The existing marketing preview screen already renders one site
+  per page; put the horizontal countdown/claim bar directly under the navbar (the
+  Hostinger pattern Peter described).
+- **Countdown must be honest.** The core offer is free forever, so the countdown should
+  tie to a REAL bonus (e.g. free domain first year / priority setup) with the deadline
+  stored per lead from send time, not a fake timer that resets on reload. Otherwise it
+  costs trust with exactly the small-business owners we want.
+- **Personalization via a signed lead token, not raw name/email in the URL.** Token
+  resolves server-side to the lead (name for the greeting, prefill for signup, the
+  countdown deadline, attribution). No PII in query strings (house rule) and it makes
+  every event attributable to one prospect.
+- **Native tracking = a `marketing_events` table** (lead token · event · page · utm ·
+  ts): `email_open` (existing pixel) → `page_view` → `cta_click` → `signup_start` →
+  `onboarding_complete` → `published`. One CRM funnel view answers "did the email
+  work / did the page work / did onboarding work". Clarity optional on top. Reuse the
+  DMT-style event pattern; keep it first-party.
+- **Screenshot in the email** = the existing prepared-masters/mockup pipeline
+  (MARKETING_MOCKUPS.md) rendering the demo's hero; same asset on the dedicated page.
+- **Auto-provisioning a claimable site per prospect** is where the Pages 100-domain cap
+  bites (checklist #3). Decide: provision on claim (after commitment) vs pre-provision
+  per lead. Pre-provision needs the wildcard Worker first.
+- **Demo-site guided tour** = a `metadata.demo_tour` flag on the site, default on for
+  Starters/demos, off for real tenants; the same tour engine as the CMS one.
+
+Draft email (Peter): "Hey {Name}, this website is for you. Claim it now for free" →
+[hero image] → [Claim] → dedicated page: "Congratulations {Name}! Here is what we are
+giving for free: free domain, SMS, hosting, … We only take 5% of the bookings you make
+on the website after claiming it." → Try it out (interact) → Signup → links to offer /
+terms / privacy.

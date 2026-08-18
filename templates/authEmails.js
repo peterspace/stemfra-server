@@ -21,7 +21,7 @@
 const { renderEmail } = require('./baseEmail');
 
 const HELP = [{ label: 'Help', url: 'https://stemfra.com/faq' }];
-const IGNORE = 'If you didn’t request this, you can safely ignore this email — nothing will change.';
+const IGNORE = 'If you didn’t request this, you can safely ignore this email. Nothing will change.';
 const ACTION = '{{ .ConfirmationURL }}';
 
 function confirmSignup() {
