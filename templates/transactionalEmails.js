@@ -731,18 +731,20 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
   const SF = "'Helvetica Neue',Helvetica,Arial,sans-serif";
   const checkRow = (t) => `<tr><td style="padding:7px 0;font-family:${SF};font-size:15px;line-height:1.4;color:#211c18;text-align:left;"><span style="display:inline-block;width:24px;color:#8a8f8c;">&#10003;</span>${escapeHtml(t)}</td></tr>`;
   const checklist = (items) => `
-    <table cellpadding="0" cellspacing="0" role="presentation" style="margin:22px auto 0;width:360px;max-width:100%;border:1px solid #211c18;"><tr><td style="padding:16px 26px;text-align:left;">
+    <table cellpadding="0" cellspacing="0" role="presentation" style="margin:22px 0 0;width:360px;max-width:100%;border:1px solid #211c18;"><tr><td style="padding:16px 26px;text-align:left;">
       <table cellpadding="0" cellspacing="0" role="presentation" style="margin:0;text-align:left;">${items.map(checkRow).join('')}</table>
     </td></tr></table>`;
-  const para = (t) => `<p style="margin:22px 0 0;font-family:${SF};font-weight:300;font-size:15px;line-height:1.75;color:#5a5f5c;text-align:center;">${escapeHtml(t)}</p>`;
+  // Body copy reads LEFT-aligned (a letter, not a poster); `tight` = the second
+  // line of the same paragraph (small gap), default = a new paragraph.
+  const para = (t, tight = false) => `<p style="margin:${tight ? '6px' : '22px'} 0 0;font-family:${SF};font-weight:300;font-size:15px;line-height:1.75;color:#5a5f5c;text-align:left;">${escapeHtml(t)}</p>`;
   const features = ['Free hosting', 'Online booking', 'AI front desk', 'SMS and email alerts'];
   const bodyHtml = first
     ? para(`Hi ${firstName || 'there'}, we built a website for your business, ${businessName}.`)
-      + para('It is already set up for you, so you never miss a client.')
+      + para('It is already set up for you, so you never miss a client.', true)
       + checklist(features)
       + para('Click "Claim" if you need this website.')
     : para(`Hi ${firstName || 'there'}, your ${businessName} website is still yours to claim.`)
-      + para('It is already set up for you, so you never miss a client.')
+      + para('It is already set up for you, so you never miss a client.', true)
       + checklist(features)
       + para('Click "Claim" if you need this website.');
   const paragraphs = [];
