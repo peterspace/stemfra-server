@@ -709,7 +709,49 @@ function staffOrphanPaymentAlert({ amountLabel, paymentIntentId, siteId }) {
   });
 }
 
+// ─── Prospecting: "Claim your website" (launch task #1/#2 design, 2026-08-18) ─
+// The FIRST touch of the 3-contact sequence, in the Bentley brochure register:
+// logo band → the vertical's hero-fold mockup → centered headline with the
+// business name → one CTA (Claim) → two short lines. Touch 2 is the SAME asset
+// with a nudge subject + a ghost "See it live" CTA (Bentley's "Enquire to buy").
+// Sent as mark@stemfra.com; the sequencer supplies claimUrl (signed lead token)
+// and unsubscribeUrl. Plain-text alternative built by the caller from `text`.
+function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel = 'business', heroImageUrl, claimUrl, demoUrl, unsubscribeUrl, senderName = 'Mark', bonusLine }) {
+  const first = touch === 1;
+  const subject = first
+    ? `${businessName}, this website is for you`
+    : `Did you forget your website, ${firstName || businessName}?`;
+  const heading = first ? `Your new website, ${businessName}` : `Your website is still waiting, ${firstName || businessName}`;
+  const paragraphs = first ? [
+    `Hi ${firstName || 'there'}, we built a website for ${businessName}: online booking, reminders and an AI front desk, already set up for a ${verticalLabel}. It is free to claim and free to publish. We only earn a flat 5% on the bookings it brings you.`,
+    bonusLine || 'Take a look, try a booking, and claim it when it feels right.',
+  ] : [
+    `Hi ${firstName || 'there'}, your ${businessName} website is still yours to claim: booking, reminders and an AI front desk, free to publish. We only earn a flat 5% on the bookings it brings you.`,
+    bonusLine || 'Have a look at the live version first if you prefer, then claim it in a minute.',
+  ];
+  const html = renderEmail({
+    brand: { stemfra: true },
+    align: 'center',
+    ctaFirst: true,
+    heroImageUrl,
+    heroImageAlt: `${businessName} website`,
+    heroImageUrlHref: claimUrl,
+    eyebrow: first ? 'Built for you' : 'Still yours',
+    heading,
+    preheader: first ? 'Free to claim, free to publish. We only earn when you do.' : 'Your website is still waiting to be claimed.',
+    paragraphs,
+    cta: { label: 'Claim this website', url: claimUrl },
+    cta2: first ? undefined : { label: 'See it live', url: demoUrl || claimUrl },
+    reason: `You are receiving this because ${senderName} at Stemfra reached out to ${businessName}. Not for you? Unsubscribe below and we will not email again.`,
+    unsubscribeUrl,
+    footerLinks: [{ label: 'stemfra.com', url: 'https://stemfra.com' }, { label: 'Privacy', url: 'https://stemfra.com/privacy/' }, { label: 'Terms', url: 'https://stemfra.com/terms/' }],
+  });
+  const text = [heading, '', ...paragraphs, '', `Claim this website: ${claimUrl}`, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '', `Unsubscribe: ${unsubscribeUrl}`].join('\n');
+  return { subject, html, text };
+}
+
 module.exports = {
+  prospectClaimEmail,
   bookingConfirmation,
   bookingReminder,
   bookingCanceled,

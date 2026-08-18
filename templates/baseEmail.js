@@ -166,10 +166,18 @@ function sButtons(cta, cta2) {
   return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:34px auto 0;"><tr>${primary}${secondary}</tr></table>`;
 }
 
-function stemfraDocument({ eyebrow, heading, preheader, paragraphs = [], bodyHtml = '', rows, amount, cta, cta2, note, reason, security, unsubscribeUrl, footerLinks }) {
+function stemfraDocument({ eyebrow, heading, preheader, paragraphs = [], bodyHtml = '', rows, amount, cta, cta2, note, reason, security, unsubscribeUrl, footerLinks, heroImageUrl, heroImageAlt = '', heroImageUrlHref, align = 'left', ctaFirst = false }) {
+  // `align:'center'` + `heroImageUrl` = the prospecting register (Bentley
+  // brochure anatomy, 2026-08-18): logo band → one full-width image → centered
+  // headline → one CTA (+ optional ghost CTA) → two short paragraphs.
+  const ta = align === 'center' ? 'text-align:center;' : '';
   const paras = paragraphs.filter(Boolean).map(p =>
-    `<p style="margin:22px 0 0;font-family:${SFONT};font-weight:300;font-size:15px;line-height:1.75;color:${S.copy};">${nl2br(p)}</p>`
+    `<p style="margin:22px 0 0;font-family:${SFONT};font-weight:300;font-size:15px;line-height:1.75;color:${S.copy};${ta}">${nl2br(p)}</p>`
   ).join('');
+  const heroImg = heroImageUrl ? `
+      <tr><td style="background:${S.card};padding:36px 40px 0;">
+        ${heroImageUrlHref ? `<a href="${escapeHtml(heroImageUrlHref)}" style="display:block;">` : ''}<img src="${escapeHtml(heroImageUrl)}" alt="${escapeHtml(heroImageAlt)}" width="540" style="display:block;width:100%;max-width:540px;height:auto;border:0;"/>${heroImageUrlHref ? '</a>' : ''}
+      </td></tr>` : '';
   const links = (footerLinks && footerLinks.length)
     ? `<div style="font-family:${SFONT};font-weight:400;font-size:9px;letter-spacing:0.30em;color:${S.bandText};text-transform:uppercase;">${
         footerLinks.map((l) => `<a href="${escapeHtml(l.url)}" style="color:${S.bandText};text-decoration:none;">${escapeHtml(l.label)}</a>`).join('&nbsp;&nbsp;&nbsp;&nbsp;')
@@ -187,14 +195,16 @@ function stemfraDocument({ eyebrow, heading, preheader, paragraphs = [], bodyHtm
         <div style="font-family:${SFONT};font-weight:300;font-size:20px;letter-spacing:0.42em;padding-left:0.42em;color:#ffffff;">STEMFRA</div>
       </td></tr>
 
-      <tr><td style="background:${S.card};padding:52px 60px 44px;">
-        ${eyebrow ? `<div style="font-family:${SFONT};font-weight:400;font-size:11px;letter-spacing:0.28em;color:${S.band};text-transform:uppercase;">${escapeHtml(eyebrow)}</div>` : ''}
-        <div style="font-family:${SFONT};font-weight:300;font-size:30px;line-height:1.25;color:${S.ink};margin-top:${eyebrow ? '18px' : '0'};">${escapeHtml(heading)}</div>
+      ${heroImg}
+      <tr><td style="background:${S.card};padding:${heroImageUrl ? '40px' : '52px'} 60px 44px;${ta}">
+        ${eyebrow ? `<div style="font-family:${SFONT};font-weight:400;font-size:11px;letter-spacing:0.28em;color:${S.band};text-transform:uppercase;${ta}">${escapeHtml(eyebrow)}</div>` : ''}
+        <div style="font-family:${SFONT};font-weight:300;font-size:30px;line-height:1.25;color:${S.ink};margin-top:${eyebrow ? '18px' : '0'};${ta}">${escapeHtml(heading)}</div>
+        ${ctaFirst && cta ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center">${sButtons(cta, cta2)}</td></tr></table>` : ''}
         ${paras}
         ${rows && rows.length ? sRows(rows) : ''}
         ${amount ? amountBlock(amount) : ''}
         ${bodyHtml}
-        ${cta ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center">${sButtons(cta, cta2)}</td></tr></table>` : ''}
+        ${!ctaFirst && cta ? `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center">${sButtons(cta, cta2)}</td></tr></table>` : ''}
         ${note ? `<p style="margin:26px auto 0;max-width:420px;font-family:${SFONT};font-weight:300;font-size:13px;line-height:1.7;color:${S.micro};text-align:center;">${nl2br(note)}</p>` : ''}
       </td></tr>
 
@@ -329,11 +339,11 @@ function tenantDocument({ brand, heading, preheader, paragraphs = [], bodyHtml =
  * @param {{name:string,logoUrl?:string,stemfra?:boolean}} [o.brand] Tenant brand; omit for Stemfra.
  * @param {string} [o.reason]           Footer "why you received this" line.
  */
-function renderEmail({ heading, eyebrow, preheader, paragraphs = [], bodyHtml = '', rows, amount, cta, cta2, note, brand, reason, security, unsubscribeUrl, footerLinks, bodyAlign = 'left' }) {
+function renderEmail({ heading, eyebrow, preheader, paragraphs = [], bodyHtml = '', rows, amount, cta, cta2, note, brand, reason, security, unsubscribeUrl, footerLinks, bodyAlign = 'left', heroImageUrl, heroImageAlt, heroImageUrlHref, align, ctaFirst }) {
   const tenant = !!(brand && brand.name && !brand.stemfra);
   if (!tenant) {
     // Stemfra brand mode → the Bentley-register chocolate document.
-    return stemfraDocument({ eyebrow, heading, preheader, paragraphs, bodyHtml, rows, amount, cta, cta2, note, reason, security, unsubscribeUrl, footerLinks });
+    return stemfraDocument({ eyebrow, heading, preheader, paragraphs, bodyHtml, rows, amount, cta, cta2, note, reason, security, unsubscribeUrl, footerLinks, heroImageUrl, heroImageAlt, heroImageUrlHref, align, ctaFirst });
   }
   // Tenant brand mode → the Case-2 popup document (the business's own colors).
   return tenantDocument({ brand, heading, preheader, paragraphs, bodyHtml, rows, cta, note, reason, security, unsubscribeUrl, footerLinks, bodyAlign });

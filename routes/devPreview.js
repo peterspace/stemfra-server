@@ -53,6 +53,8 @@ function indexPage() {
     ['owner-chat-lead', 'Owner: chat-assistant lead'],
     ['staff-handoff', 'Staff: Stacy handoff'],
     ['staff-orphan', 'Staff: orphan payment alert'],
+    ['claim-1', 'Prospecting — Claim your website (touch 1)'],
+    ['claim-2', 'Prospecting — Did you forget your website (touch 2)'],
   ].map(([k, label]) => `<li><a href="/dev/preview/${k}">${label}</a></li>`).join('');
   const links = txLinks + SUBJECTS.flatMap((s) => [
     `<li><a href="/dev/preview/notification?subject=${encodeURIComponent(s)}">Notification — ${s}</a></li>`,
@@ -91,6 +93,15 @@ router.get('/confirmation', (req, res) => {
 
 // ─── Transactional variants (Case 9 unified base) ────────────────────────────
 const send = (res, html) => res.set('Content-Type', 'text/html').send(html);
+
+// Prospecting "Claim your website" (2026-08-18) — touch 1 + touch 2.
+const CLAIM_SAMPLE = {
+  firstName: 'Marcus', businessName: 'Argyle & Sons', verticalLabel: 'barbershop',
+  heroImageUrl: 'https://res.cloudinary.com/dvdbec2fe/image/upload/v1784070724/stemfra_assets/mockups/sources/n9ulhce5xkyo3vhn9opk.webp',
+  claimUrl: 'https://stemfra.com/claim/demo-token', demoUrl: 'https://argyle-and-sons.stemfra.com', unsubscribeUrl: 'https://stemfra.com/unsubscribe/demo-token',
+};
+router.get('/claim-1', (_req, res) => send(res, tx.prospectClaimEmail({ ...CLAIM_SAMPLE, touch: 1 }).html));
+router.get('/claim-2', (_req, res) => send(res, tx.prospectClaimEmail({ ...CLAIM_SAMPLE, touch: 2 }).html));
 
 router.get('/booking-confirmation', (_req, res) => send(res, tx.bookingConfirmation({
   businessName: 'Argyle & Sons', businessLogoUrl: ARGYLE_LOGO, businessUrl: ARGYLE_URL, businessEmail: 'hello@argyle-and-sons.com',
