@@ -135,6 +135,10 @@ async function requestDetails(req, res) {
 
 // POST /api/admin/billing/:siteId/start { tier, setupOverrideCents?, monthlyOverrideCents?, currency? }
 async function startBilling(req, res) {
+  if (process.env.SUBSCRIPTION_BILLING_ENABLED !== 'true') {
+    return res.status(410).json({ error: 'Subscription billing is retired (commission model). Set SUBSCRIPTION_BILLING_ENABLED=true to re-arm.', code: 'subscription_billing_retired' });
+  }
+
   const siteId = req.params.siteId;
   const { tier, setupOverrideCents, monthlyOverrideCents, currency } = req.body || {};
   const { data: site } = await supabase.from('sites').select('id').eq('id', siteId).maybeSingle();

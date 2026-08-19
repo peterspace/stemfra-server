@@ -107,6 +107,14 @@ async function billingCheckout(req, res) {
 // gate. Idempotent: a second click won't duplicate the subscription/charge or
 // re-send the email.
 async function requestPublishInvoice(req, res) {
+  // Commission model (2026-07-29): publishing is free; the Payoneer/Airwallex
+  // pay-to-publish invoice is retired. Gate (SUBSCRIPTION_BILLING_ENABLED=true
+  // re-arms it) so nothing can open a $99 subscription charge by accident
+  // (found 2026-08-19: legacy demo subscriptions kept being invoiced).
+  if (process.env.SUBSCRIPTION_BILLING_ENABLED !== 'true') {
+    return res.status(410).json({ error: 'Publishing is free under the commission model; no invoice is needed. Use Publish.' , code: 'subscription_billing_retired' });
+  }
+
   try {
     const { siteId } = req.body;
     if (!siteId) return res.status(400).json({ error: 'siteId required' });
