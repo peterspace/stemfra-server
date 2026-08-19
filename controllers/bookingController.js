@@ -477,7 +477,13 @@ const finalizeBookingPayment = async ({ bookingId, amountCents = null, paymentIn
 //         customer: { firstName, lastName, email, phone }, notes }
 const createBooking = async (req, res) => {
   try {
-    const r = await placeBooking({ ...req.body, allowedStatuses: ['live'] });
+    // Pay-at-venue default (commission model, found in the Clean Cuts E2E
+    // 2026-08-20): with payments off (every commission-era tenant) the form
+    // books through THIS legacy route, which never flagged collect-in-person —
+    // so priced bookings carried NO amount, "Outstanding at venue" stayed $0
+    // and the commission meter never saw booking revenue. A priced service
+    // booked without online payment IS owed at the visit; record it.
+    const r = await placeBooking({ ...req.body, collectInPerson: true, allowedStatuses: ['live'] });
     if (!r.ok) return res.status(r.code).json({ success: false, message: r.message });
     return res.status(r.idempotent ? 200 : 201).json({ success: true, ...(r.idempotent ? { idempotent: true } : {}), booking: r.booking });
   } catch (err) {
