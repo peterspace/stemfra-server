@@ -4,6 +4,7 @@
 // (preview-then-publish); abuse is bounded by a light per-IP rate limit + the
 // fact that a previewing site can't be published without paying.
 const { onboardCustomer } = require('../lib/onboardSite');
+const { attachSiteDomain } = require('../lib/attachSiteDomain');
 
 const CMS_URL = process.env.CMS_URL || 'http://localhost:5180';
 const ZONE = 'stemfra.com';
@@ -49,8 +50,17 @@ async function signup(req, res) {
       claimToken: typeof claimToken === 'string' ? claimToken : null,
     });
 
+    // Wire the preview host now (best-effort, like the CMS "+ New site" path):
+    // without this the owner's "View site" / the Claim page's "your site" is dead
+    // until publish (found in the #8 rehearsal, 2026-08-19). No-op under the
+    // wildcard Worker (TENANT_WILDCARD_ROUTING=true).
+    let domain = null;
+    try { domain = await attachSiteDomain(result.site.siteId); }
+    catch (e) { domain = { error: e.message }; console.error('[onboarding.signup] attach host failed (site still provisioned):', e.message); }
+
     res.json({
       ok: true,
+      domain,
       siteId: result.site.siteId,
       subdomain: result.site.subdomain,
       previewUrl: `https://${result.site.subdomain}.${ZONE}`,
