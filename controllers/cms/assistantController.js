@@ -51,7 +51,13 @@ function guideLinksFor(reply) {
       const m = re.exec(hay);
       if (m) { idx = m.index; key = last; }
     }
-    if (idx >= 0) hits.push({ idx, len: key.length, label: g.where.split(/\s*→\s*/).pop(), route: g.route });
+    if (idx >= 0) {
+      // Chip label = the place + its parent when the leaf alone is vague
+      // ("Home → Location", "Style → Themes"; top-level items stay bare).
+      const segs = g.where.split(/\s*→\s*/);
+      const label = segs.length >= 3 ? segs.slice(-2).join(' → ') : segs[segs.length - 1];
+      hits.push({ idx, len: key.length, label, route: g.route });
+    }
   }
   hits.sort((a, b) => a.idx - b.idx || b.len - a.len);
   const out = []; const seen = new Set();
@@ -200,6 +206,11 @@ async function send(req, res) {
     }
 
     const links = guideLinksFor(reply);
+    // "Where do I…?" answers (Peter, 2026-08-19): no step-by-step path prose
+    // in the CMS; one short line + the Open chips, which navigate directly.
+    if (links.length && /\b(where|how (do|can|would) i|how to|where's|wheres)\b/i.test(userMsg.content || '')) {
+      reply = links.length > 1 ? 'Here is where those live. Tap one to open it:' : 'Here is where that lives. Tap to open it:';
+    }
     const assistantMsg = { role: 'assistant', content: reply, ts: new Date().toISOString(), ...(handoff ? { handoff: true } : {}), ...(links.length ? { links } : {}) };
     await appendMessages(conversationId, [userMsg, assistantMsg]);
     await appendToolLog(conversationId, toolLog);
