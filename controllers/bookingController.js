@@ -254,7 +254,7 @@ const sendBookingConfirmationEmails = async ({ siteId, bookingId, service, start
 // amountCents, currency, serviceName, startsAtIso }.
 const placeBooking = async ({
   siteId, teamMemberId, serviceId, date, time, customer, notes, paymentIntentId,
-  pending = false, collectInPerson = false, allowedStatuses = ['live'], emailFromName = 'Argyle & Sons',
+  pending = false, collectInPerson = false, allowedStatuses = ['live'], emailFromName = null,
   customerTimeZone,
 }) => {
   if (!siteId || !teamMemberId || !serviceId || !date || !time || !customer) {
@@ -265,7 +265,12 @@ const placeBooking = async ({
   }
 
   const { data: site, error: siteErr } = await supabase
-    .from('sites').select('id, status, time_zone, owner_contact_id, subdomain').eq('id', siteId).single();
+    .from('sites').select('id, status, time_zone, owner_contact_id, subdomain, company:companies(name)').eq('id', siteId).single();
+  // The customer-facing brand = the SITE'S company name. (A hardcoded
+  // 'Argyle & Sons' default here leaked the demo brand into every tenant's
+  // confirmation email — found in the Clean Cuts E2E, 2026-08-20.)
+  emailFromName = emailFromName || site?.company?.name || site?.subdomain || 'Bookings';
+
   if (siteErr || !site) return { ok: false, code: 404, message: 'Site not found.' };
   if (!allowedStatuses.includes(site.status)) return { ok: false, code: 403, message: 'Site not live.' };
 
