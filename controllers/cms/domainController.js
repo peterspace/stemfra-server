@@ -62,6 +62,7 @@ async function connect(req, res) {
       if (!existing) await cf.addCnameRecord(clean.replace('.stemfra.com', ''), target);
     }
     await supabase.from('sites').update({ custom_domain: clean }).eq('id', siteId);
+    try { await require('../../lib/domainActivation').markPropagating(siteId, clean); } catch { /* best-effort */ }
     const status = await cf.getCustomDomain(project, clean);
     res.json({ ok: true, domain: clean, cnameTarget: target, status: status?.status || 'pending' });
   } catch (err) {
@@ -89,11 +90,20 @@ async function status(req, res) {
         .contains('metadata', { type: 'domain_registration', domain: customDomain })
         .limit(1),
     ]);
+    const { domainStatus, MIN_WAIT_MS } = require('../../lib/domainActivation');
+    const { data: siteRow } = await supabase.from('sites').select('custom_domain, subdomain, metadata').eq('id', siteId).single();
+    const activation = domainStatus(siteRow); // 'propagating' | 'active'
+    const connectedAt = siteRow?.metadata?.custom_domain_connected_at || null;
     res.json({
       domain: customDomain,
       cnameTarget: `${project}.pages.dev`,
       status: cfStatus?.status || 'pending',
       managed: !!(regCharge && regCharge.length),
+      // Activation (lib/domainActivation.js): the CMS shows "propagating, up to
+      // 30 minutes" and keeps linking to the stemfra.com address until active.
+      activation, connectedAt,
+      activeEta: activation === 'propagating' && connectedAt ? new Date(new Date(connectedAt).getTime() + MIN_WAIT_MS).toISOString() : null,
+      publicUrl: `https://${require('../../lib/domainActivation').publicHostFor(siteRow)}`,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

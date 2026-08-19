@@ -219,6 +219,7 @@ server.listen(PORT, () => {
   // System A billing: open one recurring charge per active manual-provider
   // subscription per calendar month (Payoneer etc.; Stripe self-bills).
   startBillingCycleSweeper();
+  require('./lib/domainActivation').startDomainActivationSweeper(); // custom domains go 'active' only once they really serve (2026-08-19)
   // Site deletion: hard-purge sites that have been soft-deleted past the 90-day
   // grace window (Cloudinary media + all DB rows). See lib/siteDeletion.js.
   startSiteDeletionSweeper();

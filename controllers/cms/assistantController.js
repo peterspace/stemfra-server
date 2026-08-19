@@ -16,6 +16,7 @@ const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { buildSiteContext } = require('../../lib/stacyContext');
 const { buildOnboardingChecklist, setOnboardingState } = require('../../lib/stacyOnboarding');
 const { logSiteActivity } = require('../../lib/activity');
+const { CMS_GUIDE } = require('../../lib/cmsRoutes');
 
 const STACY_N8N_URL = process.env.STACY_N8N_URL;          // public n8n Stacy webhook
 const N8N_SECRET = process.env.N8N_WEBHOOK_SECRET;        // sent as x-leadgen-secret (server→n8n convention)
@@ -27,6 +28,41 @@ const STACY_MODEL = process.env.STACY_MODEL || 'gpt-4o';  // per-conversation de
 // Actions: 'clone' (duplicate the current site) + 'update_contact' (patch the
 // home Location section's address/phone/email — the do-it-for-me path for the
 // onboarding contact step; the CMS card applies via the owner's own RLS write).
+// Tappable "Open X →" chips (Peter, 2026-08-19): when Stacy tells the owner
+// WHERE to go ("go to Hours & timezone", "Website → Pages → Home → Location")
+// the CMS renders a link to that page. Matched against CMS_GUIDE `where`
+// labels: the full path, or its last segment when it is specific enough (≥ 2
+// words or a known single-word sidebar item). Longest match wins per route;
+// order = order of appearance in the reply; max 4.
+const GUIDE_SINGLE_OK = new Set(['services', 'team', 'bookings', 'inbox', 'clients', 'analytics', 'support']);
+function guideLinksFor(reply) {
+  const text = String(reply || '');
+  if (!text) return [];
+  const norm = (t) => t.replace(/\s*(→|->|>|›)\s*/g, ' → ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const hay = norm(text);
+  const hits = [];
+  for (const g of CMS_GUIDE) {
+    const full = norm(g.where);
+    const last = full.split(' → ').pop();
+    let idx = hay.indexOf(full);
+    let key = full;
+    if (idx < 0 && (last.split(' ').length >= 2 || GUIDE_SINGLE_OK.has(last))) {
+      const re = new RegExp(`(^|[^a-z])${last.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z])`);
+      const m = re.exec(hay);
+      if (m) { idx = m.index; key = last; }
+    }
+    if (idx >= 0) hits.push({ idx, len: key.length, label: g.where.split(/\s*→\s*/).pop(), route: g.route });
+  }
+  hits.sort((a, b) => a.idx - b.idx || b.len - a.len);
+  const out = []; const seen = new Set();
+  for (const h of hits) {
+    if (seen.has(h.route)) continue;
+    seen.add(h.route); out.push({ label: h.label, route: h.route });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
 function normalizeAction(a) {
   if (!a || typeof a !== 'object') return null;
   const s = (v, n) => (v && String(v).trim().slice(0, n)) || null;
@@ -163,7 +199,8 @@ async function send(req, res) {
       return res.status(502).json({ error: 'Stacy could not respond right now. Please try again.' });
     }
 
-    const assistantMsg = { role: 'assistant', content: reply, ts: new Date().toISOString(), ...(handoff ? { handoff: true } : {}) };
+    const links = guideLinksFor(reply);
+    const assistantMsg = { role: 'assistant', content: reply, ts: new Date().toISOString(), ...(handoff ? { handoff: true } : {}), ...(links.length ? { links } : {}) };
     await appendMessages(conversationId, [userMsg, assistantMsg]);
     await appendToolLog(conversationId, toolLog);
 
@@ -184,7 +221,7 @@ async function send(req, res) {
       }
     }
 
-    res.json({ reply, handoff, action, conversationId });
+    res.json({ reply, handoff, action, conversationId, links: assistantMsg.links || [] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
