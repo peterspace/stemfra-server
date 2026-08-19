@@ -1171,6 +1171,24 @@ own `companies` row, so two businesses under one owner ARE modeled; these close 
    the default theme and must find Website → Style → Themes. Add a theme step (the
    vertical's template cards, like the Claim funnel's Starter pick) to the modal.
 
+## P20 — Security posture / compliance readiness (queued 2026-08-20)
+
+Peter's Q: do we need SOC 2 / ISO 27001? Answer: those are ORG certifications
+(auditor, 6–12 months, $20k+), not features — and our infra already carries them
+(Supabase SOC 2 Type II · Cloudflare ISO 27001/SOC 2 · Stripe PCI DSS L1 ·
+Twilio/Google). For local-business tenants, provider inheritance + honest
+practices is the norm; pursue Stemfra's own SOC 2 only when bigger customers
+send security questionnaires. What to actually do, in order:
+1. Publish a marketing **Security page** (data handling, per-tenant RLS isolation,
+   encryption in transit/at rest, subprocessor list — reuse Privacy §5a).
+2. **Staff account hardening**: require MFA (CMS TOTP already built) for
+   @stemfra.com staff; least-privilege CRM roles = the parked "Per-role RLS data
+   hardening" item (that's the real internal gap — all staff share full data RLS).
+3. Backups/incident basics: confirm Supabase PITR tier, a security@stemfra.com
+   contact, and a one-page incident-response note.
+4. LATER: SOC 2 readiness (vendor like Vanta/Drata) when enterprise/chain deals
+   need it.
+
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
   + Jessica @ 0.95) — draft when Peter wants to record.
