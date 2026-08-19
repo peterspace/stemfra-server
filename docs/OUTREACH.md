@@ -62,6 +62,8 @@ DB-driven — `crm_settings.leadgen_sequence` (tune in the DB/CRM, no deploy):
 | 2 | +7 | **Mark's call** (`lib/leadgenCall.js`) | **read-gated**: only if touch 1 was OPENED and they haven't signed up |
 | 3 | +14 | **Claim touch 2** — "Did you forget your website?" (same asset, ghost See-it-live) — step kind `claim_email` `{touch:2}` | still `outreach_status='sent'` |
 
+**Send window (2026-08-19):** `crm_settings.leadgen_send_window {enabled, local_hour}` (CRM Review Queue → "Send at the recipient's local time", default ON at 11:00). Approving queues touch 1 as `outreach_status='scheduled'` + `outreach_scheduled_for` = the next local hour in the lead's US-state timezone (`lib/leadTimezone.js`); the sequencer sends it when due (independent of the drip master switch), and drip emails only go out inside the window. Calls keep their own 12:00–18:00 ET guardrail. The sweeper runs in PRODUCTION only (`OUTREACH_SWEEPER_DEV=true` opts a dev box in) so two servers on one DB never double-send.
+
 Campaign window 21 days · 200 emails/day cap. Stops automatically on reply, bounce,
 opt-out (one-click unsubscribe link + `List-Unsubscribe` headers → `do_not_email`), or
 signup (a `contacts` row exists for the email; the Claim page signup also marks the

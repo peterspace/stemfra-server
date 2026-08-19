@@ -74,4 +74,51 @@ async function signup(req, res) {
   }
 }
 
-module.exports = { signup };
+// POST /api/onboarding/signup-authenticated — Google sign-up (2026-08-19).
+// The wizard ran after a Supabase OAuth session exists; the Bearer JWT IS the
+// new owner. Same body as /signup minus email/password; same gates (terms,
+// rate limit, test-email flag, claim token).
+async function signupAuthenticated(req, res) {
+  try {
+    const auth = String(req.headers.authorization || '');
+    const jwt = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+    if (!jwt) return res.status(401).json({ error: 'Sign in with Google first.', code: 'unauthenticated' });
+    const supabase = require('../config/supabase');
+    const { data: { user }, error: uErr } = await supabase.auth.getUser(jwt);
+    if (uErr || !user?.email) return res.status(401).json({ error: 'Your sign-in session is invalid. Please try again.', code: 'unauthenticated' });
+
+    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+    if (rateLimited(ip)) return res.status(429).json({ error: 'Too many signups from here — please try again later.' });
+    const {
+      name, company, vertical, starterId, city, template, firstName, lastName, country, state,
+      bookingProvider, paymentMethods, tier, goals, feesAccepted, hasDomain, domain, hasStripe, termsAccepted, claimToken,
+    } = req.body || {};
+    const meta = user.user_metadata || {};
+    const fullName = name || meta.full_name || meta.name || null;
+    const result = await onboardCustomer({
+      existingAuthUser: { id: user.id, email: user.email },
+      name: fullName, email: user.email, password: null, company, vertical: vertical || null, starterId: starterId || null,
+      city: city || null, templateSlug: template || null,
+      firstName: firstName || (fullName ? fullName.split(/\s+/)[0] : null) || null,
+      lastName: lastName || (fullName ? fullName.split(/\s+/).slice(1).join(' ') || null : null),
+      country: country || null, state: state || null,
+      bookingProvider: bookingProvider || null, paymentMethods: paymentMethods || null, tier: tier || null,
+      goals: Array.isArray(goals) ? goals : null, feesAccepted: !!feesAccepted,
+      hasDomain: !!hasDomain, domain: typeof domain === 'string' ? domain : null,
+      hasStripe: ['yes', 'no', 'unsure'].includes(hasStripe) ? hasStripe : null,
+      termsAccepted: !!termsAccepted, requireTerms: true,
+      clientIp: ip, userAgent: req.headers['user-agent'] || null,
+      claimToken: typeof claimToken === 'string' ? claimToken : null,
+    });
+    let hostWiring = null;
+    try { hostWiring = await attachSiteDomain(result.site.siteId); } catch (e) { hostWiring = { error: e.message }; }
+    res.json({ ok: true, domain: hostWiring, siteId: result.site.siteId, subdomain: result.site.subdomain, previewUrl: `https://${result.site.subdomain}.${ZONE}`, loginUrl: CMS_URL });
+  } catch (err) {
+    const statusByCode = { bad_input: 400, weak_password: 400, email_taken: 409, terms_required: 400 };
+    if (statusByCode[err.code]) return res.status(statusByCode[err.code]).json({ error: err.message, code: err.code });
+    console.error('[onboarding.signupAuthenticated]', err.message);
+    res.status(500).json({ error: 'Could not complete signup. Please try again.' });
+  }
+}
+
+module.exports = { signup, signupAuthenticated };
