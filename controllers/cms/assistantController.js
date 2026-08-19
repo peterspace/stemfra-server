@@ -44,24 +44,34 @@ function guideLinksFor(reply) {
   for (const g of CMS_GUIDE) {
     const full = norm(g.where);
     const last = full.split(' → ').pop();
-    let idx = hay.indexOf(full);
+    const multiSeg = full.includes('→');
+    let idx = multiSeg ? hay.indexOf(full) : -1; // single-segment paths go through the guarded match below
     let key = full;
     if (idx < 0 && (last.split(' ').length >= 2 || GUIDE_SINGLE_OK.has(last))) {
-      const re = new RegExp(`(^|[^a-z])${last.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z])`);
+      const esc = last.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // A bare single word ("services", "team") counts only when named AS A
+      // PLACE: bolded, or right after go to / under / open / visit / in.
+      // ("manage your connection to Google's services" must not → Services.)
+      const re = last.split(' ').length >= 2
+        ? new RegExp(`(^|[^a-z])${esc}($|[^a-z])`)
+        : new RegExp(`(\\*\\*\\s*|(?:go to|head to|under|open|visit|navigate to|found in|in the|in)\\s+(?:the\\s+)?)${esc}($|[^a-z])`);
       const m = re.exec(hay);
       if (m) { idx = m.index; key = last; }
     }
     if (idx >= 0) {
       // Chip label = the place + its parent when the leaf alone is vague
       // ("Home → Location", "Style → Themes"; top-level items stay bare).
-      const segs = g.where.split(/\s*→\s*/);
+      const segs = g.where.split(/\s*→\s*/).filter((x) => !/^\(/.test(x)); // drop "(the page)"
       const label = segs.length >= 3 ? segs.slice(-2).join(' → ') : segs[segs.length - 1];
       hits.push({ idx, len: key.length, label, route: g.route });
     }
   }
   hits.sort((a, b) => a.idx - b.idx || b.len - a.len);
+  // Drop a match nested inside a longer one ("Notifications" inside
+  // "Notifications → Automated emails") so parents don't double up as chips.
+  const top = hits.filter((h) => !hits.some((o) => o !== h && o.idx <= h.idx && o.idx + o.len >= h.idx + h.len && o.len > h.len));
   const out = []; const seen = new Set();
-  for (const h of hits) {
+  for (const h of top) {
     if (seen.has(h.route)) continue;
     seen.add(h.route); out.push({ label: h.label, route: h.route });
     if (out.length >= 4) break;
@@ -208,10 +218,16 @@ async function send(req, res) {
     const links = guideLinksFor(reply);
     // "Where do I…?" answers (Peter, 2026-08-19): no step-by-step path prose
     // in the CMS; one short line + the Open chips, which navigate directly.
+    // The FULL answer (with the sidebar paths) stays in the stored history so
+    // the model keeps naming real places on later turns (storing the collapsed
+    // line taught her to echo it without paths → no chips, seen 2026-08-19);
+    // `display` is what the owner sees.
+    let display = null;
     if (links.length && /\b(where|how (do|can|would) i|how to|where's|wheres)\b/i.test(userMsg.content || '')) {
-      reply = links.length > 1 ? 'Here is where those live. Tap one to open it:' : 'Here is where that lives. Tap to open it:';
+      display = links.length > 1 ? 'Here is where those live. Tap one to open it:' : 'Here is where that lives. Tap to open it:';
     }
-    const assistantMsg = { role: 'assistant', content: reply, ts: new Date().toISOString(), ...(handoff ? { handoff: true } : {}), ...(links.length ? { links } : {}) };
+    const assistantMsg = { role: 'assistant', content: reply, ts: new Date().toISOString(), ...(handoff ? { handoff: true } : {}), ...(links.length ? { links } : {}), ...(display ? { display } : {}) };
+    if (display) reply = display;
     await appendMessages(conversationId, [userMsg, assistantMsg]);
     await appendToolLog(conversationId, toolLog);
 
