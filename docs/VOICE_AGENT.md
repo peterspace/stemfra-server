@@ -260,3 +260,12 @@ volume._
   caller-ID identity) · "Reset passwords" ✗→✓ · "Check subscription status" ✗→✓
   · "Answer billing questions" ◐→✓ (account-level) · "Route calls intelligently"
   ✗→◐ · "Trigger downstream workflows" ✗→◐ (ticket/callback). NOT yet deployed.
+
+
+## 2026-08-19 — Launch refresh (#7)
+- Knowledge: pay-at-the-business booking (online card payments "later as an option"), SMS/email
+  alerts, the Claim page. Kept in `lib/conciergeContext.js` (structured + `buildVoiceKnowledge`).
+- Outbound prospecting calls (sequence step 2, +7d, read-gated): `buildLeadContext` now describes the
+  branded "Claim your website" email (date, subject, opened?) and the goal is to get the prospect to
+  claim; new marker **`[ACTION:resend_claim]`** resends touch 1 (`lib/claimSend.js`) to the call's
+  lead, with a system-note result Mark relays. Guards: outbound lead calls only; never `do_not_email`.

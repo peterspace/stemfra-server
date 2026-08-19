@@ -68,7 +68,24 @@ function safeSend(ws, obj) {
 // the very START of a reply. This filter buffers the first tokens so a marker
 // is stripped BEFORE anything reaches the TTS, no matter how the token stream
 // splits it. Pure — exported for tests.
-const MARKERS = ['[TRANSFER]', '[ACTION:reset_password]', '[ACTION:ticket]', '[ACTION:callback]'];
+// Prospecting (launch #7): on an OUTBOUND lead call, "[ACTION:resend_claim]"
+// resends the branded Claim email (touch 1) to the source lead. Guarded to the
+// call's own lead; never on inbound/unknown callers.
+async function resendClaimForLead(session) {
+  if (!session.leadId) return 'Action refused: this call is not linked to a prospect lead, so there is no email to resend. Offer to take their email for a teammate instead.';
+  try {
+    const { data: lead } = await supabase.from('leads').select('*').eq('id', session.leadId).maybeSingle();
+    if (!lead?.email) return 'Action failed: this lead has no email address on file. Ask for their email so a teammate can send the link.';
+    if (lead.do_not_email) return 'Action refused: this person unsubscribed from our emails. Do not resend; offer a teammate follow-up instead.';
+    const { sendClaimEmail } = require('../lib/claimSend');
+    await sendClaimEmail(lead, { touch: 1, step: lead.outreach_step || 1 });
+    session.actionsTaken.push('resend_claim');
+    const masked = String(lead.email).replace(/^(.).*(@.*)$/, '$1***$2');
+    return `Done: the "Claim your website" email was resent to ${masked}. Tell them to look for it now (also in spam/promotions).`;
+  } catch (e) { return `Action failed: could not resend the email (${e.message}). Apologize and promise a teammate will send the link today.`; }
+}
+
+const MARKERS = ['[TRANSFER]', '[ACTION:reset_password]', '[ACTION:ticket]', '[ACTION:callback]', '[ACTION:resend_claim]'];
 function createMarkerFilter(markers, emit) {
   let pending = '';
   let checked = false;
@@ -172,7 +189,9 @@ function handleRelay(ws) {
           // outcome. Markers on the chained turn are ignored (no action loops).
           const action = marker.slice(8, -1);
           console.log('[voice] ⚙ account action:', action, session.identity ? '(identified)' : '(NOT identified)');
-          const result = await voiceAccount.executeVoiceAction(action, session.identity, session);
+          const result = action === 'resend_claim'
+            ? await resendClaimForLead(session)   // outbound prospecting: resend the Claim email to the source lead
+            : await voiceAccount.executeVoiceAction(action, session.identity, session);
           console.log('[voice] ⚙ result:', String(result).slice(0, 140));
           session.history.push({ role: 'system', content: `[system note] ${result}` });
           await speakTurn();

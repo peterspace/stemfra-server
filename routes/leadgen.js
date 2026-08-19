@@ -424,7 +424,7 @@ router.post('/call-with-ai', async (req, res) => {
 
   const { data: lead, error } = await supabase
     .from('leads')
-    .select('id, phone, phone_country, do_not_call, contact_name, company_name, pain_point_bucket, qualification, outreach_status, ai_draft_subject, ai_draft_message, outreach_reply_text')
+    .select('id, phone, phone_country, do_not_call, contact_name, company_name, pain_point_bucket, qualification, outreach_status, ai_draft_subject, ai_draft_message, outreach_reply_text, claim_token, outreach_sent_at, outreach_opened_at, outreach_step')
     .eq('id', leadId)
     .single();
   if (error || !lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
