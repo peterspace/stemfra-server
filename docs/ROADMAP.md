@@ -1128,6 +1128,25 @@ handed to Peter to paste into n8n directly (state checked via Peter or the
 n8n Executions tab) — never curl the webhook to test it live. This item is
 documentation only; nothing has been built yet.
 
+## P18 — Stacy image upload → placement (POST-LAUNCH, agreed 2026-08-20)
+
+Peter's ask: a paperclip in Stacy's composer so tenants upload images IN the chat,
+and Stacy places them in the right slot from the conversation ("use this as my
+hero image"). Design agreed in review (2026-08-20); build AFTER the launch.
+
+1. **S3a — paperclip upload**: composer attach → existing `site-uploads` endpoint →
+   the site's Media library (same Cloudinary folder); the upload renders as a
+   thumbnail message in the thread.
+2. **S3b — `set_image` action (focused field)**: new Stacy action
+   `{type:'set_image', target, assetId}`; easiest first target = the focused image
+   field (the `stacyTarget` mechanism that powers "Use in Headline"). Confirm card
+   (preview + target + Apply), like the update_contact card — never silent.
+3. **S3c — conversational targeting**: "put this on the About page" → target from
+   the CMS map (hero | service:<id> | team:<id> | gallery | logo | about); same
+   confirm card. Enforce per-slot specs (hero ≥1600px wide, logo PNG/SVG) and log
+   `site_activity`.
+4. **S3d — bulk**: "here are 6 gallery photos" → multi-upload → gallery reorder card.
+
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
   + Jessica @ 0.95) — draft when Peter wants to record.
