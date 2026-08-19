@@ -62,8 +62,8 @@ function guideLinksFor(reply) {
       // Chip label = the place + its parent when the leaf alone is vague
       // ("Home → Location", "Style → Themes"; top-level items stay bare).
       const segs = g.where.split(/\s*→\s*/).filter((x) => !/^\(/.test(x)); // drop "(the page)"
-      const label = segs.length >= 3 ? segs.slice(-2).join(' → ') : segs[segs.length - 1];
-      hits.push({ idx, len: key.length, label, route: g.route });
+      const label = segs[segs.length - 1]; // the place; `path` carries the full trail
+      hits.push({ idx, len: key.length, label, route: g.route, path: segs.join(' → ') });
     }
   }
   hits.sort((a, b) => a.idx - b.idx || b.len - a.len);
@@ -73,7 +73,7 @@ function guideLinksFor(reply) {
   const out = []; const seen = new Set();
   for (const h of top) {
     if (seen.has(h.route)) continue;
-    seen.add(h.route); out.push({ label: h.label, route: h.route });
+    seen.add(h.route); out.push({ label: h.label, route: h.route, path: h.path });
     if (out.length >= 4) break;
   }
   return out;
