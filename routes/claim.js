@@ -27,6 +27,38 @@ router.get('/unsubscribe/:token', async (req, res) => {
   res.set('Content-Type', 'text/html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unsubscribed | Stemfra</title></head><body style="margin:0;background:#f6f6f4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#211c18;"><div style="max-width:520px;margin:12vh auto;padding:40px;background:#fff;text-align:center;"><div style="font-size:12px;letter-spacing:.3em;">STEMFRA</div><h1 style="font-weight:300;font-size:26px;margin:24px 0 12px;">You are unsubscribed</h1><p style="color:#5a5f5c;line-height:1.7;">We will not email you again. If this was a mistake, reply to any of our emails and we will put you back.</p><p style="margin-top:28px;"><a href="https://stemfra.com" style="color:#211c18;">stemfra.com</a></p></div></body></html>`);
 });
 
+// GET /api/claim/generic?vertical=barbers — the token-less offer for paid /
+// social traffic landing on stemfra.com/claim (no lead, no personalization;
+// utm_* travels on the page's events). Same shape as a lead offer.
+router.get('/generic', async (req, res) => {
+  if (limited(ipOf(req))) return res.status(429).json({ error: 'Too many requests' });
+  try {
+    const { resolveVerticalSlug } = require('../lib/verticalConfig');
+    const vertical = resolveVerticalSlug(String(req.query.vertical || 'barbershops'));
+    const offer = await resolveClaimOffer({ id: null, claim_token: null, template_slug: vertical, company_name: null, first_name: null, created_at: new Date().toISOString() });
+    offer.token = null; offer.generic = true; offer.businessName = 'your business';
+    // Signup URL without lead params (keeps the starter + a source marker).
+    const u = new URL(offer.claimSignupUrl); u.searchParams.delete('claim'); u.searchParams.delete('company'); u.searchParams.set('src', 'claim-generic'); offer.claimSignupUrl = u.toString();
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ ok: true, offer });
+  } catch (err) {
+    console.error('[claim] generic offer failed', err.message);
+    res.status(500).json({ error: 'Could not load this offer.' });
+  }
+});
+
+// POST /api/claim/event — token-less funnel event (generic page); utm + path only.
+router.post('/event', async (req, res) => {
+  if (limited(ipOf(req), 60)) return res.status(429).json({ ok: false });
+  const { event, path = null, referrer = null, utm = null, vertical = null } = req.body || {};
+  if (!ALLOWED_EVENTS.has(event)) return res.status(400).json({ ok: false, error: 'bad_event' });
+  await supabase.from('marketing_events').insert({
+    lead_id: null, event, path: path ? String(path).slice(0, 300) : null, referrer: referrer ? String(referrer).slice(0, 300) : null,
+    utm: utm && typeof utm === 'object' ? utm : {}, ip: ipOf(req), user_agent: (req.headers['user-agent'] || '').slice(0, 300), metadata: { generic: true, vertical },
+  }).then(() => {}, (e) => console.error('[claim] generic event insert failed', e.message));
+  res.json({ ok: true });
+});
+
 router.get('/:token', async (req, res) => {
   if (limited(ipOf(req))) return res.status(429).json({ error: 'Too many requests' });
   const lead = await loadLead(req.params.token);
