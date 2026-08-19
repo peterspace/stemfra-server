@@ -52,21 +52,29 @@ via `POST /api/leadgen/refine-template` (`lib/leadgenDraft.js`, GPT).
 - A **Mark signature is auto-appended** when the body lacks his email — drafts
   and templates should not include their own signature block.
 
-## 3. The agreed cadence (when emails go & when the voice agent calls)
+## 3. The agreed cadence (LAUNCH, 2026-08-19: max 3 contacts, then stop)
 
 DB-driven — `crm_settings.leadgen_sequence` (tune in the DB/CRM, no deploy):
 
 | Step | Day | What | Gate |
 |---|---|---|---|
-| 1 | 0 | **A1 slot** — the AI-drafted, human-reviewed first email (`send-outreach`) | Reviewer approves in the CRM Review Queue |
-| 2 | +7 | **A2** template (merge-field rendered) | still `outreach_status='sent'` |
-| 3 | +8 | **Voice call** (`lib/leadgenCall.js`) | **read-gated**: only if A2 was OPENED and they haven't signed up |
-| 4 | +14 | **A8** insight-share template | |
-| 5 | +21 | **A20** breakup template | |
+| 1 | 0 | **Claim touch 1** — the branded "Built for you" email (`lib/claimSend.js`, `templates/transactionalEmails.js prospectClaimEmail`), sent by `send-outreach` in mode `claim` (default; `crm_settings.leadgen_first_touch.mode`; `draft` = the old AI plain text) | Reviewer approves in the CRM Review Queue |
+| 2 | +7 | **Mark's call** (`lib/leadgenCall.js`) | **read-gated**: only if touch 1 was OPENED and they haven't signed up |
+| 3 | +14 | **Claim touch 2** — "Did you forget your website?" (same asset, ghost See-it-live) — step kind `claim_email` `{touch:2}` | still `outreach_status='sent'` |
 
-Campaign window 30 days · 200 emails/day cap. The drip **stops automatically**
-on reply, bounce, opt-out, or signup (a `contacts` row exists for the email).
-Driven by `lib/outreachSequencer.js` (started from index.js).
+Campaign window 21 days · 200 emails/day cap. Stops automatically on reply, bounce,
+opt-out (one-click unsubscribe link + `List-Unsubscribe` headers → `do_not_email`), or
+signup (a `contacts` row exists for the email; the Claim page signup also marks the
+lead `won` via its token). Driven by `lib/outreachSequencer.js` (started from
+index.js). The former A1→A2→call→A8→A20 drip is one settings change away
+(`kind:'email'` steps with template codes); A2/A8/A20 stay in the Template Manager
+for Mark's manual sends.
+
+Every touch links to the prospect's **Claim page** `stemfra.com/claim/<claim_token>`
+(`leads.claim_token`, a per-lead UUID) and is measured first-party in
+`marketing_events` (email_sent_touch1/2, email_open, claim_page_view,
+claim_cta_click, claim_see_live_click, signup_start, signup_complete, unsubscribe).
+CRM: Lead Pipeline → **Funnel** tab (`GET /api/leadgen/funnel`).
 
 **Voice-call guardrails** (`lib/callGuardrails.js canAutoCall`): never on
 `do_not_call` · pan-US safe window **12:00–18:00 ET** · daily cap

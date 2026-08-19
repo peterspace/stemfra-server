@@ -30,6 +30,7 @@ const { refineDraft, refineTemplate, isConfigured: leadgenAiConfigured } = requi
 const gmailOutreach = require('../lib/gmailOutreach');
 const leadgenCall = require('../lib/leadgenCall');
 const { fillOutreachLinks } = require('../lib/demoLinks');
+const { sendClaimEmail } = require('../lib/claimSend');
 
 const router = express.Router();
 
@@ -277,18 +278,38 @@ router.post('/send-outreach', async (req, res) => {
   }
 
   // subject/message overrides carry the reviewer's latest (possibly unsaved) edits.
-  const { leadId, subject: subjectOverride, message: messageOverride } = req.body || {};
+  // mode: 'claim' (default, launch 2026-08-19) sends the branded "Claim your
+  // website" touch 1 (lib/claimSend.js); 'draft' sends the AI-drafted plain
+  // text as before. Default comes from crm_settings.leadgen_first_touch.mode.
+  const { leadId, subject: subjectOverride, message: messageOverride, mode: modeOverride } = req.body || {};
   if (!leadId) return res.status(400).json({ success: false, message: 'leadId is required.' });
 
   const { data: lead, error } = await supabase
     .from('leads')
-    .select('id, email, contact_name, company_name, template_slug, ai_draft_subject, ai_draft_message, outreach_status')
+    .select('*')
     .eq('id', leadId)
     .single();
   if (error || !lead) return res.status(404).json({ success: false, message: 'Lead not found.' });
   if (!lead.email) return res.status(400).json({ success: false, message: 'This lead has no email address.' });
   if (lead.outreach_status === 'sent' || lead.outreach_status === 'replied') {
     return res.status(409).json({ success: false, message: 'Outreach has already been sent for this lead.' });
+  }
+  if (lead.do_not_email) return res.status(409).json({ success: false, message: 'This lead has unsubscribed.' });
+
+  let mode = modeOverride;
+  if (!mode) {
+    const { data: ft } = await supabase.from('crm_settings').select('value').eq('key', 'leadgen_first_touch').maybeSingle();
+    mode = ft?.value?.mode || 'claim';
+  }
+  if (mode === 'claim') {
+    try {
+      const out = await sendClaimEmail(lead, { touch: 1, step: 1, byUserId: user.id });
+      return res.json({ success: true, mode: 'claim', ...out, sentFrom: process.env.MARK_EMAIL || 'mark@stemfra.com' });
+    } catch (err) {
+      console.error('[leadgen] send-outreach (claim) error:', err.message);
+      await supabase.from('leads').update({ outreach_status: 'failed' }).eq('id', leadId);
+      return res.status(502).json({ success: false, message: `Could not send the Claim email: ${err.message}` });
+    }
   }
   let text = String(messageOverride != null ? messageOverride : (lead.ai_draft_message || '')).trim();
   if (!text) return res.status(400).json({ success: false, message: 'This lead has no draft message to send.' });
@@ -366,6 +387,8 @@ router.get('/o/:token', (req, res) => {
         const isPrefetch = sentAt && (now - sentAt) < 8000;           // likely Apple/Gmail prefetch
         const firstRealOpen = !lead.outreach_opened_at && !isPrefetch;
         const nowIso = new Date(now).toISOString();
+        // Funnel: opens also land in marketing_events (one table for the whole journey).
+        if (!isPrefetch) supabase.from('marketing_events').insert({ lead_id: lead.id, event: 'email_open', user_agent: (req.headers['user-agent'] || '').slice(0, 300) }).then(() => {}, () => {});
         await supabase.from('leads').update({
           outreach_open_count:     (lead.outreach_open_count || 0) + 1,
           outreach_last_opened_at: nowIso,
@@ -561,6 +584,58 @@ router.patch('/runs/:id', async (req, res) => {
     if (error) return res.status(500).json({ success: false, message: error.message });
     return res.json({ success: true, run: data });
   } catch (err) { console.error('[leadgen] update run failed:', err.message); return res.status(500).json({ success: false, message: 'Could not update the run.' }); }
+});
+
+// ─── Funnel (measurement from day 1) ─────────────────────────────────────────
+// GET /api/leadgen/funnel?vertical=&days=&includeTest=
+// One first-party report over leads + marketing_events: sent → opened → clicked
+// (claim_page_view) → engaged (cta/see-live) → signup_start → signup_complete →
+// published, plus replied / unsubscribed, and per-lead rows for drill-down.
+router.get('/funnel', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  const { vertical = null, days = 90, includeTest = 'false' } = req.query || {};
+  try {
+    const since = new Date(Date.now() - Math.max(1, Number(days) || 90) * 86400_000).toISOString();
+    let q = supabase.from('leads')
+      .select('id, company_name, first_name, email, template_slug, region, stage, is_test, outreach_status, outreach_sent_at, outreach_step, outreach_opened_at, outreach_open_count, outreach_replied_at, do_not_email, contact_id, claim_token')
+      .not('outreach_sent_at', 'is', null).gte('outreach_sent_at', since).order('outreach_sent_at', { ascending: false }).limit(2000);
+    if (includeTest !== 'true') q = q.eq('is_test', false);
+    const { data: leads, error } = await q;
+    if (error) throw error;
+    const ids = (leads || []).map((l) => l.id);
+    const byLead = {};
+    if (ids.length) {
+      const { data: evs } = await supabase.from('marketing_events').select('lead_id, event, created_at').in('lead_id', ids).order('created_at', { ascending: true });
+      for (const e of evs || []) { (byLead[e.lead_id] ||= {})[e.event] = (byLead[e.lead_id][e.event] || 0) + 1; (byLead[e.lead_id]._first ||= {})[e.event] ||= e.created_at; }
+    }
+    // Published: any live site owned by the lead's contact.
+    const contactIds = (leads || []).map((l) => l.contact_id).filter(Boolean);
+    const publishedByContact = new Set();
+    if (contactIds.length) {
+      const { data: sites } = await supabase.from('sites').select('owner_contact_id, status').in('owner_contact_id', contactIds).eq('status', 'live').is('deleted_at', null);
+      for (const s of sites || []) publishedByContact.add(s.owner_contact_id);
+    }
+    const wantV = vertical ? require('../lib/verticalConfig').resolveVerticalSlug(vertical) : null;
+    const rows = (leads || []).filter((l) => !wantV || require('../lib/verticalConfig').resolveVerticalSlug(l.template_slug || '') === wantV).map((l) => {
+      const ev = byLead[l.id] || {};
+      return {
+        id: l.id, business: l.company_name, firstName: l.first_name, email: l.email, vertical: l.template_slug, state: l.region, stage: l.stage,
+        sentAt: l.outreach_sent_at, step: l.outreach_step, status: l.outreach_status,
+        opened: !!(l.outreach_opened_at || ev.email_open), opens: (l.outreach_open_count || 0) + (ev.email_open || 0),
+        clicked: !!ev.claim_page_view, engaged: !!(ev.claim_cta_click || ev.claim_see_live_click),
+        signupStart: !!ev.signup_start, signedUp: !!ev.signup_complete || l.stage === 'won',
+        published: publishedByContact.has(l.contact_id), replied: !!l.outreach_replied_at, unsubscribed: !!l.do_not_email,
+        touch2: !!ev.email_sent_touch2, firstClickAt: ev._first?.claim_page_view || null,
+      };
+    });
+    const count = (k) => rows.filter((r) => r[k]).length;
+    const totals = { sent: rows.length, opened: count('opened'), clicked: count('clicked'), engaged: count('engaged'), signupStart: count('signupStart'), signedUp: count('signedUp'), published: count('published'), replied: count('replied'), unsubscribed: count('unsubscribed'), touch2: count('touch2') };
+    return res.json({ success: true, totals, rows });
+  } catch (err) {
+    console.error('[leadgen] funnel failed:', err.message);
+    return res.status(500).json({ success: false, message: 'Could not load the funnel.' });
+  }
 });
 
 module.exports = router;
