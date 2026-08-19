@@ -54,13 +54,13 @@ async function signup(req, res) {
     // without this the owner's "View site" / the Claim page's "your site" is dead
     // until publish (found in the #8 rehearsal, 2026-08-19). No-op under the
     // wildcard Worker (TENANT_WILDCARD_ROUTING=true).
-    let domain = null;
-    try { domain = await attachSiteDomain(result.site.siteId); }
-    catch (e) { domain = { error: e.message }; console.error('[onboarding.signup] attach host failed (site still provisioned):', e.message); }
+    let hostWiring = null;
+    try { hostWiring = await attachSiteDomain(result.site.siteId); }
+    catch (e) { hostWiring = { error: e.message }; console.error('[onboarding.signup] attach host failed (site still provisioned):', e.message); }
 
     res.json({
       ok: true,
-      domain,
+      domain: hostWiring,
       siteId: result.site.siteId,
       subdomain: result.site.subdomain,
       previewUrl: `https://${result.site.subdomain}.${ZONE}`,
