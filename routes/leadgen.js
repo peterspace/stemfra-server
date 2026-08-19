@@ -31,6 +31,7 @@ const gmailOutreach = require('../lib/gmailOutreach');
 const leadgenCall = require('../lib/leadgenCall');
 const { fillOutreachLinks } = require('../lib/demoLinks');
 const { sendClaimEmail } = require('../lib/claimSend');
+const { timezoneForLead, nextLocalTime } = require('../lib/leadTimezone');
 
 const router = express.Router();
 
@@ -303,6 +304,18 @@ router.post('/send-outreach', async (req, res) => {
   }
   if (mode === 'claim') {
     try {
+      // Send window (2026-08-19): unless the reviewer asks to send now, queue
+      // the lead for the next send hour in ITS OWN timezone (US state → zone);
+      // the sequencer sends touch 1 when due (outreach_status='scheduled').
+      const { data: sw } = await supabase.from('crm_settings').select('value').eq('key', 'leadgen_send_window').maybeSingle();
+      const win = sw?.value || {};
+      if (win.enabled && !req.body?.sendNow) {
+        const tz = timezoneForLead(lead);
+        const hour = Number.isInteger(win.local_hour) ? win.local_hour : 11;
+        const at = nextLocalTime(tz, hour);
+        await supabase.from('leads').update({ outreach_status: 'scheduled', outreach_scheduled_for: at.toISOString(), review_status: 'approved', outreach_sent_by: user.id, last_activity_at: new Date().toISOString() }).eq('id', leadId);
+        return res.json({ success: true, mode: 'claim', scheduled: true, scheduledFor: at.toISOString(), timezone: tz, localHour: hour, sentFrom: process.env.MARK_EMAIL || 'mark@stemfra.com' });
+      }
       const out = await sendClaimEmail(lead, { touch: 1, step: 1, byUserId: user.id });
       return res.json({ success: true, mode: 'claim', ...out, sentFrom: process.env.MARK_EMAIL || 'mark@stemfra.com' });
     } catch (err) {
