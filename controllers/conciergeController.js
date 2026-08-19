@@ -154,6 +154,8 @@ async function callConfig(req, res) {
     if (!team?.length || !sales) return res.status(503).json({ error: 'Calls are not available right now.' });
 
     return res.json({
+      // Team out-of-office → the booking page shows the notice (slots inside are hidden by the engine).
+      outOfOffice: await (async () => { const o = require('../lib/outOfOffice'); const p = await o.currentOrNext(); return p ? { from: p.from, to: p.to, note: p.note || null, label: o.describe(p) } : null; })(),
       siteId: site.id,
       timeZone: site.time_zone,
       teamMemberId: team[0].id,

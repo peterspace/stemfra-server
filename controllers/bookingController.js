@@ -15,6 +15,13 @@ const { sendOwnerNewBookingEmail } = require('./../lib/bookingEmails');
 const { resolveTenantEmailBrand } = require('../lib/tenantEmailBrand');
 // Support-site extras (P16.4b): Meet event on booking + host free/busy filter.
 const { isSupportSite, createSupportCallMeet, filterSlotsByHostBusy } = require('../lib/supportMeet');
+// isSupportSite() above takes a site ROW; availability only has the id.
+const supportIdCache = new Map();
+async function isSupportSiteId(siteId) {
+  if (supportIdCache.has(siteId)) return supportIdCache.get(siteId);
+  const { data } = await supabase.from('sites').select('subdomain').eq('id', siteId).maybeSingle();
+  const v = isSupportSite(data); supportIdCache.set(siteId, v); return v;
+}
 const { buildBookingIcsAttachment } = require('../lib/ics');
 const getTenantEmailBits = (siteId) => resolveTenantEmailBrand(siteId);
 
@@ -66,6 +73,12 @@ const computeAvailability = async ({ siteId, teamMemberId, serviceId, date, allo
     return day >= s.startOf('day') && day <= e.endOf('day');
   });
   if (isOff) return { ok: true, slots: [], reason: 'off', duration, zone };
+  // Stemfra TEAM out-of-office (crm_settings.out_of_office) applies to the
+  // support site's own booking (the marketing /book-a-call uses it): no slots
+  // while the team is away, same source as setup calls + Mark's voice handoff.
+  if (await isSupportSiteId(siteId) && await require('../lib/outOfOffice').isOutOfOffice(day.toFormat('yyyy-MM-dd'))) {
+    return { ok: true, slots: [], reason: 'off', duration, zone };
+  }
 
   // Working windows for this weekday (weekly_recurring rules matching dow)
   const windows = (rules || [])

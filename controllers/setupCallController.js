@@ -14,7 +14,7 @@ function rateLimited(ip, max = 8, windowMs = 60000) {
 }
 
 // GET /api/setup-call/config — window + whether booking is live (for the UI).
-function config(_req, res) { res.json(setupCall.publicConfig()); }
+async function config(_req, res) { res.json(await setupCall.publicConfig()); }
 
 // GET /api/setup-call/month?year=&month= — dates with ≥1 open slot.
 async function month(req, res) {

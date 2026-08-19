@@ -36,7 +36,9 @@ function relayUrl(req) {
 // we are inside the transfer window (default 9-18 in TRANSFER_TZ). The brain
 // only OFFERS a transfer when this is true; outside the window it promises a
 // same-day follow-up instead.
+let oooActive = null; // refreshed per call (see below)
 function transferAvailable() {
+  if (oooActive) return false;                 // team out of office: never transfer live
   if (!process.env.STAFF_TRANSFER_PHONE) return false;
   const tz = process.env.TRANSFER_TZ || 'America/New_York';
   const [start, end] = (process.env.TRANSFER_HOURS || '9-18').split('-').map(Number);
@@ -112,6 +114,13 @@ function createMarkerFilter(markers, emit) {
 // One live phone conversation over the ConversationRelay WebSocket.
 function handleRelay(ws) {
   const session = { history: [], from: null, callSid: null, abort: null, direction: 'inbound', leadContext: null, leadId: null, finalized: false, identity: null, actionsTaken: [] };
+  // Out-of-office (crm_settings.out_of_office): refreshed per call, drives
+  // transferAvailable() + the prompt's OOO line.
+  require('../lib/outOfOffice').currentOrNext().then((p) => {
+    const { DateTime } = require('luxon');
+    const today = DateTime.now().setZone('America/New_York').toFormat('yyyy-MM-dd');
+    oooActive = p && p.from <= today && today <= p.to ? { ...p, label: require('../lib/outOfOffice').describe(p), back: DateTime.fromISO(p.to, { zone: 'America/New_York' }).plus({ days: 1 }).toFormat('MMMM d') } : null;
+  }).catch(() => { oooActive = null; });
 
   ws.on('message', async (raw) => {
     let msg;
@@ -164,6 +173,7 @@ function handleRelay(ws) {
             leadContext: session.leadContext,
             from: session.from,
             transferAvailable: transferAvailable(),
+            oooNote: oooActive ? `OUT OF OFFICE: the Stemfra team is away ${oooActive.label}${oooActive.note ? ` (${oooActive.note})` : ''}. Do NOT offer a live transfer or a same-day callback. Take their details as usual and say a teammate will follow up right after ${oooActive.back}. Everything self-serve still works: they can start free at stemfra dot com any time.` : '',
             accountContext: session.identity ? session.identity.contextString : null,
             signal: session.abort.signal,
             onToken,
