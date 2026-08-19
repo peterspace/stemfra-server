@@ -37,6 +37,37 @@ COMMISSION_MODEL.md. NOTHING is pushed to GitHub until Peter approves._
 | 9 | **Demo/test data isolated from real-user data** (leads, sites, payments, monitor, reports) | ✅ code 2026-08-18 (server + ops, NOT pushed) | ONE predicate `lib/testData.js` (`siteKind` = real / demo (`is_starter`) / test (`is_test`)) now used by the commission meter, auto-collect + membership-renewal sweepers, compliance/books rollups, admin site list + monitor. Test tenants: staff **Mark as test** (CRM Customer Sites kebab, `POST /api/admin/sites/:id/test-flag`) or automatic at signup for `TEST_EMAIL_DOMAINS` (stemfra.com, example.com). `leads.is_test` (backfilled 2) hidden from the pipeline by default (toggle). Kind badges + filter on Sites/Monitor. **Clean up test data**: `scripts/cleanup-test-data.js` (dry-run default, `--apply`) + `POST /api/admin/test-data/cleanup` + CRM button with preview→confirm; scope = test sites (+orphan owner), test leads, test legal records, smoke runs; never demo/real. Dry run today = hcltech + hcltech-2 (Peter's call to purge). Use a test-domain email for #8. |
 | 10 | **Release-checklist advice** | ✅ | See below. |
 
+## FINAL END-TO-END TEST (before the first 100 leads) — agreed 2026-08-19
+
+**Persona:** `englishwithpeter@gmail.com` (already on the server's TEST_EMAILS allowlist →
+the tenant auto-flags `is_test`; purge later with Clean up test data), phone = Peter's
+mobile (the one on the Marcus Argyle contact, so Mark's identified-caller path works),
+business: a fictional NY barbershop. Peter drives the inbox/phone; Claude drives the CRM
+and verifies every stage in the DB/Funnel. Team is out of office Aug 19–27 (CRM → Setup
+Calls), so the "book a setup call" leg is verified as **blocked with notice**, then
+re-verified open once the period is removed.
+
+| # | Leg | How | Proof |
+|---|---|---|---|
+| 1 | Lead in the CRM | Lead Pipeline → Add Lead (business, first/last, email above, phone, state NY, vertical barber) or a real Fetch Leads run with a seeded row | lead exists, Coverage unaffected |
+| 2 | Outreach email (touch 1) | Review Queue → Approve with "Send at the recipient's local time" ON (queued for 11:00 ET) or **Send now** | inbox: "{Business}, this website is for you"; Funnel: sent; open pixel → opened |
+| 3 | Claim page | click CLAIM MY WEBSITE in the email | `stemfra.com/claim/<uuid>` loads with the name, countdown, live demo; Funnel: clicked |
+| 4 | Signup | CLAIM MY WEBSITE → CMS signup prefilled → **Google sign-up** (Peter) and email/password (fallback) | account + site provisioned (`is_test`), legal ledger 3 rows, lead **won**, Funnel: signup start → signed up |
+| 5 | Stacy onboarding | CMS dashboard → Stacy checklist: set name/brand, services, team, hours, address, hero copy; ask "where do I change X" (CMS map) | checklist progress; content saved; Stacy answers from `cms_map` |
+| 6 | Publish | Publish page (required ✓) → Go live | site live at `{sub}.stemfra.com`, prerender 200, `site_published` audit |
+| 7 | Domain purchase (REAL, cheap) | Settings → Domain → search a cheap TLD (.xyz/.online ≈ $5 first year) → Register | Porkbun order, apex + www attached (www fix), CF zone + Email Routing, `billing_charges` adjustment invoice email (PDF + reference), domain live with SSL |
+| 8 | Email forwarding (optional) | Settings → Domain → Email forwarding: alias → Peter's inbox | Cloudflare verification mail, alias works |
+| 9 | Test booking (visitor) | on the live site: book a cut (Peter's phone + email) | booking confirmation email + SMS to Peter; CMS Bookings shows it; owner alert |
+| 10 | Front Desk chat | ask prices/hours, book a FREE service in chat; leave details | lead in CMS Inbox; booking card; `agent_conversations` |
+| 11 | Mark call | Lead Pipeline → Call with AI on the test lead (outbound) + Peter calls in from his number (identified path) | Mark knows the Claim email, offers resend; identified caller greeted; OOO: no transfer, "back Aug 28" |
+| 12 | Commission loop | mark a booking collected → month-end invoice preview (`/commission/run` dry run) | invoice email correct (5% only) |
+| 13 | Setup-call booking | `/book-a-call` during OOO → notice + no slots; after removing the period → slot books a Meet | `setup_calls` row / Meet event |
+| 14 | Measurement | CRM Funnel row for the lead: every dot ● through Published; Coverage row if via Fetch Leads | screenshot |
+| 15 | Cleanup | Customer Sites → Clean up test data (preview → confirm) | tenant + lead + ledger rows gone; the purchased domain stays in Porkbun (let it lapse) |
+
+Then: flip `leadgen_sequencer` / `leadgen_auto_send` (/ `leadgen_auto_call` if wanted) in the CRM and
+run the first **100 barbershop leads** (Fetch Leads → review → approve; sends at 11:00 local).
+
 ## Release checklist (my additions to Peter's 10, ordered)
 
 **Must, before the 100-lead test:**
