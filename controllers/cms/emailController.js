@@ -105,7 +105,23 @@ async function createAlias(req, res) {
     await zones.enableEmailRouting(zone.id).catch(() => {});
 
     const dest = await zones.createDestination(destination);
-    const rule = await zones.createRoutingRule(zone.id, { aliasEmail, destination });
+    // Cloudflare refuses a forwarding rule until the destination inbox clicks
+    // its verification link (error 2054). First-time destinations therefore
+    // return a friendly "check your inbox" instead of a 502 — the owner
+    // verifies, then taps Add again and the rule lands (Clean Cuts E2E,
+    // 2026-08-20).
+    let rule;
+    try {
+      rule = await zones.createRoutingRule(zone.id, { aliasEmail, destination });
+    } catch (e) {
+      if (/not verified|2054/i.test(e.message || '')) {
+        return res.status(202).json({
+          ok: false, pendingVerification: true,
+          error: `Almost there — Cloudflare just emailed a verification link to ${destination}. Open it, tap Verify, then add this address again.`,
+        });
+      }
+      throw e;
+    }
 
     logSiteActivity({
       siteId, action: 'email_alias_created', actorName: req.cmsUser.email || 'owner',
