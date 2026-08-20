@@ -83,7 +83,7 @@ async function resendClaimForLead(session) {
     await sendClaimEmail(lead, { touch: 1, step: lead.outreach_step || 1 });
     session.actionsTaken.push('resend_claim');
     const masked = String(lead.email).replace(/^(.).*(@.*)$/, '$1***$2');
-    return `Done: the "Claim your website" email was resent to ${masked}. Tell them to look for it now (also in spam/promotions).`;
+    return `Done: the "Claim your website" email was resent to ${masked}. Tell them to look for it now, and add the friendly heads-up that Gmail sometimes files our emails under the Promotions tab, so if it is not in their main inbox they should check Promotions (or spam).`;
   } catch (e) { return `Action failed: could not resend the email (${e.message}). Apologize and promise a teammate will send the link today.`; }
 }
 
