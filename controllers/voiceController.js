@@ -87,25 +87,98 @@ async function resendClaimForLead(session) {
   } catch (e) { return `Action failed: could not resend the email (${e.message}). Apologize and promise a teammate will send the link today.`; }
 }
 
-const MARKERS = ['[TRANSFER]', '[ACTION:reset_password]', '[ACTION:ticket]', '[ACTION:callback]', '[ACTION:resend_claim]'];
+// '[ACTION:capture_email' is a PREFIX marker: it carries a parameter (the
+// spoken email) and runs to the closing ']' — the filter below buffers until
+// then. All other markers are exact strings.
+const CAPTURE_PREFIX = '[ACTION:capture_email';
+
+// [ACTION:capture_email x@y.com] — the owner gave Mark an email on a cold
+// outbound call: save it on the lead and fire the Claim email (touch 1)
+// immediately, which also enrolls the lead in the normal email sequence.
+async function captureEmailForLead(session, emailRaw) {
+  if (!session.leadId) return 'Action refused: this call is not linked to a prospect lead. Offer to have a teammate follow up instead.';
+  const email = String(emailRaw || '').trim().toLowerCase().replace(/^[<"\s]+|[>",;.\s]+$/g, '');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    return `Action failed: "${String(emailRaw).slice(0, 60)}" does not look like a valid email address. Politely ask them to spell it once more, confirm it back, then retry the action.`;
+  }
+  try {
+    const { data: lead } = await supabase.from('leads').select('*').eq('id', session.leadId).maybeSingle();
+    if (!lead) return 'Action refused: the lead record was not found.';
+    if (lead.do_not_email) return 'Action refused: this person previously unsubscribed from our emails. Do not send; offer the text link instead.';
+    await supabase.from('leads').update({ email, last_activity_at: new Date().toISOString() }).eq('id', lead.id);
+    const { sendClaimEmail } = require('../lib/claimSend');
+    await sendClaimEmail({ ...lead, email }, { touch: 1, step: 1 });
+    session.actionsTaken.push('capture_email');
+    return `Done: ${email} is saved and the "Claim your website" email is on its way right now. Tell them to look for an email from Mark at Stemfra in the next minute or two (also in spam or promotions).`;
+  } catch (e) { return `Action failed: the email could not be sent (${e.message}). Apologize and promise a teammate will email the link today.`; }
+}
+
+// [ACTION:text_claim_link] — the owner agreed ON THE CALL to receive a text:
+// SMS the personal claim link to the lead's own number. Consent = their live
+// yes to Mark; one message, with an opt-out line.
+async function textClaimLinkForLead(session) {
+  if (!session.leadId) return 'Action refused: this call is not linked to a prospect lead.';
+  try {
+    const { data: lead } = await supabase.from('leads').select('id, phone, phone_country, company_name, claim_token, do_not_call').eq('id', session.leadId).maybeSingle();
+    if (!lead?.claim_token) return 'Action failed: no claim link exists for this lead. Offer to take their email instead.';
+    if (!lead.phone) return 'Action failed: no phone number is on file to text.';
+    const { twilioClient, twilioFrom } = require('../config/twilio');
+    if (!twilioClient || !twilioFrom) return 'Action failed: texting is not configured. Offer to take their email instead.';
+    const digits = String(lead.phone).replace(/\D/g, '');
+    const to = digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits.startsWith('1') ? `+${digits}` : null;
+    if (!to) return 'Action failed: the phone number on file does not look valid for texting. Offer to take their email instead.';
+    await twilioClient.messages.create({
+      from: twilioFrom, to,
+      body: `Stemfra: here is the website we built for ${lead.company_name || 'your business'} — https://stemfra.com/claim/${lead.claim_token} Free to claim, free to publish. Reply STOP to opt out.`,
+    });
+    await supabase.from('leads').update({ last_activity_at: new Date().toISOString() }).eq('id', lead.id);
+    supabase.from('marketing_events').insert({ lead_id: lead.id, event: 'claim_link_texted', metadata: { via: 'mark_call' } }).then(() => {}, () => {});
+    session.actionsTaken.push('text_claim_link');
+    return 'Done: the text with their website link was just sent to this number from Stemfra. Tell them it should arrive in a moment and they can tap it whenever convenient.';
+  } catch (e) { return `Action failed: the text could not be sent (${e.message}). Apologize and offer to take their email instead.`; }
+}
+
+const MARKERS = ['[TRANSFER]', '[ACTION:reset_password]', '[ACTION:ticket]', '[ACTION:callback]', '[ACTION:resend_claim]', '[ACTION:text_claim_link]', CAPTURE_PREFIX];
 function createMarkerFilter(markers, emit) {
   let pending = '';
   let checked = false;
   let marker = null;
   let full = '';
+  let inParam = false; // inside '[ACTION:capture_email …' waiting for ']'
+  const finishParam = () => {
+    const end = pending.indexOf(']');
+    if (end === -1) return false;               // still inside the marker
+    marker += pending.slice(0, end + 1);        // full '[ACTION:capture_email x@y.com]'
+    checked = true; inParam = false;
+    const rest = pending.slice(end + 1);
+    pending = '';
+    if (rest) emit(rest);
+    return true;
+  };
   return {
     onToken(t) {
       full += t;
       if (checked) return emit(t);
       pending += t;
+      if (inParam) { finishParam(); return; }
       if (markers.some((m) => pending.length < m.length && pending === m.slice(0, pending.length))) return; // could still become a marker
-      checked = true;
       const hit = markers.find((m) => pending.startsWith(m));
-      if (hit) { marker = hit; pending = pending.slice(hit.length); }
+      if (hit === CAPTURE_PREFIX && !pending.slice(hit.length).includes(']') ) {
+        marker = hit; inParam = true; pending = pending.slice(hit.length);
+        finishParam();
+        return;
+      }
+      checked = true;
+      if (hit === CAPTURE_PREFIX) {
+        const after = pending.slice(hit.length);
+        const end = after.indexOf(']');
+        marker = hit + after.slice(0, end + 1);
+        pending = after.slice(end + 1);
+      } else if (hit) { marker = hit; pending = pending.slice(hit.length); }
       if (pending) emit(pending);
       pending = '';
     },
-    flush() { if (!checked && pending) { checked = true; emit(pending); pending = ''; } },
+    flush() { if (!checked && pending) { checked = true; if (!inParam) { emit(pending); } pending = ''; } },
     marker: () => marker,
     spoken: () => (marker ? full.slice(marker.length) : full),
   };
@@ -199,9 +272,14 @@ function handleRelay(ws) {
           // outcome. Markers on the chained turn are ignored (no action loops).
           const action = marker.slice(8, -1);
           console.log('[voice] ⚙ account action:', action, session.identity ? '(identified)' : '(NOT identified)');
-          const result = action === 'resend_claim'
+          const [verb, ...actionArgs] = action.split(/\s+/);
+          const result = verb === 'resend_claim'
             ? await resendClaimForLead(session)   // outbound prospecting: resend the Claim email to the source lead
-            : await voiceAccount.executeVoiceAction(action, session.identity, session);
+            : verb === 'capture_email'
+              ? await captureEmailForLead(session, actionArgs.join(' '))
+              : verb === 'text_claim_link'
+                ? await textClaimLinkForLead(session)
+                : await voiceAccount.executeVoiceAction(action, session.identity, session);
           console.log('[voice] ⚙ result:', String(result).slice(0, 140));
           session.history.push({ role: 'system', content: `[system note] ${result}` });
           await speakTurn();

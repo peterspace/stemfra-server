@@ -235,6 +235,8 @@ server.listen(PORT, () => {
   // Lead-gen follow-up sequencer (A2 → read-gated call → A8 → A20). Inert until
   // crm_settings.leadgen_sequencer.enabled = true.
   startOutreachSequencer();
+  // Phone-only cohort: Mark's automated first-contact calls (split funnel).
+  require('./lib/outboundCallSweeper').startOutboundCallSweeper();
   // Commission (P13): meter the just-closed month → billing_charges kind='commission'.
   // Gated OFF (COMMISSION_SCHEDULER_ENABLED=true to arm); manual /commission/run meanwhile.
   startCommissionScheduler();
