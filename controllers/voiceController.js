@@ -109,7 +109,7 @@ async function captureEmailForLead(session, emailRaw) {
     const { sendClaimEmail } = require('../lib/claimSend');
     await sendClaimEmail({ ...lead, email }, { touch: 1, step: 1 });
     session.actionsTaken.push('capture_email');
-    return `Done: ${email} is saved and the "Claim your website" email is on its way right now. Tell them to look for an email from Mark at Stemfra in the next minute or two (also in spam or promotions).`;
+    return `Done: ${email} is saved and the "Claim your website" email is on its way right now. Tell them to look for an email from Mark at Stemfra in the next minute or two, and add the friendly heads-up that since this is the first email from us, Gmail sometimes files it under the Promotions tab, so if it is not in their main inbox they should check Promotions (or spam).`;
   } catch (e) { return `Action failed: the email could not be sent (${e.message}). Apologize and promise a teammate will email the link today.`; }
 }
 
