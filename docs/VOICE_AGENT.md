@@ -269,3 +269,35 @@ volume._
   branded "Claim your website" email (date, subject, opened?) and the goal is to get the prospect to
   claim; new marker **`[ACTION:resend_claim]`** resends touch 1 (`lib/claimSend.js`) to the call's
   lead, with a system-note result Mark relays. Guards: outbound lead calls only; never `do_not_email`.
+
+## 2026-08-20 — Split funnel: cold first-contact calls (phone-only cohort)
+The first-100-leads runs proved the no-website ICP is PHONE-ONLY (no crawlable
+email anywhere). Split funnel: leads WITH email ride the Claim-email sequence;
+leads WITHOUT email get Mark as touch 1. Server commit `564b18f`, deployed.
+- **`lib/outboundCallSweeper.js`** — every 5 min, ONE call per sweep to the
+  highest-scored eligible lead (email NULL · phone · !do_not_call · !is_test ·
+  needs_review/approved · `first_touch_at` NULL — stamped BEFORE dialing so a
+  crash never redials). Window 11:00–19:00 in the LEAD's timezone
+  (`LEADGEN_CALL_START_HOUR`/`END_HOUR`). Gates: prod-only
+  (`OUTBOUND_CALL_SWEEPER_DEV=true` opts a dev box in), CRM master switch
+  `crm_settings.leadgen_auto_call.enabled`, daily cap
+  `crm_settings.leadgen_call_daily_cap` (default 15, counted as email-null
+  leads first-touched since UTC midnight). Started from index.js after the
+  outreach sequencer.
+- **Cold-call context** (`buildLeadContext`): when `outreach_sent_at` is NULL
+  the intro says FIRST-CONTACT and instructs Mark to never imply an email was
+  sent; cold greeting names the vertical ("We build websites for barbershops —
+  and we actually already set one up for X, free to claim"). Goal: under 3
+  minutes, preference order text → email → friendly exit, never pressure.
+- **New agent actions** (voiceController marker protocol):
+  - **`[ACTION:text_claim_link]`** — only after a clear yes; SMSes
+    `https://stemfra.com/claim/<claim_token>` with a STOP opt-out, logs
+    `claim_link_texted` to marketing_events. Needs claim_token + phone.
+  - **`[ACTION:capture_email their@email.com]`** — Mark repeats the address
+    back letter-perfect first; server validates, refuses `do_not_email`, saves
+    `leads.email`, sends the Claim email instantly (`sendClaimEmail` touch 1),
+    and Mark confirms only on the system note. The streamed-token marker filter
+    gained a parameterized-marker mode (`CAPTURE_PREFIX` + buffer-until-`]`),
+    unit-tested across arbitrary token splits.
+  - `[ACTION:resend_claim]` is now gated on the lead having BOTH a claim_token
+    and an email (cold leads have no email yet → capture instead).
