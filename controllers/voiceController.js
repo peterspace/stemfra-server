@@ -119,7 +119,10 @@ async function captureEmailForLead(session, emailRaw) {
 async function textClaimLinkForLead(session) {
   if (!session.leadId) return 'Action refused: this call is not linked to a prospect lead.';
   try {
-    const { data: lead } = await supabase.from('leads').select('id, phone, phone_country, company_name, claim_token, do_not_call').eq('id', session.leadId).maybeSingle();
+    const { data: lead } = await supabase.from('leads').select('id, phone, phone_country, company_name, first_name, contact_name, claim_token, do_not_call').eq('id', session.leadId).maybeSingle();
+    const smsFirstName = lead
+      ? String(lead.first_name || (lead.contact_name && !/^owner/i.test(lead.contact_name) ? lead.contact_name : '') || '').trim().split(/\s+/)[0]
+      : '';
     if (!lead?.claim_token) return 'Action failed: no claim link exists for this lead. Offer to take their email instead.';
     if (!lead.phone) return 'Action failed: no phone number is on file to text.';
     const { twilioClient, twilioFrom } = require('../config/twilio');
@@ -129,7 +132,7 @@ async function textClaimLinkForLead(session) {
     if (!to) return 'Action failed: the phone number on file does not look valid for texting. Offer to take their email instead.';
     await twilioClient.messages.create({
       from: twilioFrom, to,
-      body: `Stemfra: here is the website we built for ${lead.company_name || 'your business'} — https://stemfra.com/claim/${lead.claim_token} Free to claim, free to publish. Reply STOP to opt out.`,
+      body: `Hi${smsFirstName ? ` ${smsFirstName}` : ''}, here is the link to your website:\nhttps://stemfra.com/claim/${lead.claim_token}\nEnjoy! Mark at Stemfra. Reply STOP to opt out.`,
     });
     await supabase.from('leads').update({ last_activity_at: new Date().toISOString() }).eq('id', lead.id);
     supabase.from('marketing_events').insert({ lead_id: lead.id, event: 'claim_link_texted', metadata: { via: 'mark_call' } }).then(() => {}, () => {});
@@ -527,7 +530,7 @@ function handleOutboundStatus(req, res) {
   if (twilioClient && smsFrom && meta.phone) {
     twilioClient.messages.create({
       to: meta.phone, from: smsFrom,
-      body: `Hi${first ? ` ${first}` : ''}, Mark from Stemfra — I just tried to call about the note we emailed you. Reply to the email any time, or call this number back when it suits you.`,
+      body: `Hi${first ? ` ${first}` : ''}, Mark from Stemfra here. I just tried to call about the note we emailed you. Reply to the email any time, or call this number back when it suits you.`,
     }).then(() => console.log('[voice] 📱 missed-call SMS sent for', CallSid))
       .catch((e) => console.error('[voice] missed-call SMS failed:', e.message));
   }
