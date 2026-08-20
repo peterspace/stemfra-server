@@ -37,6 +37,24 @@ COMMISSION_MODEL.md. NOTHING is pushed to GitHub until Peter approves._
 | 9 | **Demo/test data isolated from real-user data** (leads, sites, payments, monitor, reports) | ✅ code 2026-08-18 (server + ops, NOT pushed) | ONE predicate `lib/testData.js` (`siteKind` = real / demo (`is_starter`) / test (`is_test`)) now used by the commission meter, auto-collect + membership-renewal sweepers, compliance/books rollups, admin site list + monitor. Test tenants: staff **Mark as test** (CRM Customer Sites kebab, `POST /api/admin/sites/:id/test-flag`) or automatic at signup for `TEST_EMAIL_DOMAINS` (stemfra.com, example.com). `leads.is_test` (backfilled 2) hidden from the pipeline by default (toggle). Kind badges + filter on Sites/Monitor. **Clean up test data**: `scripts/cleanup-test-data.js` (dry-run default, `--apply`) + `POST /api/admin/test-data/cleanup` + CRM button with preview→confirm; scope = test sites (+orphan owner), test leads, test legal records, smoke runs; never demo/real. Dry run today = hcltech + hcltech-2 (Peter's call to purge). Use a test-domain email for #8. |
 | 10 | **Release-checklist advice** | ✅ | See below. |
 
+## FINAL END-TO-END TEST — ✅ RUN 2026-08-20 (persona "Clean Cuts" / eenglishwithpeter@gmail.com)
+
+Result per leg (details + the 10 bugs it caught: SESSION_HANDOFF 2026-08-20 block):
+1 lead ✓ · 2 touch-1 email ✓ (opened; Promotions — content-driven, accepted) · 3 Claim page ✓ ·
+4 signup ✓ email/password (Google = Peter later) · 5 Stacy ✓ (contact form card, headline draft,
+Open-place rows) · 6 publish ✓ (gate now REQUIRES billing details + tenant-own name/address/
+phone/email vs the clone source) · 7 domain ✓ cleancutsbarber.click $4 + $4 invoice + propagation
+flow + ACTIVE w/ SSL · 8 email forwarding ✓ hello@ → inbox (arrived) · 9 booking ✓ emails
+(brand fixed); SMS accepted by Twilio, carrier receipt pending · 10 Front Desk chat lead ✓ ·
+11 Mark call — Peter, later · 12 commission dry run ✓ $36 GMV → $1.80 · 13 setup-call OOO
+blocked ✓ (re-verify open after Aug 27) · 14 funnel dots ✓ · 15 cleanup PENDING (CRM Clean up
+test data + Airwallex: VOID the $4 domain invoice and any pending Clean Cuts charges + let the
+.click lapse).
+
+Multi-site "+ New site" is HIDDEN in prod builds until ROADMAP P19 closes (billing per business,
+fees stamp, is_test inheritance, theme pick). Sequencer sweeps every 5 min; domain activation
+floor 10 min.
+
 ## FINAL END-TO-END TEST (before the first 100 leads) — agreed 2026-08-19
 
 **Persona:** `englishwithpeter@gmail.com` (already on the server's TEST_EMAILS allowlist →
