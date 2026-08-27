@@ -8,11 +8,30 @@
 > (the two rejections below both came from describing flows that did not exist or sat behind
 > a login): (1) the announcement email's opt-in link → public confirmation page →
 > `site_customers.sms_opt_in` + timestamp + source (LIVE since 2026-08-27); (2) an unchecked
-> checkbox at the booking "Your details" step with the four disclosures (BUILD BEFORE
-> SUBMITTING). Imported `smsOptIn` flags are NOT declared and NOT sufficient — only consent
-> we recorded ourselves triggers sends. Samples shaped "[Business Name] via Stemfra: …
-> Reply STOP to opt out."; STOP → `sms_opt_in=false` for that customer. Host flow screenshots
-> at a public URL and extend the privacy policy's SMS clause to cover this program.
+> checkbox at the booking "Your details" step with the four disclosures (✅ BUILT + live-
+> verified 2026-08-27: BookingForm + MultiServiceBookingForm; server records
+> `sms_opt_in` + timestamp + source `booking_form`). Imported `smsOptIn` flags are NOT
+> declared and NOT sufficient — only consent we recorded ourselves triggers sends. Samples
+> shaped "[Business Name] via Stemfra: … Reply STOP to opt out."; STOP → `sms_opt_in=false`
+> for that customer. **Proof page LIVE: stemfra.com/sms-consent, second section ("Customer
+> messages sent for businesses on Stemfra") with real screenshots of both flows.**
+> Remaining before submission: extend the privacy policy's SMS clause to name this program.
+>
+> **Ready-to-paste fields for the SECOND campaign (drafted 2026-08-27; same brand):**
+>
+> | Field | Value |
+> |---|---|
+> | Use case | Low-Volume Mixed (reminders + review invitations + occasional updates) |
+> | Campaign description | "Stemfra is a website and booking platform for local service businesses (salons, barbershops, gyms, wellness studios). This campaign sends messages on behalf of those businesses to THEIR customers who personally opted in: appointment reminders, a review invitation after a visit, and occasional updates such as a birthday greeting. Every message names the business it is sent for and carries STOP/HELP." |
+> | Message flow / opt-in description | "End customers opt in personally, one of two ways, both shown with screenshots at https://stemfra.com/sms-consent (section: Customer messages sent for businesses on Stemfra). (1) When booking an appointment on a business's website, the 'Your details' step shows an unchecked checkbox with the full consent wording ('Text me appointment reminders and occasional updates from this business. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help.'); booking does not require ticking it. (2) A business may email its existing customers a personal 'prefer text reminders?' link; tapping it records the opt-in and shows a confirmation page restating the STOP instruction. Consent is recorded per customer with a timestamp and source. Businesses cannot opt customers in on their behalf, and imported contact lists are never texted. Privacy policy: https://stemfra.com/privacy · Terms: https://stemfra.com/terms" |
+> | Sample 1 | "Clean Cuts Barbers via Stemfra: reminder, your Classic Cut is tomorrow at 2:30 PM. Reply STOP to opt out." |
+> | Sample 2 | "Clean Cuts Barbers via Stemfra: thanks for visiting! If you have a moment, we'd love a Google review: https://stemfra.com/r/abc. Reply STOP to opt out." |
+> | Sample 3 | "Clean Cuts Barbers via Stemfra: happy birthday from all of us! We hope it's a great one. Reply STOP to opt out." |
+> | Opt-in keywords / message | (blank — web opt-in only, no text-to-join) |
+> | HELP response | "Messages sent by Stemfra on behalf of the business you opted in with. Support: support@stemfra.com. Reply STOP to unsubscribe." |
+> | Opt-out handling | STOP honored automatically (Advanced Opt-Out) + `site_customers.sms_opt_in` set false via inbound webhook |
+> | Embedded links / phone numbers | Yes (review links on our own domain — never public shorteners) / No |
+> | Number(s) | Buy 1–2 NEW local numbers for this campaign only. Never attach Mark's/CRM numbers. |
 
 _Prepared 2026-07-22 as part of P12 Wave 1 (`docs/P12_PLAN.md` §4). This is a
 **Peter console action**: Twilio Console → Messaging → Regulatory Compliance →
