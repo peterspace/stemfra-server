@@ -63,17 +63,15 @@ end-to-end on clean-cuts 2026-08-27.
 | Client CSV import | ✅ SHIPPED | CMS Clients → Import panel (column mapping + preview) + admin variant |
 | "We miss you" win-back | ✅ SHIPPED (N4) | Fires at ~60 days lapsed (Peter's note says 1 month — knob decision below) |
 | Birthday + first-visit anniversary | ✅ SHIPPED (N4) | Birthday once/year from site_customers.birthdate; anniversary ~365d after first visit; plus first-visit follow-up + no-show emails (bonus) |
-| **Import ANNOUNCEMENT blast** | 🟡 BUILD 1 | "We have a new website, book online" email to imported clients + SMS opt-in capture — import today is silent |
-| **Seasonal holiday messages** | 🟡 BUILD 2 | Christmas, New Year, Thanksgiving, July 4th; fixed calendar, per-site toggle, owner-editable copy |
+| **Import ANNOUNCEMENT blast** | ✅ SHIPPED 2026-08-27 | `lib/announcementEmail.js` + `POST /api/cms/customers/announce` + the post-import button; once-ever per customer, batches of 200, live sites only; carries the **SMS opt-in link** (`/api/site-emails/sms-optin`, signed token → sms_opt_in + consent timestamp/source). Live-verified E2E on clean-cuts (send + opt-in click) |
+| **Seasonal holiday messages** | 🟡 BUILD 2 (next) | Christmas, New Year, Thanksgiving, July 4th; fixed calendar, per-site toggle, owner-editable copy |
 | SMS variants of lifecycle emails | 🟡 later | Lifecycle is email-only today; SMS needs per-customer opt-in (captured by the announcement + booking flow) |
 
-**Knob decisions (Peter):**
-1. Win-back timing: shipped at 60 days; the offer note says 1 month. Make it
-   per-site configurable, change the default to 30, or keep 60?
-2. Review-ask frequency: shipped ONCE-EVER per customer (anti-annoyance); the
-   offer note says after each visit. Recommendation: keep once-ever automatic +
-   the existing manual re-send; a per-visit ask risks unsubscribes and violates
-   the spirit of Google's guidelines.
+**Knob decisions (settled 2026-08-27, Peter: "go on as you recommend"):**
+1. Win-back timing: now PER-SITE (CMS Notifications → Automated emails →
+   Win-back → "Send after N days", 14–180) with the default moved 60 → 30.
+2. Review-ask frequency: stays ONCE-EVER automatic + the manual re-send on the
+   Clients page (per-visit asks risk unsubscribes and review-gating optics).
 
 ## 3. Compliance rails (bake in from day one)
 
