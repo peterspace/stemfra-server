@@ -444,6 +444,13 @@ router.post('/call-with-ai', async (req, res) => {
   if (lead.do_not_call) {
     return res.status(403).json({ success: false, message: 'This lead is on the Do Not Call list.' });
   }
+  // Policy (2026-08-27): Mark is INBOUND-ONLY. crm_settings.leadgen_auto_call
+  // is the master switch for EVERY outbound AI call, manual included; outbound
+  // calls are made by a human (the CRM dialer or a personal line).
+  const { data: aiSwitch } = await supabase.from('crm_settings').select('value').eq('key', 'leadgen_auto_call').maybeSingle();
+  if (!aiSwitch?.value?.enabled) {
+    return res.status(403).json({ success: false, message: 'Outbound AI calls are disabled (Mark is inbound-only). Call this lead yourself with the dialer.' });
+  }
   if (!leadgenCall.toE164(lead.phone, lead.phone_country)) {
     return res.status(400).json({ success: false, message: 'This lead has no usable phone number.' });
   }
