@@ -87,6 +87,42 @@ async function resendClaimForLead(session) {
   } catch (e) { return `Action failed: could not resend the email (${e.message}). Apologize and promise a teammate will send the link today.`; }
 }
 
+// [ACTION:do_not_call] — the person asked us to stop calling: record it and
+// end the call. One handler does flag + hangup together so Mark never loops
+// apologies while the request goes unrecorded (2026-08-27 fix; the first cold
+// cohort had a "stop calling" request that was never persisted).
+async function markDoNotCall(session) {
+  try {
+    if (session.leadId) {
+      await supabase.from('leads').update({ do_not_call: true, last_activity_at: new Date().toISOString() }).eq('id', session.leadId);
+    }
+    session.actionsTaken.push('do_not_call');
+    scheduleHangup(session, 6000);
+    return 'Done: this number is marked do-not-call and will never be called again. Say ONE short apology and goodbye; the call ends on its own. Do not repeat yourself.';
+  } catch (e) { return `Action failed (${e.message}). Still apologize once and end the call politely.`; }
+}
+
+// [ACTION:end_call] — hang up shortly, leaving the TTS a moment to speak the
+// short goodbye that follows the marker. Used for voicemail systems and
+// dead-end conversations (the first cohort had Mark chatting with voicemail
+// menus for minutes and logging them as conversations).
+function endCallSoon(session) {
+  session.actionsTaken.push('end_call');
+  scheduleHangup(session, 9000);
+  return 'The call ends in a few seconds. Say nothing further after your current sentence.';
+}
+
+function scheduleHangup(session, delayMs) {
+  if (!session.callSid || session.hangupScheduled) return;
+  session.hangupScheduled = true;
+  const { twilioClient } = require('../config/twilio');
+  setTimeout(() => {
+    twilioClient?.calls(session.callSid).update({ status: 'completed' })
+      .then(() => console.log('[voice] ⏹ scheduled hangup executed —', session.callSid))
+      .catch((e) => console.error('[voice] scheduled hangup failed:', e.message));
+  }, delayMs);
+}
+
 // '[ACTION:capture_email' is a PREFIX marker: it carries a parameter (the
 // spoken email) and runs to the closing ']' — the filter below buffers until
 // then. All other markers are exact strings.
@@ -141,7 +177,7 @@ async function textClaimLinkForLead(session) {
   } catch (e) { return `Action failed: the text could not be sent (${e.message}). Apologize and offer to take their email instead.`; }
 }
 
-const MARKERS = ['[TRANSFER]', '[ACTION:reset_password]', '[ACTION:ticket]', '[ACTION:callback]', '[ACTION:resend_claim]', '[ACTION:text_claim_link]', CAPTURE_PREFIX];
+const MARKERS = ['[TRANSFER]', '[ACTION:reset_password]', '[ACTION:ticket]', '[ACTION:callback]', '[ACTION:resend_claim]', '[ACTION:text_claim_link]', '[ACTION:do_not_call]', '[ACTION:end_call]', CAPTURE_PREFIX];
 function createMarkerFilter(markers, emit) {
   let pending = '';
   let checked = false;
@@ -280,6 +316,10 @@ function handleRelay(ws) {
             ? await resendClaimForLead(session)   // outbound prospecting: resend the Claim email to the source lead
             : verb === 'capture_email'
               ? await captureEmailForLead(session, actionArgs.join(' '))
+              : verb === 'do_not_call'
+                ? await markDoNotCall(session)
+              : verb === 'end_call'
+                ? endCallSoon(session)
               : verb === 'text_claim_link'
                 ? await textClaimLinkForLead(session)
                 : await voiceAccount.executeVoiceAction(action, session.identity, session);
@@ -504,14 +544,31 @@ function handleAmd(req, res) {
   res.sendStatus(204);
   if (!CallSid || !AnsweredBy || !String(AnsweredBy).startsWith('machine')) return;
   const meta = leadgenCall.getCallMeta(CallSid);
+  dropVoicemail(CallSid, meta).catch((e) => console.error('[voice] voicemail drop failed:', e.message));
+}
+
+// The voicemail drop must match what the lead actually experienced: cold leads
+// (never emailed) get a self-contained message with a callback path; warm leads
+// get the "note we emailed you" version. (2026-08-27 fix — cold voicemails
+// previously claimed we had emailed them.)
+async function dropVoicemail(CallSid, meta) {
   const first = meta?.name && !/^owner/i.test(meta.name) ? String(meta.name).trim().split(/\s+/)[0] : null;
-  const msg = `Hi${first ? ` ${first}` : ''}, this is Mark with Stemfra following up on the note we emailed you — sorry to have missed you. I will send you an email as well, and you can reply there any time. Have a great day.`;
-  console.log('[voice] 🤖 voicemail detected on', CallSid, '→ dropping message');
-  twilioClient.calls(CallSid).update({
-    twiml: `<Response><Pause length="1"/><Say>${escapeXml(msg)}</Say><Hangup/></Response>`,
-  }).catch((e) => console.error('[voice] voicemail drop failed:', e.message));
+  let warm = false;
+  let company = null;
   if (meta?.leadId) {
-    appendLeadNote(meta.leadId, `Outbound AI call reached voicemail — left a message. (${new Date().toISOString().slice(0, 10)})`)
+    const { data } = await supabase.from('leads').select('outreach_sent_at, company_name').eq('id', meta.leadId).maybeSingle();
+    warm = !!data?.outreach_sent_at;
+    company = data?.company_name || null;
+  }
+  const msg = warm
+    ? `Hi${first ? ` ${first}` : ''}, this is Mark with Stemfra following up on the note we emailed you. Sorry to have missed you. You can reply to the email any time, or call this number back. Have a great day.`
+    : `Hi${first ? ` ${first}` : ''}, this is Mark with Stemfra. We built a free website for ${company || 'your business'} with online booking. If you would like to see it, just call this number back any time. Have a great day.`;
+  console.log('[voice] 🤖 voicemail detected on', CallSid, '→ dropping', warm ? 'warm' : 'cold', 'message');
+  await twilioClient.calls(CallSid).update({
+    twiml: `<Response><Pause length="1"/><Say>${escapeXml(msg)}</Say><Hangup/></Response>`,
+  });
+  if (meta?.leadId) {
+    appendLeadNote(meta.leadId, `Outbound AI call reached voicemail — left a ${warm ? 'follow-up' : 'cold-intro'} message. (${new Date().toISOString().slice(0, 10)})`)
       .catch(() => {});
   }
 }
@@ -525,9 +582,23 @@ function handleOutboundStatus(req, res) {
   if (!CallSid || !['no-answer', 'busy', 'failed', 'canceled'].includes(String(CallStatus))) return;
   const meta = leadgenCall.getCallMeta(CallSid);
   if (!meta) return; // not one of our outbound AI calls
+  handleMissedOutbound(CallSid, CallStatus, meta).catch((e) => console.error('[voice] missed-call handling failed:', e.message));
+}
+
+// The missed-call SMS is a WARM-lead courtesy only: it references the email we
+// sent, so it must never go to the cold (never-emailed) cohort — those leads
+// have not consented to texts and the message would be false. (2026-08-27 fix:
+// the first cold cohort received 11 of these, all carrier-filtered.)
+async function handleMissedOutbound(CallSid, CallStatus, meta) {
+  let lead = null;
+  if (meta.leadId) {
+    const { data } = await supabase.from('leads').select('outreach_sent_at, do_not_call, do_not_email').eq('id', meta.leadId).maybeSingle();
+    lead = data;
+  }
+  const warm = !!lead?.outreach_sent_at;
   const smsFrom = process.env.VOICE_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER;
   const first = meta.name && !/^owner/i.test(meta.name) ? String(meta.name).trim().split(/\s+/)[0] : null;
-  if (twilioClient && smsFrom && meta.phone) {
+  if (warm && !lead?.do_not_call && twilioClient && smsFrom && meta.phone) {
     twilioClient.messages.create({
       to: meta.phone, from: smsFrom,
       body: `Hi${first ? ` ${first}` : ''}, Mark from Stemfra here. I just tried to call about the note we emailed you. Reply to the email any time, or call this number back when it suits you.`,
@@ -535,7 +606,7 @@ function handleOutboundStatus(req, res) {
       .catch((e) => console.error('[voice] missed-call SMS failed:', e.message));
   }
   if (meta.leadId) {
-    appendLeadNote(meta.leadId, `Outbound AI call not answered (${CallStatus}) — sent a follow-up SMS. (${new Date().toISOString().slice(0, 10)})`)
+    appendLeadNote(meta.leadId, `Outbound AI call not answered (${CallStatus})${warm ? ' — sent a follow-up SMS.' : ' — no SMS (cold lead, no consent).'} (${new Date().toISOString().slice(0, 10)})`)
       .catch(() => {});
   }
 }
