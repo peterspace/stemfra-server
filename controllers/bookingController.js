@@ -149,15 +149,27 @@ const getAvailability = async (req, res) => {
 // error object. Blocks suspended members. Extracted so the paid, pending, and
 // finalize paths all share one implementation.
 const upsertBookingCustomer = async (siteId, customer) => {
+  // SMS consent (A2P tenant-customer program, 2026-08-27): true ONLY when the
+  // visitor ticked the unchecked checkbox at the booking "Your details" step
+  // AND gave a phone number. Recorded with timestamp + source so the consent
+  // is provable per customer; never inferred, never set by chat/staff paths.
+  const smsConsent = customer.smsOptIn === true && !!customer.phone?.trim();
   let customerId = null;
   if (customer.email) {
     const { data: existing } = await supabase
-      .from('site_customers').select('id, metadata').eq('site_id', siteId).eq('email', customer.email.trim().toLowerCase()).maybeSingle();
+      .from('site_customers').select('id, metadata, sms_opt_in, phone').eq('site_id', siteId).eq('email', customer.email.trim().toLowerCase()).maybeSingle();
     if (existing) {
       if (existing.metadata?.suspended) {
         return { ok: false, code: 403, message: 'This account is suspended. Please contact us.' };
       }
       customerId = existing.id;
+      if (smsConsent && !existing.sms_opt_in) {
+        await supabase.from('site_customers').update({
+          sms_opt_in: true,
+          phone: existing.phone || customer.phone.trim(),
+          metadata: { ...(existing.metadata || {}), sms_opt_in_at: new Date().toISOString(), sms_opt_in_source: 'booking_form' },
+        }).eq('id', existing.id);
+      }
     }
   }
   if (!customerId) {
@@ -168,6 +180,8 @@ const upsertBookingCustomer = async (siteId, customer) => {
         last_name:  customer.lastName?.trim() || null,
         email:      customer.email?.trim().toLowerCase() || null,
         phone:      customer.phone?.trim() || null,
+        sms_opt_in: smsConsent,
+        ...(smsConsent ? { metadata: { sms_opt_in_at: new Date().toISOString(), sms_opt_in_source: 'booking_form' } } : {}),
       }]).select().single();
     if (custErr) return { ok: false, code: 500, message: custErr.message };
     customerId = newCust.id;
@@ -723,26 +737,11 @@ const placeBookingGroup = async ({
       return { ok: false, code: 409, message: 'Some of the selected times were just taken. Please pick new times before paying.', failed };
     }
 
-    // 5. Upsert customer.
-    let customerId = null;
-    if (customer.email) {
-      const { data: existing } = await supabase
-        .from('site_customers').select('id').eq('site_id', siteId)
-        .eq('email', customer.email.trim().toLowerCase()).maybeSingle();
-      if (existing) customerId = existing.id;
-    }
-    if (!customerId) {
-      const { data: newCust, error: custErr } = await supabase
-        .from('site_customers').insert([{
-          site_id: siteId,
-          first_name: customer.firstName?.trim() || null,
-          last_name:  customer.lastName?.trim() || null,
-          email:      customer.email?.trim().toLowerCase() || null,
-          phone:      customer.phone?.trim() || null,
-        }]).select().single();
-      if (custErr) throw custErr;
-      customerId = newCust.id;
-    }
+    // 5. Upsert customer (shared helper → suspension guard + SMS-consent
+    // recording ride along, same as the single-service path).
+    const cust = await upsertBookingCustomer(siteId, customer);
+    if (!cust.ok) return { ok: false, code: cust.code, message: cust.message };
+    const customerId = cust.customerId;
 
     // 6. Group totals from succeeded[].
     const groupStartsAt = succeeded.reduce((min, h) => h.startsAt < min ? h.startsAt : min, succeeded[0].startsAt);
