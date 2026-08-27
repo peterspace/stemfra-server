@@ -1,5 +1,19 @@
 # A2P 10DLC Registration — prepared answers for Peter
 
+> **➕ PLANNED SECOND CAMPAIGN (2026-08-27, Client Growth Engine):** tenant→their-customers
+> lifecycle SMS (review links, birthday, win-back, seasonal) needs its OWN campaign under the
+> SAME Stemfra brand + 1–2 dedicated new numbers (never Mark's/CRM numbers). **Opt-in is the
+> END CUSTOMER'S OWN, never the tenant's on their behalf** (TCPA consent is personal to the
+> recipient). Declared mechanisms — both must EXIST and be publicly provable before submitting
+> (the two rejections below both came from describing flows that did not exist or sat behind
+> a login): (1) the announcement email's opt-in link → public confirmation page →
+> `site_customers.sms_opt_in` + timestamp + source (LIVE since 2026-08-27); (2) an unchecked
+> checkbox at the booking "Your details" step with the four disclosures (BUILD BEFORE
+> SUBMITTING). Imported `smsOptIn` flags are NOT declared and NOT sufficient — only consent
+> we recorded ourselves triggers sends. Samples shaped "[Business Name] via Stemfra: …
+> Reply STOP to opt out."; STOP → `sms_opt_in=false` for that customer. Host flow screenshots
+> at a public URL and extend the privacy policy's SMS clause to cover this program.
+
 _Prepared 2026-07-22 as part of P12 Wave 1 (`docs/P12_PLAN.md` §4). This is a
 **Peter console action**: Twilio Console → Messaging → Regulatory Compliance →
 A2P 10DLC (US). Register the **brand** first, then the **campaign**, then
