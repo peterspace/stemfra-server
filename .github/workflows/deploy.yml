@@ -84,7 +84,7 @@ jobs:
             CLIENT_URL=https://stemfra.com
             SUPABASE_URL=https://acxepovfklgthxmteqxr.supabase.co
             SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }}
-            GMAIL_USER=support@stemfra.com
+            GMAIL_USER=admin@stemfra.com
             GMAIL_APP_PASSWORD=${{ secrets.GMAIL_APP_PASSWORD }}
             NOTIFY_EMAIL=support@stemfra.com
             LOGO_URL=https://stemfra.com/stemfra_logo.png
