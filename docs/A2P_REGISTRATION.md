@@ -300,7 +300,15 @@ does. Never describe behaviour the code does not have.
   dashboard card and the verbatim consent sentence, so a reviewer never needs an
   account. Screenshots re-shot to match the current form; `REV` cache-buster at 4.
 - ✅ Confirmation SMS implemented, so the Opt-in Message field can be filled.
-- ⬜ **ONLY REMAINING STEP:** paste the `message_flow` above into the campaign
+- ✅ **DONE (campaign VERIFIED — confirmed in the console 2026-08-27).** This
+  step was completed: the resubmitted campaign passed review and shows
+  status Verified. Historical instruction kept below for the record; it
+  applies ONLY to fixing THAT campaign. The 2026-08-27 tenant-customer
+  campaign at the top of this doc is a genuinely NEW, SEPARATE registration
+  (different audience + use), so for it "Register a new A2P Campaign" is the
+  CORRECT action and its vetting fee is expected, not wasted. Never edit the
+  verified account-alerts campaign to add tenant-customer traffic.
+  - (original step:) paste the `message_flow` above into the campaign
   (replacing the rejected text) and resubmit the SAME campaign via **Fix
   Campaign**, never "Register a new A2P Campaign" (that re-charges the vetting
   fee for nothing).
