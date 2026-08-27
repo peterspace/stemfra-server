@@ -437,6 +437,21 @@ function reviewRequest({ businessName, businessLogoUrl, businessEmail, businessU
   });
 }
 
+// Seasonal holiday greeting (Client Growth Engine build 2) — a pure care
+// message: no CTA, no discount. `message` is the owner-editable body from the
+// CMS Seasonal greetings settings; `heading` like "Merry Christmas".
+function seasonalGreeting({ businessName, businessLogoUrl, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, heading, message, unsubscribeUrl }) {
+  return renderEmail({
+    brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
+    preheader: `${heading} from ${businessName}!`,
+    heading: firstName ? `${heading}, ${firstName}!` : `${heading}!`,
+    paragraphs: [message],
+    note: `Warm wishes from all of us at ${businessName}.`,
+    reason: `You're receiving this because you're a customer of ${businessName}.`,
+    unsubscribeUrl,
+  });
+}
+
 // Website announcement — sent once per customer after a client-list import
 // (Client Growth Engine, 2026-08-27): "your barber has a new website, book
 // online any time." Carries the SMS opt-in link (the consent collector for the
@@ -813,6 +828,7 @@ module.exports = {
   winBack,
   reviewRequest,
   websiteAnnouncement,
+  seasonalGreeting,
   birthdayGreeting,
   anniversaryGreeting,
   noShowFollowup,
