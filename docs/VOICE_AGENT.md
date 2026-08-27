@@ -301,3 +301,29 @@ leads WITHOUT email get Mark as touch 1. Server commit `564b18f`, deployed.
     unit-tested across arbitrary token splits.
   - `[ACTION:resend_claim]` is now gated on the lead having BOTH a claim_token
     and an email (cold leads have no email yet → capture instead).
+
+## 2026-08-27 — Cold-cohort post-mortem: results + fixes (commit 4b030a8)
+Aug 20–24 the sweeper dialed all 63 phone-only NY leads (15/day, window
+honored). Twilio-verified outcome: ~2 humans reached (3%), 46 calls ≤30s,
+0 texts sent, 0 emails captured, 0 claims. Root causes and fixes:
+- **Voicemail**: AMD (DetectMessageEnd) missed most machines; Mark conversed
+  with voicemail MENUS (one 163s call answering "press 1" prompts) and the
+  finalizer marked two of them "qualified". Fixes: voicemail-detection rule in
+  the brief (one short message then `[ACTION:end_call]`), a scheduled-hangup
+  `[ACTION:end_call]` tool, and a new **"voicemail" disposition** that is never
+  "qualified".
+- **Stop-calling**: the one real prospect asked to stop calling 6 times; Mark
+  apologized 6 times, never hung up, and `do_not_call` was never persisted.
+  Fix: **`[ACTION:do_not_call]`** records the flag AND auto-ends the call after
+  one apology; brief instructs exactly one apology. JR Barber Shop backfilled.
+- **Missed-call SMS misfire**: 11 cold leads were texted "the note we emailed
+  you" (false + unconsented; all carrier-filtered). Fix: the missed-call SMS is
+  WARM-only (`outreach_sent_at` set, not do_not_call); the AMD voicemail drop
+  is also cold-aware now (cold message never claims an email).
+- **Outbound framing**: Mark twice opened with "How can I assist you today?"
+  on HIS OWN outbound call. Brief now forbids receptionist questions and gives
+  a restate-the-pitch rule + a two-attempts-then-end rule.
+- **Status**: `crm_settings.leadgen_auto_call` = OFF (parked). Carrier/AI
+  research (in-session report): behavior-scored spam labeling explains the 3%
+  reach; FCC treats AI voice as "artificial voice" (TCPA); recommendation under
+  discussion = inbound-only AI + human outbound + email/SMS claim funnels.
