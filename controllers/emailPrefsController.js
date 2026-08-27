@@ -2,7 +2,7 @@
 // the signed unsubscribe token (see lib/emailTokens.js). Reachable from the
 // "Unsubscribe" link in customer-facing emails.
 const supabase = require('./../config/supabase');
-const { verifyUnsubscribeToken, unsubscribeToken } = require('../lib/emailTokens');
+const { verifyUnsubscribeToken, unsubscribeToken, verifySmsOptInToken } = require('../lib/emailTokens');
 
 function page({ title, heading, body, accent = '#161514' }) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -64,4 +64,42 @@ async function resubscribe(req, res) {
   }));
 }
 
-module.exports = { unsubscribe, resubscribe };
+// GET /api/site-emails/sms-optin?token=... — one-click SMS opt-in from the
+// website-announcement email (Client Growth Engine, 2026-08-27). Consent is
+// explicit: the customer clicked a link addressed to them, and we record when.
+async function smsOptIn(req, res) {
+  const id = verifySmsOptInToken(req.query.token);
+  if (!id) {
+    return res.status(400).type('html').send(page({
+      title: 'Invalid link', heading: 'This link is no longer valid',
+      body: '<p>The opt-in link is invalid or has expired. You can opt in next time you book, or ask the business directly.</p>',
+    }));
+  }
+  const { data: c } = await supabase
+    .from('site_customers')
+    .select('id, first_name, phone, sms_opt_in, metadata')
+    .eq('id', id).maybeSingle();
+  if (!c) {
+    return res.status(404).type('html').send(page({ title: 'Not found', heading: 'We could not find your details', body: '<p>This link no longer matches an active record.</p>' }));
+  }
+  if (!c.phone) {
+    return res.type('html').send(page({
+      title: 'No number on file', heading: 'We need your phone number first',
+      body: '<p>There is no phone number on your file yet. Add one next time you book and we can text you reminders.</p>',
+    }));
+  }
+  if (!c.sms_opt_in) {
+    await supabase.from('site_customers').update({
+      sms_opt_in: true,
+      metadata: { ...(c.metadata || {}), sms_opt_in_at: new Date().toISOString(), sms_opt_in_source: 'announcement_email' },
+    }).eq('id', id);
+  }
+  return res.type('html').send(page({
+    title: 'Texts on',
+    heading: 'You’re in!',
+    body: `<p>${c.first_name ? c.first_name + ', we' : 'We'}’ll text booking reminders and occasional updates to the number ending in ${String(c.phone).slice(-4)}.</p>
+           <p>Reply STOP to any text to opt out again.</p>`,
+  }));
+}
+
+module.exports = { unsubscribe, resubscribe, smsOptIn };

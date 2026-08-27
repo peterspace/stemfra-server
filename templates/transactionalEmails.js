@@ -437,6 +437,30 @@ function reviewRequest({ businessName, businessLogoUrl, businessEmail, businessU
   });
 }
 
+// Website announcement — sent once per customer after a client-list import
+// (Client Growth Engine, 2026-08-27): "your barber has a new website, book
+// online any time." Carries the SMS opt-in link (the consent collector for the
+// future SMS channel) + the standard unsubscribe.
+function websiteAnnouncement({ businessName, businessLogoUrl, businessUrl, businessAccent, businessFont, businessPhotoUrl, firstName, bookingUrl, siteHost, unsubscribeUrl, smsOptInUrl }) {
+  const smsLine = smsOptInUrl
+    ? `<p style="margin:18px 0 0;font-size:14px;color:#57534E;">Prefer text reminders? <a href="${smsOptInUrl}" style="color:${businessAccent || '#161514'};font-weight:600;">Tap here and we can text you</a> when it matters.</p>`
+    : '';
+  return renderEmail({
+    brand: { name: businessName, logoUrl: businessLogoUrl, url: businessUrl, accent: businessAccent, font: businessFont, photoUrl: businessPhotoUrl },
+    preheader: `${businessName} has a new website. Book your next visit online, any time.`,
+    heading: firstName ? `${firstName}, we have news!` : 'We have news!',
+    paragraphs: [
+      `${businessName} now has a brand new website. You can see our services and prices, and book your next visit in seconds, day or night.`,
+      siteHost ? `Find us any time at ${siteHost}.` : '',
+    ].filter(Boolean),
+    bodyHtml: smsLine,
+    cta: bookingUrl ? { label: 'Book your next visit', url: bookingUrl } : undefined,
+    note: 'Nothing changes about how we look after you. Booking just got easier.',
+    reason: `You're receiving this because you're a customer of ${businessName}.`,
+    unsubscribeUrl,
+  });
+}
+
 // Birthday greeting — sent on the customer's birthday. Warm wishes + a book
 // nudge. Optional per-site birthday discount (`discountPercent`, set on the CMS
 // Emails page) renders a highlighted "N% off" coupon band.
@@ -788,6 +812,7 @@ module.exports = {
   firstVisitFollowup,
   winBack,
   reviewRequest,
+  websiteAnnouncement,
   birthdayGreeting,
   anniversaryGreeting,
   noShowFollowup,

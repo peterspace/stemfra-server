@@ -565,6 +565,36 @@ async function adminImportCustomers(req, res) {
   }
 }
 
+/** POST /api/cms/customers/announce — { siteId, dryRun? }. The website
+ *  announcement blast (Client Growth Engine build 1): every not-yet-announced
+ *  client with an email gets the "we have a new website" email once. dryRun
+ *  returns the pending count so the CMS can show "Send to N clients". */
+async function announceCustomers(req, res) {
+  try {
+    const { siteId, dryRun } = req.body || {};
+    if (!siteId) return res.status(400).json({ success: false, message: 'siteId is required.' });
+    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
+    if (!site) return res.status(403).json({ success: false, message: 'Not your site.' });
+
+    const { sendWebsiteAnnouncement } = require('../../lib/announcementEmail');
+    const r = await sendWebsiteAnnouncement(siteId, { dryRun: !!dryRun });
+    if (!r.ok) return res.status(400).json({ success: false, message: r.error });
+    if (!dryRun && r.sent) {
+      await logSiteActivity({
+        siteId, actorName: req.cmsUser?.email,
+        action: 'website_announcement_sent',
+        entityType: 'site', entityId: siteId,
+        details: { sent: r.sent, failed: r.failed, remaining: r.remaining },
+      });
+    }
+    res.json({ success: true, ...r });
+  } catch (err) {
+    console.error('[customers.announce]', err.message);
+    res.status(500).json({ success: false, message: 'Could not send the announcement.' });
+  }
+}
+
 module.exports = {
   mapImportColumns, setSuspended, sendReviewEmail, listCustomers, exportCustomers, importPreview, importCustomers,
+  announceCustomers,
   adminMapImportColumns, adminImportPreview, adminImportCustomers };

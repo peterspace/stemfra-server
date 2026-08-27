@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireCmsAuth } = require('../../middleware/cmsAuth');
-const { setSuspended, sendReviewEmail, listCustomers, exportCustomers, importPreview, importCustomers, mapImportColumns } = require('../../controllers/cms/customersController');
+const { setSuspended, sendReviewEmail, listCustomers, exportCustomers, importPreview, importCustomers, mapImportColumns, announceCustomers } = require('../../controllers/cms/customersController');
 
 // Customer book + CSV import/export (Task #25). All owner-auth + per-site owned.
 router.get('/', requireCmsAuth, listCustomers);                    // ?siteId= → list
@@ -9,6 +9,9 @@ router.get('/export', requireCmsAuth, exportCustomers);            // ?siteId= �
 router.post('/import/map', requireCmsAuth, mapImportColumns);      // { siteId, headers, samples } → preset/AI column map
 router.post('/import/preview', requireCmsAuth, importPreview);     // { siteId, rows } → dry-run counts
 router.post('/import', requireCmsAuth, importCustomers);           // { siteId, rows } → { created, merged, skipped }
+
+// The website-announcement blast ({ siteId, dryRun? } → sent/pending counts).
+router.post('/announce', requireCmsAuth, announceCustomers);
 
 // CMS — owner suspends/unsuspends a member (hard account block). Auth-gated.
 router.post('/:id/suspend', requireCmsAuth, setSuspended);
