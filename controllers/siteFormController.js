@@ -67,7 +67,7 @@ const submitSiteLead = async (req, res) => {
       const prefs = await getSiteNotifyPrefs(site.id);
       if (owner?.email && prefs.owner_lead) {
         // Task 9: SMS alongside the email, same pref gate, consent-gated inside.
-        sendOwnerSms(owner.auth_user_id, `New enquiry on ${site.subdomain} from ${name || 'a visitor'}. Open your Leads inbox to reply.`);
+        sendOwnerSms(owner.auth_user_id, `New enquiry on ${site.subdomain} from ${name || 'a visitor'}${phone ? ` (${phone.trim()})` : ''}. Open your Leads inbox to reply.`);
         const dashboardUrl = await cmsMagicLink(owner.auth_user_id, '/leads');
         await sendMail({
           fromName: 'STEMfra Sites',
