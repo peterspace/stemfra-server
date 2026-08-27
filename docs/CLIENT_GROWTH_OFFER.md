@@ -47,21 +47,33 @@ brings new clients, who enter the same loop.
 
 ---
 
-## 2. Build map (internal)
+## 2. Build map (internal) — CORRECTED 2026-08-27 after code verification
+
+⚠ The first version of this table guessed from memory and was WRONG: the N4
+lifecycle arc already shipped most of the offer. Verified against
+`lib/lifecycleEmails.js` + `lib/lifecycleSweeper.js` (running in prod via
+index.js) + the CMS EmailsSection/CustomersPage; a live test send passed
+end-to-end on clean-cuts 2026-08-27.
 
 | Piece | Status | Notes |
 |---|---|---|
 | Website + booking + SEO | ✅ live | Templates, native scheduler, prerender/meta/JSON-LD |
-| Booking reminder emails | ✅ live | 24h/2h reminder fields + N-arc email path |
-| Post-visit Google review request | 🟡 build FIRST | Rides the booking-completion event; needs per-site Google review link (owner pastes their GBP review URL in CMS Settings); email + SMS variants |
-| Client-list import + announcement | 🟡 build second | CSV import (see provider-switching memory) → site_customers; announcement email/SMS with booking link + SMS opt-in capture |
-| "We miss you" win-back (30d) | 🟡 build third | Sweeper over site_customers last-visit; suppressed by email_opt_out |
-| Birthday + first-visit anniversary | 🟡 build fourth | site_customers.birthdate EXISTS (N3/N4 groundwork); anniversary derived from first booking |
-| Seasonal holiday messages | 🟡 build fifth | Fixed calendar, per-site toggle, owner-editable copy |
+| Booking reminder emails | ✅ live | bookingReminderSweeper (24h/2h) |
+| Post-visit Google review request | ✅ SHIPPED (N4) | Auto: ~2 days after a visit, ONCE-EVER per customer; owner sets the Google link + per-email discount in CMS Notifications → Automated emails; manual per-client send on the Clients page kebab; live-verified 2026-08-27 |
+| Client CSV import | ✅ SHIPPED | CMS Clients → Import panel (column mapping + preview) + admin variant |
+| "We miss you" win-back | ✅ SHIPPED (N4) | Fires at ~60 days lapsed (Peter's note says 1 month — knob decision below) |
+| Birthday + first-visit anniversary | ✅ SHIPPED (N4) | Birthday once/year from site_customers.birthdate; anniversary ~365d after first visit; plus first-visit follow-up + no-show emails (bonus) |
+| **Import ANNOUNCEMENT blast** | 🟡 BUILD 1 | "We have a new website, book online" email to imported clients + SMS opt-in capture — import today is silent |
+| **Seasonal holiday messages** | 🟡 BUILD 2 | Christmas, New Year, Thanksgiving, July 4th; fixed calendar, per-site toggle, owner-editable copy |
+| SMS variants of lifecycle emails | 🟡 later | Lifecycle is email-only today; SMS needs per-customer opt-in (captured by the announcement + booking flow) |
 
-Schema groundwork already in place: `site_customers.birthdate`, `sms_opt_in`,
-`email_opt_out`, the signed-token unsubscribe endpoint, tenant-branded email
-templates (`tenantDocument`), Twilio SMS rails with an approved A2P campaign.
+**Knob decisions (Peter):**
+1. Win-back timing: shipped at 60 days; the offer note says 1 month. Make it
+   per-site configurable, change the default to 30, or keep 60?
+2. Review-ask frequency: shipped ONCE-EVER per customer (anti-annoyance); the
+   offer note says after each visit. Recommendation: keep once-ever automatic +
+   the existing manual re-send; a per-visit ask risks unsubscribes and violates
+   the spirit of Google's guidelines.
 
 ## 3. Compliance rails (bake in from day one)
 
@@ -166,15 +178,13 @@ number any time. Thanks!"
 
 ---
 
-## 5. Recommended build order
+## 5. Remaining build order (corrected — most of the plan already shipped)
 
-1. **Post-visit review request** (highest leverage, uses existing booking
-   completion; needs the GBP review-link field in CMS Settings).
-2. **Client import + announcement** (the onboarding wow moment; CSV import
-   toolkit from the provider-switching plan).
-3. **Win-back at 30 days.**
-4. **Birthday + anniversary.**
-5. **Seasonal messages.**
+1. **Import announcement blast** ("your barber has a new website, book online
+   any time") — sent optionally after a CSV import; collects SMS opt-in.
+2. **Seasonal holiday messages.**
+3. **SMS variants of the lifecycle emails** (after opt-in capture exists).
 
-Each piece is a tenant-facing feature toggle in the CMS (Operations), owner
-sees what was sent per customer, and every send is suppressed by opt-outs.
+Everything else in the offer is live: the sales pitch can promise the full
+flywheel TODAY. Each automation is a per-site toggle in CMS Notifications →
+Automated emails, with per-email discounts, and every send honors opt-outs.
