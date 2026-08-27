@@ -1,6 +1,6 @@
 # A2P 10DLC Registration — prepared answers for Peter
 
-> **➕ PLANNED SECOND CAMPAIGN (2026-08-27, Client Growth Engine):** tenant→their-customers
+> **➕ PLANNED SECOND CAMPAIGN — STATUS: DEFERRED (Peter, 2026-08-27: "I will do the new campaign later"; on the pending list. Everything below is ready to paste when he picks it up):** tenant→their-customers
 > lifecycle SMS (review links, birthday, win-back, seasonal) needs its OWN campaign under the
 > SAME Stemfra brand + 1–2 dedicated new numbers (never Mark's/CRM numbers). **Opt-in is the
 > END CUSTOMER'S OWN, never the tenant's on their behalf** (TCPA consent is personal to the
