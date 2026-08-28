@@ -1189,6 +1189,23 @@ send security questionnaires. What to actually do, in order:
 4. LATER: SOC 2 readiness (vendor like Vanta/Drata) when enterprise/chain deals
    need it.
 
+## P21 — Data safety before the first client (queued 2026-08-27)
+
+The production Supabase org runs the FREE plan (no backups, 500MB cap). Peter's
+call: upgrade to Pro once real clients arrive (~first 10); Claude's standing rec
+is to treat the FIRST paying client as the trigger. Until then:
+1. **Nightly backup sweeper (BUILD, small):** server-side cron dumps the
+   critical tables (site_customers, site_bookings + groups, sites, site_pages/
+   sections, site_services/team, site_leads, billing_charges, subscriptions,
+   leads, contacts/companies) to compressed JSON via the service key; rolling
+   7-day retention on the VPS disk. Turns "total loss" into "restore yesterday"
+   at zero cost. Ship BEFORE the first real tenant.
+2. **Supabase MFA for admin@'s dashboard login** (Team page showed MFA
+   Disabled for both owners) — same hygiene bucket as the Cloudflare TOTP done
+   2026-08-27.
+3. **Pro upgrade** (~$25/mo) at the first paying client; consider the PITR
+   add-on once revenue justifies.
+
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
   + Jessica @ 0.95) — draft when Peter wants to record.
