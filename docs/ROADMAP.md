@@ -38,6 +38,17 @@ restore/delete with an Archived tab · outbound message-id storage +
 In-Reply-To threading + thread-priority reply matching. The same task for the
 stemfra_ai Front Desk inbox is relayed via its own handoff (parallel-session
 boundary; do not edit that repo from here).
+SECURITY POSTURE for the sanitized-HTML item (the XSS-sensitive one; the
+stemfra_ai session correctly flagged it for an advisor pass): copy the
+reference implementation `client-helen-leadgen/.../server/lib/emailHtml.js`.
+Sanitize at INGEST with a server-side allowlist and store ONLY sanitized HTML
+(never sanitize client-side at render time); pass your own outbound HTML
+through the same filter (one trust level); strip scripts/event handlers/
+iframes/javascript: URLs; force links to rel=noopener target=_blank; limit
+inline styles to text formatting; cap stored size. For MULTI-TENANT
+dashboards add: block or click-to-load remote images (tracking pixels leak
+the reader's IP and open-time; the Helen build allows https images as a
+single-operator trade-off).
 
 ### 🎨 Theme polish — About Us + Contact page review (ACTIVE arc, started 2026-08-13)
 A cross-vertical walkthrough with Peter: review the **About Us** and **Contact** pages of
