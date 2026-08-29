@@ -23,6 +23,22 @@ checklist + the marketing-funnel discussion live THERE. Read it after this block
 
 _Previous active arc = **P13 commission model** (`docs/COMMISSION_MODEL.md`), shipped; theme-polish arc below closed 2026-08-17._
 
+### 📥 PENDING — Inbox parity upgrades (queued 2026-08-29, Peter)
+The Helen lead-gen CRM's inbox (repo `stemfra/client-helen-leadgen`, see its
+`SESSION_HANDOFF.md`) is now the REFERENCE inbox across all builds. Upgrade the
+CMS enquiries inbox and the CRM Gmail inbox to that standard when their arcs
+next open. The parity checklist (all live-verified in the Helen build):
+Gmail-style thread anatomy (subject once, collapsed rows, latest expanded,
+quoted tails behind a ··· toggle) · sanitized-HTML message rendering (server
+allowlist, one trust level) · AI suggested-reply pill under the last inbound
+message (click opens the composer prefilled) · Tiptap rich-text composer with
+attachments (25MB), signature auto-append, and refine chips (Simplify/Shorten/
+Lengthen/Warmer/Professional, server-whitelisted, Cmd+Z undo) · archive/
+restore/delete with an Archived tab · outbound message-id storage +
+In-Reply-To threading + thread-priority reply matching. The same task for the
+stemfra_ai Front Desk inbox is relayed via its own handoff (parallel-session
+boundary; do not edit that repo from here).
+
 ### 🎨 Theme polish — About Us + Contact page review (ACTIVE arc, started 2026-08-13)
 A cross-vertical walkthrough with Peter: review the **About Us** and **Contact** pages of
 every active theme, **vertical by vertical, default theme (★) first**, then the next theme
