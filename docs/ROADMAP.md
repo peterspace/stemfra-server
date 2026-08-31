@@ -1401,7 +1401,19 @@ Lead-Gen CRM's telephony arc:
    the Lead-Gen CRM's Copilot and Stacy in the CMS — staff-facing,
    context = the open record + CRM data. Reuse the Lead-Gen copilot's
    panel UX + the aiMeter metering pattern.
-3. **Lead-Gen product monitoring inside the stemfra CRM.** A surface
+3. **Lead-Gen product monitoring: ✅ BUILT + VERIFIED 2026-08-31** (local
+   commits, not pushed). leads-api `GET /api/ops/monitor` (routes/ops.js,
+   `x-ops-secret` = OPS_MONITOR_SECRET, service-to-service) → stemfra_server
+   proxy `/api/admin/leadgen-monitor` (LEADGEN_API_URL + LEADGEN_OPS_SECRET
+   env; requireStaffAuth) → CRM page /leadgen-monitor (Platform sidebar,
+   Radar icon): summary cards + per-tenant table (health Active/Quiet/New,
+   members, leads/enriched/contacted, inbox connected + emails/awaiting,
+   number/compliance, AI calls + billed, last activity), search +
+   pagination, 5-min auto-refresh. Verified live: 3 tenants, Helen Active
+   with inbox connected. ⚠ AT PUSH TIME add OPS_MONITOR_SECRET to the
+   Helen deploy env AND LEADGEN_API_URL + LEADGEN_OPS_SECRET to
+   stemfra_server deploy.yml (public hostname, never loopback).
+   Original spec: A surface
    showing per-tenant health of the Lead-Gen product (Helen first):
    plan/usage (the /api/usage/summary payload), lookups run + spend,
    emails sent, last inbox sync, telephony state, last activity.
