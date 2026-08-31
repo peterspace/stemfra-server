@@ -1385,7 +1385,10 @@ Lead-Gen CRM's telephony arc:
    scan_expenses. Verified live: grounded pipeline answer (63 leads, 11
    contacts) + the scan action end-to-end with the honest "Done" note.
 
-1. **Persistent call widget (call + act simultaneously).** Replace the
+1. **Persistent call widget: ✅ BUILT IN THE LEAD-GEN CRM 2026-08-31** (CallDock,
+   per the build-there-first plan; port back here when browser calling lands —
+   the ops CRM's existing CallWidget already covers its Twilio Voice SDK flow).
+   Original spec: Replace the
    modal-style call UX with a floating, page-independent widget (the
    Front Desk launcher pattern from tenant sites): active call docks to a
    corner and survives navigation, so staff can edit a contact, draft a

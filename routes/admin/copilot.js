@@ -33,6 +33,7 @@ async function saveConvo(id, messages, patch = {}) {
 const SURFACES = [
   { label: 'Dashboard', route: '/dashboard' },
   { label: 'Lead Pipeline', route: '/leads' },
+  { label: 'Setup Calls', route: '/setup-calls' },
   { label: 'Inbox', route: '/inbox' },
   { label: 'CRM', route: '/crm' },
   { label: 'Customer Sites', route: '/sites' },
@@ -61,7 +62,7 @@ const STAGES = ['new_lead', 'contacted', 'discovery_call', 'proposal_sent', 'neg
 function normalizeAction(a) {
   if (!a || typeof a !== 'object') return null;
   const s = (v, n) => (v && String(v).trim().slice(0, n)) || null;
-  const ALIAS = { stage: 'set_stage', email: 'email_lead', draft_email: 'email_lead', scan: 'scan_expenses' };
+  const ALIAS = { stage: 'set_stage', email: 'email_lead', draft_email: 'email_lead', scan: 'scan_expenses', setup_call: 'invite_setup_call', book_setup_call: 'invite_setup_call' };
   if (ALIAS[a.type]) a = { ...a, type: ALIAS[a.type] };
   if (a.type === 'set_stage') {
     const company = s(a.company, 120);
@@ -72,8 +73,29 @@ function normalizeAction(a) {
     const company = s(a.company, 120);
     return company ? { type: 'email_lead', company } : null;
   }
+  if (a.type === 'invite_setup_call') {
+    const company = s(a.company, 120);
+    return company ? { type: 'invite_setup_call', company } : null;
+  }
   if (a.type === 'scan_expenses') return { type: 'scan_expenses' };
   return null;
+}
+
+// Follow-up chips (the Concierge / Front Desk quick-replies pattern): the
+// model appends SUGGEST:["...","..."] as its final line; strip + parse.
+function extractSuggestions(text) {
+  const t = String(text || '');
+  const idx = t.lastIndexOf('SUGGEST:');
+  if (idx < 0) return { text: t, suggestions: [] };
+  let suggestions = [];
+  const m = t.slice(idx).match(/\[[\s\S]*?\]/);
+  if (m) {
+    try {
+      const arr = JSON.parse(m[0]);
+      if (Array.isArray(arr)) suggestions = arr.map((s) => String(s).trim().slice(0, 90)).filter(Boolean).slice(0, 3);
+    } catch { /* malformed */ }
+  }
+  return { text: t.slice(0, idx).replace(/```(?:json)?\s*$/, '').trim(), suggestions };
 }
 
 function extractAction(text) {
@@ -197,8 +219,11 @@ router.post('/send', requireStaffAuth, async (req, res) => {
 You can PROPOSE (never perform) these actions; the user confirms with a click:
 - set_stage {"company": "<company name from the snapshot>", "stage": "new_lead|contacted|discovery_call|proposal_sent|negotiation|won|lost"}
 - email_lead {"company": "<company name>"} (opens the email composer for that lead's contact, prefilled recipient; nothing sends until they click Send)
+- invite_setup_call {"company": "<company name>"} (opens the composer with a ready invitation to book a free setup call at stemfra.com/book-a-call; nothing sends until they click Send)
 - scan_expenses {} (re-scan the linked mailboxes for new expense receipts now)
-ONLY when the user explicitly asks for one of these: say in one sentence what you are proposing, then append as the very last line exactly ACTION:{"type":...} with the fields above. Never propose an action the user did not ask for; never output more than one.
+ONLY when the user explicitly asks for one of these: say in one sentence what you are proposing, then append on its own line exactly ACTION:{"type":...} with the fields above. Never propose an action the user did not ask for; never output more than one.
+
+After everything else, ALWAYS append as the very last line exactly SUGGEST:["...","..."] with 2 or 3 short follow-up questions or asks the user is likely to want next, grounded in the snapshot and the conversation (each under 60 characters, phrased as the user would type them). Never mention this line in the reply.
 
 ${APP_GUIDE}
 
@@ -211,15 +236,17 @@ ${JSON.stringify(ctx)}`,
       max_tokens: 500,
     });
     const raw = r.choices[0].message.content.trim();
-    const { reply: content, action } = extractAction(raw);
+    const { text: withoutSuggest, suggestions } = extractSuggestions(raw);
+    const { reply: content, action } = extractAction(withoutSuggest);
     const links = guideLinksFor(content);
     const reply = {
       role: 'assistant', content, at: new Date().toISOString(),
       ...(links.length ? { links } : {}),
       ...(action ? { action } : {}),
+      ...(suggestions.length ? { quick_replies: suggestions } : {}),
     };
     await saveConvo(convo.id, [...history, userMsg, reply], titlePatch);
-    res.json({ conversation_id: convo.id, reply: content, links, action, model: MODEL });
+    res.json({ conversation_id: convo.id, reply: content, links, action, quick_replies: suggestions, model: MODEL });
   } catch (e) {
     console.error('[crm-copilot] failed:', e.message);
     res.status(500).json({ error: `Copilot failed: ${e.message}` });
