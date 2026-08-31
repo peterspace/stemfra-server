@@ -122,6 +122,10 @@ jobs:
             CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}
             MOCKUP_RENDER_URL=https://crm.stemfra.com
             RECON_ENABLED=true
+            LEADGEN_API_URL=https://leads-api.stemfra.com
+            LEADGEN_OPS_SECRET=${{ secrets.LEADGEN_OPS_SECRET }}
+            EXPENSE_MB2_USER=peter.space.io@gmail.com
+            EXPENSE_MB2_PASS=${{ secrets.EXPENSE_MB2_PASS }}
             CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
             CLOUDFLARE_ZONE_ID=${{ secrets.CLOUDFLARE_ZONE_ID }}
             CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}
