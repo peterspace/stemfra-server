@@ -30,6 +30,17 @@ router.post('/scan', requireStaffAuth, async (req, res) => {
   }
 });
 
+// Bulk include/exclude (the header "All" checkbox).
+router.post('/bulk', requireStaffAuth, async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.slice(0, 500) : [];
+  const excluded = !!req.body?.excluded;
+  if (!ids.length) return res.status(400).json({ error: 'ids required' });
+  const { error } = await supabase.from('expense_receipts')
+    .update({ excluded, updated_at: new Date().toISOString() }).in('id', ids);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ updated: ids.length, excluded });
+});
+
 router.patch('/:id', requireStaffAuth, async (req, res) => {
   const patch = {};
   for (const k of ['excluded', 'excluded_reason', 'renews_on', 'amount_cents', 'vendor', 'currency']) {

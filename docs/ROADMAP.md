@@ -1137,6 +1137,20 @@ harvested (43 admin@ + 42 peter.space.io), Figma excluded, Anthropic PDF
 archived. NEXT: periodic auto-scan (interval sweeper), email reminders for
 due-soon renewals, push into `expenses` for the Compliance books, vendor
 grouping/registry view (item 1 below).
+**v1.1 same day (Peter's review):** N mailboxes via EXPENSE_MB2..MB9 env
+pairs (⚠ PETER ACTION: create an app password for peter.okeme@gmail.com
+— it holds the Northwest Registered Agent incorporation invoice — and
+hand it over for EXPENSE_MB3_*); failure/decline notices auto-excluded at
+scan; PDF receipts delivered as JPG previews (Cloudinary blocks raw PDF
+delivery — 401); header All checkbox (bulk include/exclude) + search +
+date range + sortable columns + pagination (tablekit) + Export menu
+(xlsx/CSV, included-only, duplicate twins by vendor+amount+day dropped
+and chip-flagged in the table).
+**Related idea recorded (Peter): Gmail-style MULTI-ACCOUNT sign-in**
+(switch between logged-in accounts / add another, the Google account
+menu pattern) for the Stemfra AI dashboard and the Lead-Gen CRM — an
+account-model feature for their auth layer; flag to the stemfra_ai
+session for their side.
 
 Not previously in the roadmap (confirmed 2026-08-11 — this is a genuinely new
 item, not a rediscovery of an existing one). Goal: give Stemfra staff a single
