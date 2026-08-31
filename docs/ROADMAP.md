@@ -1140,12 +1140,27 @@ grouping/registry view (item 1 below).
 **v1.1 same day (Peter's review):** N mailboxes via EXPENSE_MB2..MB9 env
 pairs (⚠ PETER ACTION: create an app password for peter.okeme@gmail.com
 — it holds the Northwest Registered Agent incorporation invoice — and
-hand it over for EXPENSE_MB3_*); failure/decline notices auto-excluded at
-scan; PDF receipts delivered as JPG previews (Cloudinary blocks raw PDF
-delivery — 401); header All checkbox (bulk include/exclude) + search +
+hand it over for EXPENSE_MB3_*); failure/decline notices SKIPPED at scan
+entirely (never shown: not submittable for tax anyway); same-vendor +
+same-amount + same-day twins auto-excluded at scan ("duplicate?" chip);
+receipts stored as ORIGINAL PDFs, full quality, all pages (the earlier
+page-1 JPG conversion is dropped; ⚠ PETER ACTION: Cloudinary console →
+Settings → Security → check "Allow delivery of PDF and ZIP files", else
+Open links 401; the restriction also lifts on any paid Cloudinary plan);
+header All checkbox (bulk include/exclude) + search +
 date range + sortable columns + pagination (tablekit) + Export menu
 (xlsx/CSV, included-only, duplicate twins by vendor+amount+day dropped
 and chip-flagged in the table).
+**v2 idea, AI classification layer (Peter, 2026-08-31):** run each
+candidate email through one cheap LLM pass at scan time to (a) verdict
+receipt vs failure vs marketing noise (replaces the regex), (b) category
+(software / infrastructure / telecom / fees / professional services),
+(c) business-vs-personal guess with confidence (auto-untick personal
+vendors like Figma), (d) vendor normalization ("Google Payments" and
+"The Google Workspace Team" are one vendor), (e) renewal cadence
+(monthly/yearly) for a real renews_on instead of the +1 month guess.
+Back-office AI = OpenAI per the 2026-06-26 decision; category column +
+export follow.
 **Related idea recorded (Peter): Gmail-style MULTI-ACCOUNT sign-in**
 (switch between logged-in accounts / add another, the Google account
 menu pattern) for the Stemfra AI dashboard and the Lead-Gen CRM — an

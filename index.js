@@ -188,6 +188,7 @@ app.use('/api/admin/bookings', require('./routes/admin/bookings'));
 app.use('/api/admin/memberships', require('./routes/admin/memberships'));
 app.use('/api/admin/mockups', require('./routes/admin/mockups'));
 app.use('/api/admin/email-images', require('./routes/emailImages'));
+app.use('/api/admin/email-assist', require('./routes/emailAssist'));
 app.use('/api/admin/expense-receipts', require('./routes/admin/expenseReceipts'));
 app.use('/api/admin/marketing-assets', require('./routes/admin/marketingAssets'));
 app.use('/api/admin/theme-registry', require('./routes/admin/themeRegistry'));
