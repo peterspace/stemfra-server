@@ -5,6 +5,7 @@
 const supabase = require('../../config/supabase');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { evaluateCompleteness } = require('../../lib/siteCompleteness');
+const { evaluateSampleSections } = require('../../lib/sampleContent');
 const { publishSite, unpublishSite, getBillingStatus } = require('../../lib/sitePublish');
 const { createPlatformCheckout } = require('../../lib/platformBilling');
 const billing = require('../../lib/billing');
@@ -162,4 +163,19 @@ async function requestPublishInvoice(req, res) {
   }
 }
 
-module.exports = { getReadiness, publish, unpublish, billingCheckout, requestPublishInvoice };
+// GET /api/cms/site-publish/sample-status/:siteId — ids of sections whose text
+// still equals the clone source's (the CMS badges them "Sample"; the badge
+// clears on the section's first real edit). Best-effort: errors return empty.
+async function getSampleStatus(req, res) {
+  try {
+    const { siteId } = req.params;
+    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
+    if (!site) return res.status(403).json({ error: 'Not your site.' });
+    res.json(await evaluateSampleSections(siteId));
+  } catch (e) {
+    console.error('[cms/publish] sample-status failed:', e.message);
+    res.json({ sampleSectionIds: [] });
+  }
+}
+
+module.exports = { getReadiness, publish, unpublish, billingCheckout, requestPublishInvoice, getSampleStatus };
