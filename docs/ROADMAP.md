@@ -1118,7 +1118,25 @@ call must become optional/minimal; Stacy + interactive tours carry onboarding.
    drafting). Mini-tour instruction label restyled (hand-pointer icon, default
    cursor) so it cannot be read as a button.
 
-## P17 — Platform subscriptions & expense receipts (CRM + n8n) (NEW, queued 2026-08-11)
+## P17 — Platform subscriptions & expense receipts (CRM + n8n) (queued 2026-08-11; **v1 BUILT IN THE CRM 2026-08-31**)
+
+**STATUS 2026-08-31: v1 shipped (in-CRM, no n8n — supersedes item 2's
+planned n8n harvester, per the P22 note).** `lib/expenseScan.js` (read-only
+IMAP over admin@stemfra.com [existing app password] + peter.space.io@gmail.com
+[app password reused from the leadgen build; env EXPENSE_MB2_*]; 120-day
+window, subject heuristics -> full parse of candidates only; amount/vendor
+best-effort; PDF/image attachments archived to Cloudinary
+`stemfra_assets/expense-receipts` — chosen over Google Drive so the CRM UI
+owns the copies; a periodic Drive export for the accountant can come later)
+-> `expense_receipts` table (message-id dedupe, staff RLS) -> CRM page
+**Finance -> Expense Receipts** (`/expense-receipts`): include/EXCLUDE
+toggle (personal spend never counts — Peter's Figma/Atlassian case),
+editable renewal dates driving a "renewing within 7 days" alert banner,
+month total, receipt links, on-demand Scan. Live-verified: 85 receipts
+harvested (43 admin@ + 42 peter.space.io), Figma excluded, Anthropic PDF
+archived. NEXT: periodic auto-scan (interval sweeper), email reminders for
+due-soon renewals, push into `expenses` for the Compliance books, vendor
+grouping/registry view (item 1 below).
 
 Not previously in the roadmap (confirmed 2026-08-11 — this is a genuinely new
 item, not a rediscovery of an existing one). Goal: give Stemfra staff a single
@@ -1270,6 +1288,18 @@ Product shape (v0 sketch):
 Build trigger: after the Helen handoff + billing arc; P17's n8n harvester
 can be superseded by this product's engine (build once, use internally
 first — the platform is customer #1).
+
+## P24 — CMS lead-reply email (DECIDED 2026-08-31, Peter): dual mode
+
+Tenants replying to site leads from the CMS get REAL sending (replacing
+the mailto link): **default = Option B** (platform Resend from
+notifications@mail.stemfra.com with the owner's address as reply-to; zero
+setup) **plus an optional Gmail connector** (app-password only, Gmail
+only for now — the leadgen CRM's connect/vault/test-before-store model
+ported to the CMS) for tenants who want to send AS their own address.
+Composer = the leadgen RichToolbar register. Build after the CRM email
+arc (P23-adjacent slices: ops AI-assist chips, staff signatures, ops
+inbox).
 
 ## P23 — CRM call workspace + side Copilot + Lead-Gen monitoring (recorded 2026-08-31, Peter)
 
