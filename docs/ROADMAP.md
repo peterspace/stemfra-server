@@ -1318,7 +1318,30 @@ Build trigger: after the Helen handoff + billing arc; P17's n8n harvester
 can be superseded by this product's engine (build once, use internally
 first — the platform is customer #1).
 
-## P24 — CMS lead-reply email (DECIDED 2026-08-31, Peter): dual mode
+## P24 — CMS lead-reply email: dual mode — ✅ BUILT + VERIFIED 2026-08-31 (local commits, not pushed)
+
+Option B (platform Resend, business display name, reply-to = owner) had
+already shipped 2026-08-07 (replyToLead + the CMS ReplyComposer). This
+session added the remaining delta, verified live in the CMS as
+Marcus/argyle:
+- **Gmail connector, test-before-store**: `site_email_connectors`
+  (server-only RLS) + `lib/tenantGmail.js` (real SMTP login check BEFORE
+  storing; app password AES-256-GCM encrypted with a key derived from
+  the server secret; decrypted only at send) + `/api/cms/email-connector`
+  + CMS Settings, Notifications, "Reply sending" section (default card,
+  connect form, Connected/Disconnect). Wrong password rejected with
+  guidance; real admin@stemfra.com app password accepted, then
+  disconnected to leave the demo clean.
+- **replyToLead dual mode**: connector present sends via the owner's own
+  Gmail; otherwise the platform path. Reply metadata records `via`.
+- **Composer register**: ReplyComposer gained the leadgen typography set
+  (light-theme ReplyToolbar: 10 email-safe fonts, TT sizes, link
+  popover, underline) + a mode-aware footer.
+- Sync kept: settingsSections + sectionIcons + server lib/cmsRoutes.js
+  `replySending`. CMS tiptap aligned at 3.30.6 (a nested dual
+  @tiptap/core broke typecheck).
+
+Original decision text (kept for context):
 
 Tenants replying to site leads from the CMS get REAL sending (replacing
 the mailto link): **default = Option B** (platform Resend from
