@@ -11,6 +11,7 @@
 const supabase = require('../../config/supabase');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { sendMail } = require('../../lib/mailer');
+const { getConnector, sendViaConnector } = require('../../lib/tenantGmail');
 const { logSiteActivity } = require('../../lib/activity');
 
 // POST /api/cms/leads/:id/reply  { siteId, subject, html, text? }
@@ -39,19 +40,37 @@ async function replyToLead(req, res) {
 
     // The send IS the point here — unlike best-effort notifications, a failure
     // must surface to the owner, so no fire-and-forget.
-    await sendMail({
-      fromName: businessName,
-      to: lead.email,
-      replyTo: req.cmsUser.email,
-      subject: String(subject).trim(),
-      text: plain,
-      html,
-    });
+    //
+    // P24 dual mode: a connected Gmail (site_email_connectors) sends AS the
+    // owner's own address; otherwise the platform default (Resend, business
+    // display name, reply-to = the owner) applies.
+    const connector = await getConnector(siteId);
+    if (connector) {
+      await sendViaConnector(connector, {
+        fromName: businessName,
+        to: lead.email,
+        subject: String(subject).trim(),
+        text: plain,
+        html,
+      });
+    } else {
+      await sendMail({
+        fromName: businessName,
+        to: lead.email,
+        replyTo: req.cmsUser.email,
+        subject: String(subject).trim(),
+        text: plain,
+        html,
+      });
+    }
 
     const meta = lead.metadata && typeof lead.metadata === 'object' ? { ...lead.metadata } : {};
     meta.replies = [
       ...(Array.isArray(meta.replies) ? meta.replies : []),
-      { subject: String(subject).trim(), html, sent_at: new Date().toISOString(), by: req.cmsUser.email },
+      {
+        subject: String(subject).trim(), html, sent_at: new Date().toISOString(),
+        by: req.cmsUser.email, via: connector ? `gmail:${connector.email}` : 'platform',
+      },
     ];
     await supabase.from('site_leads')
       .update({ status: 'replied', replied_at: new Date().toISOString(), metadata: meta })
