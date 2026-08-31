@@ -1161,6 +1161,22 @@ vendors like Figma), (d) vendor normalization ("Google Payments" and
 (monthly/yearly) for a real renews_on instead of the +1 month guess.
 Back-office AI = OpenAI per the 2026-06-26 decision; category column +
 export follow.
+**v1.2 additions (2026-08-31): manual entry + receipt upload.** "Add
+expense" (account='manual') + per-row receipt attach/replace (PDF/image,
+Cloudinary originals) + delete for manual rows only. Covers dashboard-only
+invoices (Northwest Registered Agent bills the card as "Corporate Filings
+LLC"; the invoice never arrives by email). DECISION: the peter.okeme@
+gmail.com app password (EXPENSE_MB3) is SKIPPED for now, manual entry
+covers its only subscription; revisit if more billing lands there.
+**Airwallex card feed (recorded, not built): the P17 v2 direction.** Most
+subscriptions now charge the AWX debit card, so the authoritative expense
+LEDGER should be the Airwallex issuing/transactions API (catches every
+charge, even without an email receipt), with the email scan ATTACHING
+receipts to matching transactions (vendor+amount+day, the dup-detection
+matcher) and manual entry covering other cards + dashboard invoices. A
+mini recon engine for spend, mirroring lib/reconEngine.js for deposits.
+Combination beats either source alone: card feed = completeness, email =
+documentation, manual = the tail.
 **Related idea recorded (Peter): Gmail-style MULTI-ACCOUNT sign-in**
 (switch between logged-in accounts / add another, the Google account
 menu pattern) for the Stemfra AI dashboard and the Lead-Gen CRM — an
@@ -1357,6 +1373,17 @@ inbox).
 
 Three stemfra-CRM (stemfra-ops) items agreed while building the Helen
 Lead-Gen CRM's telephony arc:
+
+2 (of the P23 list). **Side Copilot: ✅ BUILT + VERIFIED 2026-08-31** (local
+   commits, not pushed). The Helen Lead-Gen copilot ported: server
+   `/api/admin/copilot` (routes/admin/copilot.js + lib/crmCopilotContext.js
+   live snapshot of sales pipeline + tenant sites + billing + expenses;
+   `crm_copilot_conversations` table, per-staff), CRM `components/copilot/`
+   CopilotPanel (docked resizable right rail, Chat|History, markdown,
+   link chips, rewind) + TopBar Copilot launcher. Whitelisted
+   confirm-before-act actions: set_stage, email_lead (opens the composer),
+   scan_expenses. Verified live: grounded pipeline answer (63 leads, 11
+   contacts) + the scan action end-to-end with the honest "Done" note.
 
 1. **Persistent call widget (call + act simultaneously).** Replace the
    modal-style call UX with a floating, page-independent widget (the
