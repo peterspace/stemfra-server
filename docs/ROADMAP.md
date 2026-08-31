@@ -1271,6 +1271,36 @@ Build trigger: after the Helen handoff + billing arc; P17's n8n harvester
 can be superseded by this product's engine (build once, use internally
 first — the platform is customer #1).
 
+## P23 — CRM call workspace + side Copilot + Lead-Gen monitoring (recorded 2026-08-31, Peter)
+
+Three stemfra-CRM (stemfra-ops) items agreed while building the Helen
+Lead-Gen CRM's telephony arc:
+
+1. **Persistent call widget (call + act simultaneously).** Replace the
+   modal-style call UX with a floating, page-independent widget (the
+   Front Desk launcher pattern from tenant sites): active call docks to a
+   corner and survives navigation, so staff can edit a contact, draft a
+   note, or add a calendar event (e.g. the prospect agrees to a Zoom/Meet
+   mid-call) WHILE talking — the bank-agent mental model. Same pattern
+   ships in the Lead-Gen CRM (design recorded in its docs/TELEPHONY.md
+   §4b); build there first on the smaller surface, port back here where
+   the Twilio Voice JS SDK (browser audio) already exists.
+2. **Side Copilot for the stemfra CRM.** A docked side-panel copilot like
+   the Lead-Gen CRM's Copilot and Stacy in the CMS — staff-facing,
+   context = the open record + CRM data. Reuse the Lead-Gen copilot's
+   panel UX + the aiMeter metering pattern.
+3. **Lead-Gen product monitoring inside the stemfra CRM.** A surface
+   showing per-tenant health of the Lead-Gen product (Helen first):
+   plan/usage (the /api/usage/summary payload), lookups run + spend,
+   emails sent, last inbox sync, telephony state, last activity.
+   Mechanism: leads-api exposes a staff endpoint guarded by a shared
+   secret (the STEMFRA_ADMIN_SECRET service-to-service pattern; public
+   hostname, never loopback), proxied by stemfra_server for the CRM page.
+   Start read-only; actions (suspend, top-up) come with the billing arc.
+
+Sequencing: after the Helen handoff. Item 3 is small and first (it aids
+the pilot itself); 1 and 2 ride with the Lead-Gen telephony T5/T6 arc.
+
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
   + Jessica @ 0.95) — draft when Peter wants to record.
