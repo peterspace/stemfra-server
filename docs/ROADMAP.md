@@ -1233,6 +1233,44 @@ is to treat the FIRST paying client as the trigger. Until then:
 3. **Pro upgrade** (~$25/mo) at the first paying client; consider the PITR
    add-on once revenue justifies.
 
+## P22 — Expense Tracker AI (PRODUCT sketch, recorded 2026-08-31)
+
+The sellable, tenant-facing sibling of P17 (which stays the internal OPEX
+version and becomes the dogfood). Origin: while building the Helen Lead-Gen
+CRM's telephony arc, Peter asked for a live case study — a read-only IMAP
+scan of his connected Gmail (546 August messages) surfaced 8 real expense
+documents with a plain subject filter (Anthropic x2, ElevenLabs, Cloudflare,
+Atlassian, Figma x2, Tello). Proof: the hard plumbing (mailbox connect,
+vaulted credentials, sync) ALREADY exists in the lead-gen CRM; the product
+is the extraction + books layer on top.
+
+Product shape (v0 sketch):
+1. **Connect mailboxes — PLURAL, a core requirement (Peter 2026-08-31):**
+   a business's subscriptions scatter across addresses (Peter's own case:
+   peter.space.io@gmail.com, admin@stemfra.com, peter@stemfra.com). The
+   account model is one workspace -> N linked mailboxes from day one; the
+   lead-gen CRM's single `email_account` key generalizes to a list. Reuse
+   the same app-password flow + docs page now, the stemfra_ai OAuth broker
+   at product scale.
+2. **Harvest**: scheduled scan per mailbox (subject/sender heuristics find
+   candidates cheaply — measured 546 -> 8 with zero AI cost), then the LLM
+   opens only the candidates and extracts vendor / amount / currency /
+   date / cadence / last4. Dedupe by message-id AND by vendor+amount+period
+   (a Figma "renewal reminder" and its receipt must not double-count).
+3. **Books**: monthly expense P&L by category, renewal calendar with
+   upcoming-charge warnings, "not a business expense — exclude" toggle
+   (P17's rule), CSV/Excel export (the lead-gen CRM's SheetJS exporter
+   ports straight over).
+4. **Metering/pricing**: AI extraction runs through the same aiMeter
+   25%-markup pattern; candidate-filtering-first keeps unit cost tiny.
+   Could ship as a module inside the CRMs or a standalone product under
+   the Stemfra AI umbrella (the Google-style multi-product launcher idea,
+   recorded in the lead-gen plan doc).
+
+Build trigger: after the Helen handoff + billing arc; P17's n8n harvester
+can be superseded by this product's engine (build once, use internally
+first — the platform is customer #1).
+
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
   + Jessica @ 0.95) — draft when Peter wants to record.
