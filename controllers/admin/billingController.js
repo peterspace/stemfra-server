@@ -82,7 +82,11 @@ async function invoicePdf(req, res) {
   }
   // Widened 2026-08-04 to every unpaid charge — keep in step with the CMS path.
   const bank = charge.status !== 'paid' ? await getCommissionBank().catch(() => null) : null;
-  streamInvoicePdf(res, { charge, contact, billingProfile: contact?.billing_profile || {}, provider: charge.provider, bank });
+  // P19: bill-to = the SITE's company identity (contact fallback inside).
+  const identity = await require('../../lib/billingProfile').resolveBillingIdentity(charge.site_id).catch(() => null);
+  const bp = identity?.profile || contact?.billing_profile || {};
+  const billTo = { ...contact, full_name: null, first_name: bp.first_name ?? contact?.first_name, last_name: bp.last_name ?? contact?.last_name, country: bp.country ?? contact?.country, state: bp.state ?? contact?.state };
+  streamInvoicePdf(res, { charge, contact: billTo, billingProfile: bp, provider: charge.provider, bank });
 }
 
 // GET /api/admin/billing/charges/:id/booking-export.csv — proof-of-service for a

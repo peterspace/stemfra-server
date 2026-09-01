@@ -1237,27 +1237,27 @@ hero image"). Design agreed in review (2026-08-20); build AFTER the launch.
    `site_activity`.
 4. **S3d — bulk**: "here are 6 gallery photos" → multi-upload → gallery reorder card.
 
-## P19 — Multi-site (second business) gaps (agreed 2026-08-20, Peter: all important)
+## P19 — Multi-site (second business) gaps (agreed 2026-08-20, Peter: all important) — ✅ ALL FOUR DONE 2026-09-01
 
 Found while walking "+ New site" during the final E2E test. Each site already has its
 own `companies` row, so two businesses under one owner ARE modeled; these close the rest:
 
-1. **Per-business billing details.** Today `contacts.billing_profile` = ONE billing
+1. ✅ **Per-business billing details.** (2026-09-01: `companies.billing_profile` jsonb + backfill migration `p19_company_billing_profile` [18/20 companies]; `lib/billingProfile.js` `resolveBillingIdentity` [company-over-contact per-field merge] + `saveCompanyBillingProfile` [contact prefill]; consumers switched: cms billingController [GET returns `billingIdentity`, PATCH /contact with `siteId` writes the company profile, invoice PDF bill-to], admin invoice, billingEmails attachment, siteCompleteness billing gate; CMS BillingPage details tab edits per business + LocationSectionEditor "use my billing address" reads the identity. Airwallex payer/awx_customer_id deliberately stays contact-level.) Today `contacts.billing_profile` = ONE billing
    name/address per LOGIN, shared by every site; a barbershop + a CrossFit club need
    distinct invoice identities. Move/duplicate the billing profile to the COMPANY level
    (prefill from the owner's existing details; editable per site at Account → Billing →
    Billing details); invoices/commission statements + the publish gate read the site's
    company profile. Touches: billingController (contact → company), invoicePdf,
    BillingPage details tab, siteCompleteness `billing_details`, CRM billing views.
-2. **Fees-policy acceptance for site #2.** Signup stamps `metadata.onboarding.fees_policy`;
+2. ✅ **Fees-policy acceptance for site #2.** (2026-09-01: `stampNewSite` in cms sitesController stamps `metadata.onboarding.fees_policy` [onboardSite shape] + a `legal_acceptances` fees row on createSite/cloneOwnSite when the modal's confirm line is ticked; NewSiteModal + CloneSiteModal gained the required "same terms: free website, 5% commission" checkbox. Stacy's clone card sends no acceptance so nothing is fabricated.) Signup stamps `metadata.onboarding.fees_policy`;
    `POST /api/cms/sites` (+ /clone) never does — the second business has no recorded 5%
    acceptance. Add a confirm line to NewSiteModal ("Free website + 5% commission, same
    as your other sites") and stamp server-side (same shape as onboardSite).
-3. **`is_test` inheritance.** A new/cloned site by a TEST owner is not flagged
+3. ✅ **`is_test` inheritance.** (2026-09-01: same `stampNewSite` — flags when `isTestEmail(owner email)` OR every existing sibling site is already test; best-effort, never fails the provision.) A new/cloned site by a TEST owner is not flagged
    `is_test` (flag comes from the signup email only) → escapes Clean up test data +
    pollutes KPIs. In createSite/cloneSiteEndpoint: flag when `isTestEmail(owner.email)`
    or when all the owner's existing sites are test.
-4. **Theme selection at creation.** NewSiteModal offers vertical only; owner lands on
+4. ✅ **Theme selection at creation.** (2026-09-01: NewSiteModal theme cards [per-vertical active templates, color swatches, default preselected, resets on vertical change] → `templateSlug` through `POST /api/cms/sites` → provisionSite's existing `templateSlug` param; cross-vertical slugs rejected by resolveTemplate.) NewSiteModal offers vertical only; owner lands on
    the default theme and must find Website → Style → Themes. Add a theme step (the
    vertical's template cards, like the Claim funnel's Starter pick) to the modal.
 

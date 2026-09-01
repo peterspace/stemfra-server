@@ -8,6 +8,7 @@ const billing = require('../../lib/billing');
 const { logSiteActivity } = require('../../lib/activity');
 const { streamInvoicePdf } = require('../../lib/invoicePdf');
 const { getCommissionBank } = require('../../lib/commission');
+const { resolveBillingIdentity, saveCompanyBillingProfile, IDENTITY_KEYS } = require('../../lib/billingProfile');
 
 const CONTACT_COLS = 'full_name, first_name, last_name, email, phone, country, state, billing_profile';
 
@@ -59,7 +60,11 @@ async function getBilling(req, res) {
   const hasBankTransfer = charges.some((c) => c.kind === 'commission' || c.kind === 'adjustment');
   const commissionBank = hasBankTransfer ? await getCommissionBank() : null;
 
-  return res.json({ subscription: sub || null, charges, contact, availablePlans, currentTier, canChangePlan, provider, commissionBank });
+  // P19: the invoice identity for THIS business (company profile, contact
+  // fallback) — what the Billing details tab edits + invoices print.
+  const billingIdentity = await resolveBillingIdentity(siteId);
+
+  return res.json({ subscription: sub || null, charges, contact, billingIdentity, availablePlans, currentTier, canChangePlan, provider, commissionBank });
 }
 
 // POST /api/cms/billing/change-plan { siteId, tier }
@@ -99,13 +104,31 @@ async function changePlan(req, res) {
 }
 
 // PATCH /api/cms/billing/contact — name + full billing address + tax id.
-// country/state stay on the contacts columns (Payoneer payer reads them); the
-// rest of the postal address + tax id merge into contacts.billing_profile.
+// P19 (2026-09-01): WITH a siteId the write goes to that site's COMPANY
+// billing profile (per-business invoice identity, prefilled from the contact);
+// WITHOUT one it stays the legacy contact write (ProfilePage's account-level
+// name edit). country/state stay mirrored on the contacts columns for the
+// legacy path (Payoneer payer reads them).
 const PROFILE_KEYS = ['line1', 'line2', 'city', 'postal_code', 'tax_id', 'tax_type'];
 async function updateBillingContact(req, res) {
   const contactId = await resolveContactId(req.cmsUser.id);
   if (!contactId) return res.status(404).json({ error: 'No contact for this account' });
   const b = req.body || {};
+
+  if (b.siteId) {
+    const site = await verifySiteOwnership(req.cmsUser.id, b.siteId);
+    if (!site) return res.status(403).json({ error: 'Not your site' });
+    const patch = {};
+    for (const k of IDENTITY_KEYS) if (b[k] !== undefined) patch[k] = b[k] || null;
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'Nothing to update' });
+    try {
+      const { profile } = await saveCompanyBillingProfile(b.siteId, patch);
+      const billingIdentity = { profile, source: 'company' };
+      return res.json({ billingIdentity });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
   const patch = {};
   if (b.first_name !== undefined) patch.first_name = b.first_name;
   if (b.last_name !== undefined) patch.last_name = b.last_name;
@@ -181,7 +204,11 @@ async function invoicePdf(req, res) {
   // commission/adjustment) → include our Airwallex bank details so the tenant
   // knows exactly where to pay. Matches the emailed attachment.
   const bank = charge.status !== 'paid' ? await getCommissionBank().catch(() => null) : null;
-  streamInvoicePdf(res, { charge, contact, billingProfile: contact?.billing_profile || {}, provider: charge.provider, bank });
+  // P19: bill-to = the SITE's company identity (contact fallback inside).
+  const identity = await resolveBillingIdentity(charge.site_id);
+  const bp = identity?.profile || contact?.billing_profile || {};
+  const billTo = { ...contact, full_name: null, first_name: bp.first_name ?? contact?.first_name, last_name: bp.last_name ?? contact?.last_name, country: bp.country ?? contact?.country, state: bp.state ?? contact?.state };
+  streamInvoicePdf(res, { charge, contact: billTo, billingProfile: bp, provider: charge.provider, bank });
 }
 
 // GET /api/cms/billing/charges/:chargeId/hosted-invoice

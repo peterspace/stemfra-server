@@ -12,6 +12,52 @@ const { provisionSite, cloneSite, resolveVerticalSlug, SEED_SOURCE_BY_VERTICAL }
 const { attachSiteDomain } = require('../../lib/attachSiteDomain');
 const { softDeleteSite, restoreSite } = require('../../lib/siteDeletion');
 const { logSiteActivity } = require('../../lib/activity');
+const { isTestEmail } = require('../../lib/testData');
+const { LEGAL_DOCS, recordLegalAcceptance } = require('../../lib/legalDocs');
+
+// P19 items 2+3 (2026-09-01): stamp a newly created/cloned ADDITIONAL site the
+// way signup stamps site #1 —
+//   is_test: inherited when the owner is a test account (test email domain, or
+//     every existing site of theirs is already flagged test), so a test owner's
+//     new sites never leak into invoices/sweepers/KPIs;
+//   fees_policy: recorded when the owner ticked the NewSiteModal confirm line
+//     ("Free website + 5% commission, same as your other sites") — same shape
+//     as lib/onboardSite.js + a legal_acceptances ledger row. Callers that
+//     never show the confirm (Stacy's clone card) simply don't send
+//     feesAccepted, and nothing is fabricated.
+// Best-effort by design: a stamp failure never fails the provision.
+async function stampNewSite({ siteId, contactId, authUserId, email, feesAccepted, source }) {
+  try {
+    let isTest = isTestEmail(email);
+    if (!isTest) {
+      const { data: siblings } = await supabase
+        .from('sites').select('id, metadata')
+        .eq('owner_contact_id', contactId).neq('id', siteId).is('deleted_at', null);
+      isTest = !!(siblings && siblings.length > 0 && siblings.every((x) => x?.metadata?.is_test === true));
+    }
+
+    const feesPolicy = feesAccepted === true
+      ? { accepted: true, accepted_at: new Date().toISOString(), commission_percent: 5, policy_version: LEGAL_DOCS.fees.version, source }
+      : null;
+
+    if (isTest || feesPolicy) {
+      const { data: cur } = await supabase.from('sites').select('metadata').eq('id', siteId).single();
+      const meta = { ...(cur?.metadata || {}) };
+      if (isTest) meta.is_test = true;
+      if (feesPolicy) meta.onboarding = { ...(meta.onboarding || {}), fees_policy: feesPolicy };
+      await supabase.from('sites').update({ metadata: meta }).eq('id', siteId);
+    }
+
+    if (feesPolicy) {
+      await recordLegalAcceptance({
+        contactId, authUserId, email, siteId, docs: ['fees'], source,
+        metadata: { commission_percent: 5 },
+      });
+    }
+  } catch (e) {
+    console.warn('[cms sites] stampNewSite failed:', e.message);
+  }
+}
 
 // POST /api/cms/sites { businessName, vertical, city? }
 async function createSite(req, res) {
@@ -22,6 +68,9 @@ async function createSite(req, res) {
     const businessName = String(req.body?.businessName || '').trim();
     const city = req.body?.city ? String(req.body.city).trim() : null;
     const vSlug = resolveVerticalSlug(req.body?.vertical);
+    // P19 item 4: optional theme choice from the NewSiteModal — validated by
+    // provisionSite's resolveTemplate (unknown/inactive slug → error).
+    const templateSlug = req.body?.templateSlug ? String(req.body.templateSlug).trim() : null;
     if (!businessName) return res.status(400).json({ error: 'Enter a business name.' });
     if (!SEED_SOURCE_BY_VERTICAL[vSlug]) {
       return res.status(400).json({ error: `Choose a vertical: ${Object.keys(SEED_SOURCE_BY_VERTICAL).join(', ')}` });
@@ -41,6 +90,7 @@ async function createSite(req, res) {
         ownerContactId: contactId,
         displayName: businessName,
         city,
+        templateSlug,
         // No createdBy: sites.created_by → profiles(id) is the STAFF actor.
         // Client owners have no profile row (staff-only since Wave 0) — passing
         // their auth id violates the FK. The owner is captured via owner_contact_id.
@@ -50,6 +100,11 @@ async function createSite(req, res) {
       try { await supabase.from('companies').delete().eq('id', companyId); } catch { /* best-effort */ }
       throw err;
     }
+
+    await stampNewSite({
+      siteId: site.siteId, contactId, authUserId: req.cmsUser.id, email: req.cmsUser.email,
+      feesAccepted: req.body?.feesAccepted === true, source: 'new_site',
+    });
 
     // Best-effort host attach so the preview is reachable. If Cloudflare is
     // unavailable the site still exists (previewing) and the host can be
@@ -110,6 +165,11 @@ async function cloneOwnSite(req, res) {
       try { await supabase.from('companies').delete().eq('id', companyId); } catch { /* best-effort */ }
       throw err;
     }
+
+    await stampNewSite({
+      siteId: site.siteId, contactId, authUserId: req.cmsUser.id, email: req.cmsUser.email,
+      feesAccepted: req.body?.feesAccepted === true, source: 'clone',
+    });
 
     let domain = { attached: false };
     try {
@@ -201,4 +261,4 @@ async function updateBusinessName(req, res) {
   }
 }
 
-module.exports = { createSite, cloneOwnSite, deleteOwnSite, restoreOwnSite, updateBusinessName };
+module.exports = { createSite, cloneOwnSite, deleteOwnSite, restoreOwnSite, updateBusinessName, stampNewSite };
