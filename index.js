@@ -21,6 +21,7 @@ const { startBookingAutoCollectSweeper } = require('./lib/bookingAutoCollectSwee
 const { startDomainRenewalSweeper } = require('./lib/domainRenewalSweeper');
 const { startNexusSweeper } = require('./lib/nexusSweeper');
 const { startReconSweeper } = require('./lib/reconSweeper');
+const { startBackupSweeper } = require('./lib/backupSweeper');
 const { startOutreachSequencer } = require('./lib/outreachSequencer');
 const leadgenRoutes    = require('./routes/leadgen');
 const speedToLeadRoutes = require('./routes/speedToLead');
@@ -185,6 +186,7 @@ app.use('/api/admin/subscriptions', require('./routes/admin/subscriptions'));
 app.use('/api/admin/billing', require('./routes/admin/billing'));
 app.use('/api/admin/compliance', require('./routes/admin/compliance'));
 app.use('/api/admin/recon', require('./routes/admin/recon'));
+app.use('/api/admin/backups', require('./routes/admin/backups')); // P21 nightly data backups
 app.use('/api/admin/bookings', require('./routes/admin/bookings'));
 app.use('/api/admin/memberships', require('./routes/admin/memberships'));
 app.use('/api/admin/mockups', require('./routes/admin/mockups'));
@@ -219,6 +221,9 @@ server.listen(PORT, () => {
   // Flip stale user_presence rows to offline once a minute. Browsers don't
   // reliably fire the offline beacon on tab close, so this is the fallback.
   startStalePresenceSweeper();
+  // P21: nightly compressed-JSON dumps of the business-critical tables to the
+  // VPS disk (compose volume ./backups) — the free-plan Supabase safety net.
+  startBackupSweeper();
   // Lead-gen Phase 2: poll sent-outreach Gmail threads for replies → flip leads
   // warm. Idle (no-op) until the Google service account is configured.
   startOutreachReplySweeper();

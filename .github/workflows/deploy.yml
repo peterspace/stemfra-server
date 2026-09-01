@@ -6,6 +6,9 @@
 #
 #   Secrets (sensitive — NEVER commit these to .env.example or anywhere else):
 #     - HOSTINGER_API_KEY        Generated at: hPanel → Account → API keys
+#   P21 nightly backups run BY DEFAULT (lib/backupSweeper.js → the ./backups
+#   compose volume; kill with BACKUP_ENABLED=false, tune BACKUP_HOUR_UTC /
+#   BACKUP_RETENTION_DAYS — none are required here, defaults live in code).
 #     - SUPABASE_SECRET_KEY      sb_secret_... key from Supabase Dashboard → API
 #     - GMAIL_APP_PASSWORD       App Password from myaccount.google.com/apppasswords
 #     - TWILIO_ACCOUNT_SID       Twilio Console → Account Info

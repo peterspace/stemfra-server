@@ -8,6 +8,10 @@ services:
       - "4000"
     env_file:
       - .env
+    volumes:
+      # P21 nightly backups — a host bind mount so the dumps survive container
+      # recreation and image redeploys (lib/backupSweeper.js writes here).
+      - ./backups:/app/backups
     labels:
       - traefik.enable=true
       - traefik.docker.network=space

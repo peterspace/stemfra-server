@@ -1284,12 +1284,17 @@ send security questionnaires. What to actually do, in order:
 The production Supabase org runs the FREE plan (no backups, 500MB cap). Peter's
 call: upgrade to Pro once real clients arrive (~first 10); Claude's standing rec
 is to treat the FIRST paying client as the trigger. Until then:
-1. **Nightly backup sweeper (BUILD, small):** server-side cron dumps the
-   critical tables (site_customers, site_bookings + groups, sites, site_pages/
-   sections, site_services/team, site_leads, billing_charges, subscriptions,
-   leads, contacts/companies) to compressed JSON via the service key; rolling
-   7-day retention on the VPS disk. Turns "total loss" into "restore yesterday"
-   at zero cost. Ship BEFORE the first real tenant.
+1. ✅ **Nightly backup sweeper — DONE 2026-09-01** (`lib/backupSweeper.js` +
+   `routes/admin/backups.js` + the `./backups` compose bind mount): nightly at
+   BACKUP_HOUR_UTC (default 7 ≈ 2-3am ET) it streams 30 business-critical
+   tables to gzip JSON (per-night dir + manifest), rolling 7-day retention,
+   boot catch-up when the newest dump is >26h old, failure email to
+   NOTIFY_EMAIL, `POST /api/admin/backups/run` + `GET /api/admin/backups`
+   (PLATFORM_ADMIN), manual `scripts/backup-now.js`. ON by default
+   (BACKUP_ENABLED=false kills). Verified: full prod dump 3,174 rows / 0.4MB /
+   0 errors, every file re-parses as valid JSON (argyle + 116 bookings
+   present), retention prune exercised. Restore = manual by design (header
+   comment documents FK order).
 2. **Supabase MFA for admin@'s dashboard login** (Team page showed MFA
    Disabled for both owners) — same hygiene bucket as the Cloudflare TOTP done
    2026-08-27.
