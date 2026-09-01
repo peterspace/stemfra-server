@@ -7,6 +7,19 @@ linked docs; this is "what's next and why."_
 ## 📌 WHERE WE STAND (2026-07-29 audit — read this before the per-arc detail)
 _Verified against code + DB + env, not just doc claims._
 
+### 🥇 AGREED BUILD ORDER (Peter, 2026-09-01 — cold calls + REAL-CLIENT ONBOARDING START 2026-09-02)
+After the wellness About/Contact visual pass closes and the push hold lifts, prioritize the
+surfaces that touch new-client onboarding, in THIS order:
+1. **Inbox parity upgrades** (CMS enquiries + CRM Gmail to the Helen standard — see the parity
+   checklist block below).
+2. **P23** CRM call workspace + lead-gen monitoring (copilot part already built).
+3. **Template readiness audit** (every image/text CMS-editable, per theme; yoga Sanctuary is the
+   done model).
+4. **Peter's dashboard actions** (Supabase auth-email SMTP + paste the 4 branded templates;
+   CMS-origin redirect allowlist for magic links).
+5. **P25** logo toolkit (Brandfetch import + SVG builder).
+Then the rest of the queue (P20 security, P21 items 2–3, P18, P22, launch-plan tasks as they come due).
+
 ### 🚀 ACTIVE ARC (2026-08-18): LAUNCH — phased, barbershop first → **[`LAUNCH_PLAN.md`](LAUNCH_PLAN.md)**
 Peter's 10 launch tasks (VSL video · 3-contact prospecting sequence · Stacy+routes refresh ·
 CMS tour re-walk · legal pages · lead-gen city/state coverage in the CRM · Mark voice refresh ·
