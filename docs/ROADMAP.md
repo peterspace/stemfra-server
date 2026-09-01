@@ -1430,6 +1430,39 @@ Lead-Gen CRM's telephony arc:
 Sequencing: after the Helen handoff. Item 3 is small and first (it aids
 the pilot itself); 1 and 2 ride with the Lead-Gen telephony T5/T6 arc.
 
+## P25 — Tenant logo toolkit (recorded 2026-09-01, agreed with Peter)
+
+Where client logos come from. Context: there is no "Unsplash for logos" —
+stock APIs work because photos are generic; a logo is an identity mark, so
+the toolkit has an import track and a creation track:
+
+1. **Import an existing brand (small, ship first)**: a "Find your logo"
+   action in CMS Settings → Style → Branding — Brandfetch (or Logo.dev)
+   lookup by the business's domain/website → preview → import through the
+   existing upload pipeline (Cloudinary subdomain folder + site_media row
+   with provenance metadata, exactly like the Unsplash stock-photo imports).
+   Server-proxied key (`/api/cms/brand-logo/*`, key stays server-side, same
+   pattern as stockPhotosController). Free tiers cover our volume.
+2. **SVG logo builder (the main build)**: for clients WITHOUT a logo — an
+   in-CMS wordmark/monogram generator: business name + a Google Font picker
+   (families already load dynamically per theme) + optional icon from the
+   Iconify corpus (200k+ open-source icons, free API — server-proxied like
+   Unsplash) + colors seeded from the active theme palette → composed
+   vector SVG in 3 lockups (wordmark / icon+wordmark / monogram badge) →
+   saved as the site logo via the existing branding flow (favicon derived
+   from the monogram). Zero per-use cost, deterministic, always on-theme.
+   Precedent: the boot-loader letter-monogram pattern, scaled up.
+3. **AI generation deliberately SKIPPED** — not for cost (gpt-image runs
+   ~$0.02–0.19/image; a whole session is under $1) but for quality: raster
+   output, mangled in-logo text, inconsistent marks that undercut the
+   polished-site positioning. Revisit only as an optional "ideas" garnish
+   after 1+2 exist.
+
+Integration points: BrandingSection (upload stays the default path), the
+Stacy onboarding "logo" step deep-links the builder, publish-checklist logo
+gate counts a built logo. Build trigger: after the wellness theme-polish
+arc closes.
+
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio
   + Jessica @ 0.95) — draft when Peter wants to record.
