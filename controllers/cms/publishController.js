@@ -6,6 +6,7 @@ const supabase = require('../../config/supabase');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { evaluateCompleteness } = require('../../lib/siteCompleteness');
 const { evaluateSampleSections } = require('../../lib/sampleContent');
+const { evaluateSiteQuality } = require('../../lib/siteQuality');
 const { publishSite, unpublishSite, getBillingStatus } = require('../../lib/sitePublish');
 const { createPlatformCheckout } = require('../../lib/platformBilling');
 const billing = require('../../lib/billing');
@@ -178,4 +179,19 @@ async function getSampleStatus(req, res) {
   }
 }
 
-module.exports = { getReadiness, publish, unpublish, billingCheckout, requestPublishInvoice, getSampleStatus };
+// GET /api/cms/site-publish/quality/:siteId — theme-aware quality suggestions
+// (lib/siteQuality.js). Advisory only; NEVER part of the publish gate. Errors
+// degrade to an empty list so the Publish page never breaks on this.
+async function getQuality(req, res) {
+  try {
+    const { siteId } = req.params;
+    const site = await verifySiteOwnership(req.cmsUser.id, siteId);
+    if (!site) return res.status(403).json({ error: 'Not your site.' });
+    res.json(await evaluateSiteQuality(siteId));
+  } catch (e) {
+    console.error('[cms/publish] quality failed:', e.message);
+    res.json({ findings: [], summary: null });
+  }
+}
+
+module.exports = { getReadiness, publish, unpublish, billingCheckout, requestPublishInvoice, getSampleStatus, getQuality };
