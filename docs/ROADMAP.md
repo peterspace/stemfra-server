@@ -1056,17 +1056,17 @@ CMS boot spinner, card active states, FAQ+legal onboarding steps).
    3-step model (Add domain -> Configure DNS w/ per-provider instructions ->
    Verify button; render.com/docs/custom-domains is the reference).
 
-## P16 — Interactive onboarding + What's New + Support system (QUEUED 2026-08-09, design agreed in discussion; build order TBD with Peter)
+## P16 — Interactive onboarding + What's New + Support system — ✅ CLOSED 2026-09-01 (items 2+3 shipped; item 1 DROPPED by Peter)
 
 Context: the native CMS walkthrough (P15) shipped 2026-08-08 (10 spotlight steps,
 Jessica voice @ 0.95, docs in P15_VIDEO_DEMOS_PLAN.md). Peter's goal: the setup
 call must become optional/minimal; Stacy + interactive tours carry onboarding.
 
-1. **Interactive "do-it" tour steps**: extend the tour engine so a step can
-   require the user's REAL action (click the spotlit target, advance on route
-   change/DOM event) instead of Next. Then wire Stacy's 14-step onboarding
-   checklist to launch per-task mini-tours ("Show me how" on each step) — the
-   checklist says WHAT, the tour shows WHERE, in place.
+1. ❌ **Interactive "do-it" tour steps** — DROPPED (Peter, 2026-09-01): the
+   existing "Take a quick tour" (Dashboard) + per-page "Take a tour" already
+   serve the goal. Video strategy instead: several VSL videos uploaded to
+   YouTube + dedicated YouTube-ad promo videos, created later (see the VSL
+   item in LAUNCH_PLAN / P15).
 2. **What's New channel** (absorbs the parked P10 case-1 "What's new" item):
    feature announcements via the existing broadcast_announcement rail + a
    What's New surface in the CMS; each entry can carry a "Show me" hook that
