@@ -8,6 +8,7 @@
 const supabase = require('../config/supabase');
 const { DateTime } = require('luxon');
 const { buildConciergeContext } = require('../lib/conciergeContext');
+const conciergeBrain = require('../lib/conciergeBrain');
 
 let fireSpeedToLead = null;
 try { ({ fireSpeedToLead } = require('../routes/speedToLead')); } catch { /* optional */ }
@@ -15,6 +16,9 @@ try { ({ fireSpeedToLead } = require('../routes/speedToLead')); } catch { /* opt
 const CONCIERGE_N8N_URL = process.env.CONCIERGE_N8N_URL;
 const N8N_SECRET = process.env.N8N_WEBHOOK_SECRET;
 const CONCIERGE_MODEL = process.env.CONCIERGE_MODEL || 'gpt-4o';
+// Transport flag (2026-09-02, the Stacy native pattern): 'native' calls OpenAI
+// directly via lib/conciergeBrain.js; anything else keeps the n8n webhook.
+const CONCIERGE_MODE = process.env.CONCIERGE_MODE === 'native' ? 'native' : 'n8n';
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
 // CTA buttons the agent may surface (keys → server-controlled label + internal path,
@@ -79,7 +83,9 @@ async function send(req, res) {
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown';
     if (rateLimited(ip)) return res.status(429).json({ error: 'Too many messages — please slow down a moment.' });
 
-    if (!CONCIERGE_N8N_URL) return res.status(503).json({ error: 'The assistant is not configured yet.' });
+    if (CONCIERGE_MODE === 'native' ? !conciergeBrain.isConfigured() : !CONCIERGE_N8N_URL) {
+      return res.status(503).json({ error: 'The assistant is not configured yet.' });
+    }
 
     const context = buildConciergeContext();
     const today = DateTime.now().setZone('America/New_York').toFormat("yyyy-MM-dd '('cccc')'");
@@ -89,15 +95,20 @@ async function send(req, res) {
 
     let reply = '', lead = null, quickReplies = [], ctaKeys = [], wantsBooking = false;
     try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
-      const r = await fetch(CONCIERGE_N8N_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ agent: 'concierge', model: CONCIERGE_MODEL, message: String(message).trim(), history: hist, context, today }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || `Concierge workflow error (${r.status})`);
+      let data;
+      if (CONCIERGE_MODE === 'native') {
+        data = await conciergeBrain.runConcierge({ message: String(message).trim(), history: hist, context, today, model: CONCIERGE_MODEL });
+      } else {
+        const headers = { 'Content-Type': 'application/json' };
+        if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
+        const r = await fetch(CONCIERGE_N8N_URL, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ agent: 'concierge', model: CONCIERGE_MODEL, message: String(message).trim(), history: hist, context, today }),
+        });
+        data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || `Concierge workflow error (${r.status})`);
+      }
       reply = data.reply ?? data.output ?? '';
       if (data.lead && typeof data.lead === 'object') lead = data.lead;
       if (Array.isArray(data.quick_replies)) quickReplies = data.quick_replies.filter(s => typeof s === 'string' && s.trim()).slice(0, 6);
@@ -106,7 +117,7 @@ async function send(req, res) {
         ctaKeys = data.cta.filter(k => CTA_LINKS[k]);
       }
     } catch (e) {
-      console.error('[concierge.send] n8n error:', e.message);
+      console.error(`[concierge.send] ${CONCIERGE_MODE} error:`, e.message);
       return res.status(502).json({ error: 'The assistant could not respond right now. Please try again.' });
     }
 

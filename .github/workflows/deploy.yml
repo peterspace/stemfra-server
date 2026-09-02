@@ -110,6 +110,7 @@ jobs:
             N8N_WEBHOOK_SECRET=${{ secrets.N8N_WEBHOOK_SECRET }}
             STACY_N8N_URL=https://n8n.srv1555257.hstgr.cloud/webhook/stacy
             STACY_MODEL=gpt-4o
+            STACY_MODE=native
             FRONTDESK_N8N_URL=https://n8n.srv1555257.hstgr.cloud/webhook/frontdesk
             FRONTDESK_MODEL=gpt-4o
             CONCIERGE_N8N_URL=https://n8n.srv1555257.hstgr.cloud/webhook/concierge

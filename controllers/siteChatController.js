@@ -18,6 +18,7 @@ const { runManageTool } = require('../lib/frontdeskManage');
 const { runBookingTool } = require('../lib/frontdeskBooking');
 const { sendOwnerSms } = require('../lib/ownerSmsAlerts');
 const { runMembershipTool } = require('../lib/frontdeskMemberships');
+const frontdeskBrain = require('../lib/frontdeskBrain');
 const { placeBooking, bookClassSession } = require('../controllers/bookingController');
 
 const ALLOWED_CHAT = ['live', 'previewing'];
@@ -25,6 +26,9 @@ const ALLOWED_CHAT = ['live', 'previewing'];
 const FRONTDESK_N8N_URL = process.env.FRONTDESK_N8N_URL;
 const N8N_SECRET = process.env.N8N_WEBHOOK_SECRET;
 const FRONTDESK_MODEL = process.env.FRONTDESK_MODEL || 'gpt-4o';
+// Transport flag (2026-09-02, the Stacy native pattern): 'native' calls OpenAI
+// directly via lib/frontdeskBrain.js; anything else keeps the n8n webhook.
+const FRONTDESK_MODE = process.env.FRONTDESK_MODE === 'native' ? 'native' : 'n8n';
 
 // Lightweight in-memory rate limiter (per IP+site) — protects the PUBLIC endpoint
 // and the LLM cost from abuse. Per-instance; fine for a single VPS container.
@@ -285,22 +289,28 @@ async function notifyOwnerOfLead(site, lead) {
   });
 }
 
-// One round-trip to the Front Desk n8n workflow. Returns the parsed agent output
-// { reply, handoff, lead, booking }. `context` already includes the live site
-// context + today + any booking_system_note for this call.
+// One agent round-trip (native OpenAI or the n8n workflow, per FRONTDESK_MODE).
+// Returns the parsed agent output; `context` already includes the live site
+// context + today + any system note for this call. Both transports normalize
+// through the same return block below.
 async function callFrontdesk({ convId, siteId, business, message, history, context }) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
-  const r = await fetch(FRONTDESK_N8N_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      conversationId: convId, siteId, agent: 'frontdesk',
-      business, model: FRONTDESK_MODEL, message, history, context,
-    }),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || `Front desk workflow error (${r.status})`);
+  let data;
+  if (FRONTDESK_MODE === 'native') {
+    data = await frontdeskBrain.runFrontdesk({ business, message, history, context, model: FRONTDESK_MODEL });
+  } else {
+    const headers = { 'Content-Type': 'application/json' };
+    if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
+    const r = await fetch(FRONTDESK_N8N_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        conversationId: convId, siteId, agent: 'frontdesk',
+        business, model: FRONTDESK_MODEL, message, history, context,
+      }),
+    });
+    data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || `Front desk workflow error (${r.status})`);
+  }
   return {
     reply: data.reply ?? data.output ?? '',
     handoff: !!data.handoff,
@@ -334,7 +344,9 @@ async function send(req, res) {
       return res.status(403).json({ error: 'Chat is not enabled for this site.' });
     }
 
-    if (!FRONTDESK_N8N_URL) return res.status(503).json({ error: 'The assistant is not configured yet.' });
+    if (FRONTDESK_MODE === 'native' ? !frontdeskBrain.isConfigured() : !FRONTDESK_N8N_URL) {
+      return res.status(503).json({ error: 'The assistant is not configured yet.' });
+    }
 
     // Resume or create an anonymous conversation.
     let convId = conversationId;
@@ -488,7 +500,7 @@ async function send(req, res) {
       // Server-injected booking chips (exact times) win; else use the agent's chips.
       if (!quickReplies.length) quickReplies = out.quickReplies || [];
     } catch (e) {
-      console.error('[site-chat.send] n8n error:', e.message);
+      console.error(`[site-chat.send] ${FRONTDESK_MODE} error:`, e.message);
       return res.status(502).json({ error: 'The assistant could not respond right now. Please try again.' });
     }
 
