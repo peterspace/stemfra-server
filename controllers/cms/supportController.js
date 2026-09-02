@@ -92,43 +92,49 @@ async function listRequests(req, res) {
 // GET /api/cms/support/call-config — the internal support site's booking
 // coordinates, resolved live by subdomain (never hardcoded ids). The CMS
 // books through the PUBLIC booking endpoints with these.
+/** The support-site booking coordinates, resolved live (shared by the HTTP
+ *  handler and Stacy's call-booking tool — lib/stacySupportCall.js). */
+async function loadSupportCallConfig() {
+  const { data: site, error: siteErr } = await supabase
+    .from('sites')
+    .select('id, time_zone')
+    .eq('subdomain', SUPPORT_SUBDOMAIN)
+    .single();
+  if (siteErr || !site) return null;
+
+  const [{ data: team }, { data: services }] = await Promise.all([
+    supabase.from('site_team_members').select('id').eq('site_id', site.id).eq('is_active', true).limit(1),
+    supabase
+      .from('site_services')
+      .select('id, name, duration_minutes, metadata')
+      .eq('site_id', site.id)
+      .eq('is_active', true)
+      .order('display_order'),
+  ]);
+  if (!team?.length || !services?.length) return null;
+
+  return {
+    siteId: site.id,
+    timeZone: site.time_zone,
+    teamMemberId: team[0].id,
+    services: services.map(s => ({
+      id: s.id,
+      category: s.metadata?.support_category ?? 'general',
+      name: s.name?.en ?? 'Support call',
+      durationMinutes: s.duration_minutes,
+    })),
+  };
+}
+
 async function callConfig(req, res) {
   try {
-    const { data: site, error: siteErr } = await supabase
-      .from('sites')
-      .select('id, time_zone')
-      .eq('subdomain', SUPPORT_SUBDOMAIN)
-      .single();
-    if (siteErr || !site) return res.status(503).json({ error: 'Support calls are not available right now.' });
-
-    const [{ data: team }, { data: services }] = await Promise.all([
-      supabase.from('site_team_members').select('id').eq('site_id', site.id).eq('is_active', true).limit(1),
-      supabase
-        .from('site_services')
-        .select('id, name, duration_minutes, metadata')
-        .eq('site_id', site.id)
-        .eq('is_active', true)
-        .order('display_order'),
-    ]);
-    if (!team?.length || !services?.length) {
-      return res.status(503).json({ error: 'Support calls are not available right now.' });
-    }
-
-    return res.json({
-      siteId: site.id,
-      timeZone: site.time_zone,
-      teamMemberId: team[0].id,
-      services: services.map(s => ({
-        id: s.id,
-        category: s.metadata?.support_category ?? 'general',
-        name: s.name?.en ?? 'Support call',
-        durationMinutes: s.duration_minutes,
-      })),
-    });
+    const cfg = await loadSupportCallConfig();
+    if (!cfg) return res.status(503).json({ error: 'Support calls are not available right now.' });
+    return res.json(cfg);
   } catch (err) {
     console.error('[support] call-config failed:', err);
     return res.status(500).json({ error: 'Could not load the call schedule.' });
   }
 }
 
-module.exports = { createRequest, listRequests, callConfig };
+module.exports = { createRequest, listRequests, callConfig, loadSupportCallConfig };

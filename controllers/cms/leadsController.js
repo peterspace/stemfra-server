@@ -75,10 +75,14 @@ async function replyToLead(req, res) {
         messageId,
       });
     } else {
+      // With inbound receiving configured, the visitor's answer routes back
+      // into the CMS thread via the per-lead plus-address (and is
+      // copy-forwarded to the owner). Without it, behavior is unchanged.
+      const inboundDomain = process.env.INBOUND_REPLY_DOMAIN;
       await sendMail({
         fromName: businessName,
         to: lead.email,
-        replyTo: req.cmsUser.email,
+        replyTo: inboundDomain ? `reply+${leadId}@${inboundDomain}` : req.cmsUser.email,
         subject: String(subject).trim(),
         text: plain,
         html: cleanHtml,

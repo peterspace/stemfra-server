@@ -11,6 +11,7 @@
 // Single-var supabase require per the server convention.
 const supabase = require('../../config/supabase');
 const emails = require('../../templates/transactionalEmails');
+const { runSupportCallTool } = require('../../lib/stacySupportCall');
 const { sendMail } = require('../../lib/mailer');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { buildSiteContext } = require('../../lib/stacyContext');
@@ -196,16 +197,38 @@ async function send(req, res) {
     let handoff = false;
     let toolLog = [];
     let action = null;
+    let card = null;          // structured card (call_confirm) for the panel
+    let quickReplies = [];    // tappable chips under the reply
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
-      const r = await fetch(STACY_N8N_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ conversationId, siteId, agent: 'stacy', model: conv.model || STACY_MODEL, message: userMsg.content, history, context }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || `Stacy workflow error (${r.status})`);
+      const invoke = async (extraContext) => {
+        const r = await fetch(STACY_N8N_URL, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            conversationId, siteId, agent: 'stacy', model: conv.model || STACY_MODEL,
+            message: userMsg.content, history, context: extraContext ? { ...context, ...extraContext } : context,
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || `Stacy workflow error (${r.status})`);
+        return data;
+      };
+      let data = await invoke();
+      // Support-call booking tool (Front Desk pattern): the agent emits a
+      // `call` intent; we ground it against the REAL support calendar and
+      // re-invoke ONCE with the system note so the reply never invents times.
+      if (data.call && typeof data.call === 'object') {
+        try {
+          const tool = await runSupportCallTool(data.call);
+          card = tool.card;
+          quickReplies = tool.quickReplies || [];
+          if (tool.note) data = await invoke({ call_system_note: tool.note });
+        } catch (toolErr) {
+          console.error('[stacy.send] call tool failed:', toolErr.message);
+        }
+      }
       reply = data.reply ?? data.output ?? '';
       handoff = !!data.handoff;
       toolLog = Array.isArray(data.tool_log) ? data.tool_log : [];
@@ -226,7 +249,7 @@ async function send(req, res) {
     if (links.length && /\b(where|how (do|can|would) i|how to|where's|wheres)\b/i.test(userMsg.content || '')) {
       display = links.length > 1 ? 'Here is where those live. Tap one to open it:' : 'Here is where that lives. Tap to open it:';
     }
-    const assistantMsg = { role: 'assistant', content: reply, ts: new Date().toISOString(), ...(handoff ? { handoff: true } : {}), ...(links.length ? { links } : {}), ...(display ? { display } : {}) };
+    const assistantMsg = { role: 'assistant', content: reply, ts: new Date().toISOString(), ...(handoff ? { handoff: true } : {}), ...(links.length ? { links } : {}), ...(display ? { display } : {}), ...(card ? { card } : {}), ...(quickReplies.length ? { quick_replies: quickReplies } : {}) };
     if (display) reply = display;
     await appendMessages(conversationId, [userMsg, assistantMsg]);
     await appendToolLog(conversationId, toolLog);
@@ -248,7 +271,7 @@ async function send(req, res) {
       }
     }
 
-    res.json({ reply, handoff, action, conversationId, links: assistantMsg.links || [] });
+    res.json({ reply, handoff, action, conversationId, links: assistantMsg.links || [], card, quick_replies: quickReplies });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -112,6 +112,8 @@ app.use(cors({
 app.use('/api/stripe/webhook', express.raw({ type: '*/*' }), require('./routes/stripeWebhook'));
 // Airwallex deposit webhook (recon) — same raw-body requirement for HMAC verify.
 app.use('/api/awx/webhook', express.raw({ type: '*/*' }), require('./routes/awxWebhook'));
+// Resend Receiving webhook (CMS inbox inbound replies) — raw body for svix.
+app.use('/api/resend/inbound', express.raw({ type: '*/*' }), require('./routes/resendInbound'));
 
 // Document export (stemfra_business, staff-only) — registered before the global
 // 10kb json parser because it receives multi-MB HTML+CSS payloads; the route
