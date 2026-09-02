@@ -19,8 +19,9 @@
 #     - TWILIO_TWIML_APP_SID     Twilio Console → Voice → TwiML Apps → Stemfra Ops Calling
 #   (N8N_SPEED_TO_LEAD_URL + N8N_LEADGEN_WARM_URL removed 2026-09-03 — the
 #    speed-to-lead and warm lead-gen n8n workflows were never built; the code
-#    paths degrade gracefully when unset. Delete the N8N_SPEED_TO_LEAD_URL
-#    GitHub secret too.)
+#    paths degrade gracefully when unset. No GitHub secret to clean up: the
+#    N8N_SPEED_TO_LEAD_URL secret was never created, so the old
+#    ${{ secrets... }} reference always resolved to an empty string.)
 #     - N8N_WEBHOOK_SECRET       Shared secret sent as x-leadgen-secret header to
 #                                the localhost n8n lead-gen webhook. Generate one
 #                                random string and use it consistently in both
