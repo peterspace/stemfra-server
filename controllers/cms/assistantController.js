@@ -11,7 +11,7 @@
 // Single-var supabase require per the server convention.
 const supabase = require('../../config/supabase');
 const emails = require('../../templates/transactionalEmails');
-const { runSupportCallTool } = require('../../lib/stacySupportCall');
+const { detectBookCallIntent } = require('../../lib/stacySupportCall');
 const { sendMail } = require('../../lib/mailer');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { buildSiteContext } = require('../../lib/stacyContext');
@@ -215,21 +215,18 @@ async function send(req, res) {
         if (!r.ok) throw new Error(data.error || `Stacy workflow error (${r.status})`);
         return data;
       };
-      let data = await invoke();
-      // Support-call booking tool (Front Desk pattern): the agent emits a
-      // `call` intent; we ground it against the REAL support calendar and
-      // re-invoke ONCE with the system note so the reply never invents times.
-      if (data.call && typeof data.call === 'object') {
-        try {
-          const tool = await runSupportCallTool(data.call);
-          card = tool.card;
-          quickReplies = tool.quickReplies || [];
-          if (tool.note) data = await invoke({ call_system_note: tool.note });
-        } catch (toolErr) {
-          console.error('[stacy.send] call tool failed:', toolErr.message);
-        }
-      }
+      const data = await invoke();
       reply = data.reply ?? data.output ?? '';
+      // Book-a-call = the CONCIERGE pattern (Peter, 2026-09-02: reuse the
+      // reviewed UX, don't re-invent): the model only signals INTENT (its
+      // `call` field, or the server-side ask detector); the panel then shows
+      // the structured booking picker — the same calendar flow as the CMS
+      // Support page — and the LLM never handles dates or times.
+      if ((data.call && typeof data.call === 'object') || detectBookCallIntent(userMsg.content)) {
+        card = { type: 'book_call', topic: (data.call && data.call.topic) || '' };
+        // The Concierge's reviewed phrasing; deterministic, no second AI call.
+        reply = 'Happy to set that up. Pick a day and time that work for you below, and the call is booked with the Stemfra team.';
+      }
       handoff = !!data.handoff;
       toolLog = Array.isArray(data.tool_log) ? data.tool_log : [];
       action = normalizeAction(data.action);
