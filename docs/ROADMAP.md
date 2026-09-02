@@ -18,7 +18,8 @@ surfaces that touch new-client onboarding, in THIS order:
 4. **Peter's dashboard actions** (Supabase auth-email SMTP + paste the 4 branded templates;
    CMS-origin redirect allowlist for magic links).
 5. **P25** logo toolkit (Brandfetch import + SVG builder).
-Then the rest of the queue (P20 security, P21 items 2–3, P18, P22, launch-plan tasks as they come due).
+Then the rest of the queue (P20 security, P21 items 2–3, P18, P22, **P26** agent
+inventory + archetype system, launch-plan tasks as they come due).
 
 ### 🚀 ACTIVE ARC (2026-08-18): LAUNCH — phased, barbershop first → **[`LAUNCH_PLAN.md`](LAUNCH_PLAN.md)**
 Peter's 10 launch tasks (VSL video · 3-contact prospecting sequence · Stacy+routes refresh ·
@@ -1475,6 +1476,33 @@ Integration points: BrandingSection (upload stays the default path), the
 Stacy onboarding "logo" step deep-links the builder, publish-checklist logo
 gate counts a built logo. Build trigger: after the wellness theme-polish
 arc closes.
+
+## P26 — AI agent inventory + agent archetype system (recorded 2026-09-02, Peter)
+
+Goal: stop rebuilding agent/chat UX from scratch and stop re-discovering what
+each agent can do. Two deliverables, mirroring what the theme system did for
+tenant websites:
+
+1. **Capability inventory doc** — ONE reference documenting every AI agent and
+   chat surface across the repos: Concierge (marketing), Front Desk (tenant
+   sites), the Stemfra AI runtime's agents, Stacy (CMS), the CRM call/side
+   Copilots, email-assist (suggest/refine/draft), lead-gen agents, and Mark
+   (voice). Per agent: where it lives, transport (n8n / native / runtime),
+   contract shape (reply/handoff/action/card/quick_replies/lead/booking),
+   tools it can invoke, persistence, and its UI surface.
+2. **Agent ARCHETYPE layer** — reusable pieces the way packages/archetypes
+   serves the templates, so a pattern reviewed once (booking panel, confirm
+   cards, chips, link rows, refine bar, composer, receipt cards, tz picker)
+   is PORTED, not re-invented. Covers both UI components and the server-side
+   contract conventions (context builder → hard-rule prompt → structured
+   JSON → server grounding/whitelist → confirm-before-act).
+
+Why: the 2026-09-02 lesson — Stacy's booking flow was built conversationally
+before Peter pointed at the Concierge's already-reviewed BookingPanel; the
+timezone picker then had to be ported by hand. The inventory + archetype layer
+makes "check similar works first" a lookup instead of an archaeology dig.
+Timing: after the current onboarding-facing queue (inbox parity, P23,
+template audit, P25); pairs naturally with the Stacy native-mode migration.
 
 ## Deferred one-offs (kept pending per Peter 2026-08-09)
 - First YouTube tutorial script ("Stemfra CMS in 5 minutes", ElevenLabs Studio

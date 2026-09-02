@@ -12,6 +12,7 @@
 const supabase = require('../../config/supabase');
 const emails = require('../../templates/transactionalEmails');
 const { detectBookCallIntent } = require('../../lib/stacySupportCall');
+const stacyBrain = require('../../lib/stacyBrain');
 const { sendMail } = require('../../lib/mailer');
 const { verifySiteOwnership } = require('../../middleware/cmsAuth');
 const { buildSiteContext } = require('../../lib/stacyContext');
@@ -22,6 +23,10 @@ const { CMS_GUIDE } = require('../../lib/cmsRoutes');
 const STACY_N8N_URL = process.env.STACY_N8N_URL;          // public n8n Stacy webhook
 const N8N_SECRET = process.env.N8N_WEBHOOK_SECRET;        // sent as x-leadgen-secret (server→n8n convention)
 const STACY_MODEL = process.env.STACY_MODEL || 'gpt-4o';  // per-conversation default; provider-switchable in n8n
+// Transport flag (2026-09-02): 'native' calls OpenAI directly via
+// lib/stacyBrain.js (API-enforced JSON, no Parse-node drift); anything else
+// keeps the n8n webhook. Default stays n8n until Peter blesses native.
+const STACY_MODE = process.env.STACY_MODE === 'native' ? 'native' : 'n8n';
 
 // S3 (act) — whitelist the actions Stacy may PROPOSE. The server never executes;
 // it relays a validated proposal to the CMS, which shows a confirm card and (on
@@ -186,7 +191,9 @@ async function send(req, res) {
       .select('id, messages, model').eq('id', conversationId).eq('site_id', siteId).maybeSingle();
     if (!conv) return res.status(404).json({ error: 'Conversation not found.' });
 
-    if (!STACY_N8N_URL) return res.status(503).json({ error: 'Stacy is not configured on the server yet.' });
+    if (STACY_MODE === 'native' ? !stacyBrain.isConfigured() : !STACY_N8N_URL) {
+      return res.status(503).json({ error: 'Stacy is not configured on the server yet.' });
+    }
 
     const userMsg = { role: 'user', content: String(message).trim(), ts: new Date().toISOString() };
     // Stacy gets the CMS map (where to change what); the public Front Desk does not.
@@ -200,15 +207,21 @@ async function send(req, res) {
     let card = null;          // structured card (call_confirm) for the panel
     let quickReplies = [];    // tappable chips under the reply
     try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
-      const invoke = async (extraContext) => {
+      // Both transports return the same shape: { reply, handoff, action, call }.
+      const invoke = async () => {
+        if (STACY_MODE === 'native') {
+          return stacyBrain.runStacy({
+            message: userMsg.content, history, context, model: conv.model || STACY_MODEL,
+          });
+        }
+        const headers = { 'Content-Type': 'application/json' };
+        if (N8N_SECRET) headers['x-leadgen-secret'] = N8N_SECRET;
         const r = await fetch(STACY_N8N_URL, {
           method: 'POST',
           headers,
           body: JSON.stringify({
             conversationId, siteId, agent: 'stacy', model: conv.model || STACY_MODEL,
-            message: userMsg.content, history, context: extraContext ? { ...context, ...extraContext } : context,
+            message: userMsg.content, history, context,
           }),
         });
         const data = await r.json().catch(() => ({}));
@@ -231,7 +244,7 @@ async function send(req, res) {
       toolLog = Array.isArray(data.tool_log) ? data.tool_log : [];
       action = normalizeAction(data.action);
     } catch (e) {
-      console.error('[stacy.send] n8n error:', e.message);
+      console.error(`[stacy.send] ${STACY_MODE} error:`, e.message);
       return res.status(502).json({ error: 'Stacy could not respond right now. Please try again.' });
     }
 
