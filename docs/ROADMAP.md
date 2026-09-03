@@ -65,8 +65,13 @@ player via the authenticated recording proxy, per-row shareable deep link
 (/calls?call=<id>) for the supervisor-shares-a-great-call workflow.
 (b) **Per-rep attribution ✅ ALREADY EXISTED** (useAssignLead + LeadModal Assigned To
 picker + my-leads filter) — verified 2026-09-03, not rebuilt.
-(c) **Targets/KPIs (queued)** — monthly targets table + a sales-manager dashboard
-scoped to their own sales + their tenants.
+(c) **Targets/KPIs ✅ DONE 2026-09-03 (ops 65d14b5 + server 7c0214c, verified live)** —
+/performance: "My month" scorecard (won vs target, revenue attainment bar, open
+pipeline, follow-ups due) + team leaderboard w/ inline target editing
+(super_admin/admin/manager); sales_targets table + leads.won_at attribution.
+NOTE deferred within 4c: "their tenants'" sales on the scoped view needs a
+sites→account-manager link (no such attribution exists yet) — add
+sites.metadata.account_manager when the first sales manager onboards tenants.
 (d) **Country filter on leads (queued)** + (later, if multi-national) multiple
 pipelines per country/segment — today leads carry city/state and one stage flow.
 
