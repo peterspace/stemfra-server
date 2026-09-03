@@ -37,6 +37,21 @@ checklist + the marketing-funnel discussion live THERE. Read it after this block
 
 _Previous active arc = **P13 commission model** (`docs/COMMISSION_MODEL.md`), shipped; theme-polish arc below closed 2026-08-17._
 
+### 🔐 QUEUED — CRM role-based privilege hardening (Peter, 2026-09-03)
+Stemfra will soon onboard **Sales managers**, who must have RESTRICTED CRM access.
+Today every active staff role shares full CRM-data access via the blanket
+`is_stemfra_staff()` RLS policies; the functional roles (sales/finance/support/member)
+are only restricted at the UI layer (sidebar + AppLayout route guard) — a determined
+staffer could query out-of-scope data directly. This elevates the long-parked
+"per-role RLS data hardening" item (full spec in `stemfra-ops/CLAUDE.md`, STAFF-ONLY
+model section) from parked → queued: role-scoped RLS per table/domain via a
+`has_crm_role(variadic roles)` SQL helper — sales → leads/contacts/deals only;
+finance → income/expenses/invoices/pricing; `profiles` writes → super_admin;
+platform `site_*` admin reads → super_admin/admin/manager/support. Keep
+`lib/roles.js` areas + the server `PLATFORM_ADMIN`/`PLATFORM_OPS` sets + the new RLS
+policies in sync (3-place rule). **Build BEFORE the first sales-manager account is
+created.**
+
 ### 📥 Inbox parity upgrades (queued 2026-08-29, Peter) — ✅ COMPLETE 2026-09-03 (pending Peter's CRM live pass)
 _All checklist items now shipped: thread anatomy + sanitized HTML + suggest/refine +
 composer + threading landed 2026-08-31; the final slices landed 2026-09-03 (commits
