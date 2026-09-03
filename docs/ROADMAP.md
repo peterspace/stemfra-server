@@ -74,6 +74,16 @@ sites→account-manager link (no such attribution exists yet) — add
 sites.metadata.account_manager when the first sales manager onboards tenants.
 (d) **Country filter on leads (queued)** + (later, if multi-national) multiple
 pipelines per country/segment — today leads carry city/state and one stage flow.
+(e) **Duplicate lead detection + merge (queued 2026-09-03, Peter's Amo-CRM ask):**
+match duplicates by phone/email/company-name; a rep can DELETE one after checking or
+MERGE (union of fields, keep whichever side has data); if both are assigned, the
+FIRST-assigned rep keeps the lead. Surface as a Duplicates indicator/review flow on
+the Lead Pipeline.
+(f) **Mass-email "send as Mark" server rail (idea, 2026-09-03):** the MassEmailModal
+sends via the rep's browser Gmail token; the gmailOutreach service-account rail
+(domain-wide delegation) can send as any @stemfra.com rep with no sign-in — a server
+endpoint would let repless/dev sessions blast too. Smoke-tested live: a
+mass-email-shaped send as mark@stemfra.com with ledger row + prod pixel delivered.
 
 ### 🔐 SUPERSEDED by the block above — original queue note (Peter, 2026-09-03)
 Stemfra will soon onboard **Sales managers**, who must have RESTRICTED CRM access.
