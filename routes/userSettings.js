@@ -14,7 +14,7 @@ const supabase = require('../config/supabase');
 
 const router = express.Router();
 
-const ALLOWED_FIELDS = ['record_calls', 'record_inbound_calls', 'signature_html'];
+const ALLOWED_FIELDS = ['record_calls', 'record_inbound_calls', 'signature_html', 'saved_lead_views'];
 
 async function validateUserSession(req) {
   const authHeader = req.headers.authorization;
