@@ -383,6 +383,48 @@ router.post('/send-outreach', async (req, res) => {
 // certainty. We treat opens within 8s of send as likely prefetch and don't stamp
 // the "first open" from them (still counted, so the trend line stays honest).
 const TRANSPARENT_GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+
+// PUBLIC per-MESSAGE open pixel for CRM rep mail (email_sends ledger — 1:1 and
+// mass sends; 2026-09-03). Same semantics as the outreach pixel below: instant
+// GIF, fire-and-forget write, 8s prefetch guard, first real open logs an
+// activity row. Distinct route so ad-hoc rep mail never touches the lead's
+// outreach_* campaign fields.
+router.get('/om/:token', (req, res) => {
+  const token = String(req.params.token || '').replace(/\.(gif|png|jpg)$/i, '');
+  if (token) {
+    (async () => {
+      try {
+        const { data: send } = await supabase
+          .from('email_sends')
+          .select('id, lead_id, subject, kind, sent_by, sent_at, opened_at, open_count')
+          .eq('track_token', token)
+          .maybeSingle();
+        if (!send) return;
+        const now = Date.now();
+        const sentAt = send.sent_at ? new Date(send.sent_at).getTime() : 0;
+        const isPrefetch = sentAt && (now - sentAt) < 8000;
+        const firstRealOpen = !send.opened_at && !isPrefetch;
+        const nowIso = new Date(now).toISOString();
+        await supabase.from('email_sends').update({
+          open_count: (send.open_count || 0) + 1,
+          last_opened_at: nowIso,
+          ...(firstRealOpen ? { opened_at: nowIso } : {}),
+        }).eq('id', send.id);
+        if (firstRealOpen && send.lead_id) {
+          await supabase.from('activity_feed').insert([{
+            entity_type: 'lead', entity_id: send.lead_id, action: 'email_opened',
+            details: { subject: send.subject || null, kind: send.kind }, created_by: send.sent_by || null,
+          }]).then(() => {}, () => {});
+        }
+      } catch { /* never let tracking break the pixel */ }
+    })();
+  }
+  res.set('Content-Type', 'image/gif');
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  return res.end(TRANSPARENT_GIF);
+});
 router.get('/o/:token', (req, res) => {
   const token = String(req.params.token || '').replace(/\.(gif|png|jpg)$/i, '');
   // Fire-and-forget the DB write; the pixel must return instantly regardless.
