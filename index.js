@@ -120,6 +120,11 @@ app.use('/api/resend/inbound', express.raw({ type: '*/*' }), require('./routes/r
 // carries its own express.json({ limit: '60mb' }).
 app.use('/api/export', require('./routes/export'));
 
+// CMS lead replies carry base64 attachments (25MB cap enforced in the
+// controller; ~34MB as base64) — parse them BEFORE the global 10kb limit.
+// body-parser marks the body parsed, so the global parser skips these.
+app.use('/api/cms/leads', express.json({ limit: '40mb' }));
+
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(busboy({ limits: { files: 1, fileSize: 105 * 1024 * 1024 } })); // 105MB headroom over the 100MB video cap; 30MB image cap also fits

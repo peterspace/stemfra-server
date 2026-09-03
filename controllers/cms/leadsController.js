@@ -14,14 +14,18 @@ const { sendMail } = require('../../lib/mailer');
 const { getConnector, sendViaConnector } = require('../../lib/tenantGmail');
 const { logSiteActivity } = require('../../lib/activity');
 
-// POST /api/cms/leads/:id/reply  { siteId, subject, html, text? }
+// POST /api/cms/leads/:id/reply
+//   { siteId, subject, html, text?, attachments?: [{filename, content_type, content_base64}] }
 const { sanitizeEmailHtml } = require('../../lib/emailHtml');
 const { suggestLeadReply, refineEmailHtml } = require('../../lib/emailAssist');
 const crypto = require('crypto');
 
+// 25MB total, like Gmail (the Helen-inbox parity standard).
+const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+
 async function replyToLead(req, res) {
   try {
-    const { siteId, subject, html, text } = req.body || {};
+    const { siteId, subject, html, text, attachments } = req.body || {};
     const leadId = req.params.id;
     if (!subject || !String(subject).trim()) return res.status(400).json({ error: 'Subject is required.' });
     if (!html || !String(html).trim()) return res.status(400).json({ error: 'Write a message before sending.' });
@@ -43,6 +47,26 @@ async function replyToLead(req, res) {
     const { data: siteRow } = await supabase
       .from('sites').select('company:companies(name)').eq('id', siteId).single();
     const businessName = siteRow?.company?.name || site.subdomain;
+
+    // Attachments (Helen pattern): base64 in → Buffers for both transports,
+    // 25MB total cap server-side (the composer enforces it client-side too).
+    let mailAttachments;
+    if (Array.isArray(attachments) && attachments.length) {
+      let total = 0;
+      mailAttachments = [];
+      for (const a of attachments) {
+        const content = Buffer.from(String(a.content_base64 || ''), 'base64');
+        total += content.length;
+        mailAttachments.push({
+          filename: String(a.filename || 'attachment').slice(0, 200),
+          content,
+          contentType: a.content_type || undefined,
+        });
+      }
+      if (total > ATTACHMENT_MAX_BYTES) {
+        return res.status(400).json({ error: 'Attachments exceed the 25 MB limit.' });
+      }
+    }
 
     // Plain-text alternative derived from the html (mailer convention: always both).
     const plain = (text && String(text).trim()) ||
@@ -71,6 +95,7 @@ async function replyToLead(req, res) {
         subject: String(subject).trim(),
         text: plain,
         html: cleanHtml,
+        attachments: mailAttachments,
         headers,
         messageId,
       });
@@ -86,6 +111,7 @@ async function replyToLead(req, res) {
         subject: String(subject).trim(),
         text: plain,
         html: cleanHtml,
+        attachments: mailAttachments,
         headers,
         messageId,
       });
@@ -98,6 +124,8 @@ async function replyToLead(req, res) {
         subject: String(subject).trim(), html: cleanHtml, sent_at: new Date().toISOString(),
         by: req.cmsUser.email, via: connector ? `gmail:${connector.email}` : 'platform',
         message_id: messageId,
+        // Names + sizes only — content never lands in lead metadata.
+        ...(mailAttachments ? { attachments: mailAttachments.map(a => ({ filename: a.filename, size: a.content.length })) } : {}),
       },
     ];
     await supabase.from('site_leads')
