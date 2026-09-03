@@ -101,13 +101,17 @@ async function replyToLead(req, res) {
       });
     } else {
       // With inbound receiving configured, the visitor's answer routes back
-      // into the CMS thread via the per-lead plus-address (and is
-      // copy-forwarded to the owner). Without it, behavior is unchanged.
+      // into the CMS thread (and is copy-forwarded to the owner). The
+      // reply-to is the business's own friendly inbound address —
+      // <subdomain>@inbound... (Peter, 2026-09-03: the reply+<uuid> form read
+      // as a strange sender). Lead routing no longer rides the address: the
+      // webhook matches the visitor's In-Reply-To header (our Message-IDs
+      // embed the lead id), with alias+sender as the fallback.
       const inboundDomain = process.env.INBOUND_REPLY_DOMAIN;
       await sendMail({
         fromName: businessName,
         to: lead.email,
-        replyTo: inboundDomain ? `reply+${leadId}@${inboundDomain}` : req.cmsUser.email,
+        replyTo: inboundDomain ? `${site.subdomain}@${inboundDomain}` : req.cmsUser.email,
         subject: String(subject).trim(),
         text: plain,
         html: cleanHtml,

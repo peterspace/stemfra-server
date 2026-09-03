@@ -50,7 +50,8 @@ function verifySvix(req) {
   });
 }
 
-/** reply+<uuid>@… anywhere in the recipient list → the lead id. */
+/** reply+<uuid>@… anywhere in the recipient list → the lead id (legacy —
+ *  replies to mail sent before the friendly-alias change, 2026-09-03). */
 function leadIdFromRecipients(addresses) {
   const re = /reply\+([0-9a-f-]{36})@/i;
   for (const addr of addresses || []) {
@@ -58,6 +59,50 @@ function leadIdFromRecipients(addresses) {
     if (m) return m[1];
   }
   return null;
+}
+
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+/** Our outbound Message-IDs embed the lead id (<lead-<uuid>-<hex>@…>), so the
+ *  visitor's In-Reply-To/References carry it. Field names on the fetched
+ *  email vary, so scan every header-ish field defensively. */
+function leadIdFromHeaders(full) {
+  const hay = [full?.in_reply_to, full?.references, JSON.stringify(full?.headers || '')]
+    .filter(Boolean).join(' ');
+  const m = new RegExp(`lead-(${UUID})-[0-9a-f]+@`, 'i').exec(hay);
+  return m ? m[1] : null;
+}
+
+const addrEmail = (raw) => {
+  const m = /<([^>]+)>/.exec(String(raw || ''));
+  return (m ? m[1] : String(raw || '')).trim().toLowerCase();
+};
+
+/**
+ * Resolve the lead a received email belongs to, in order:
+ *   1. legacy plus-address (reply+<leadId>@…),
+ *   2. the lead id inside the reply's threading headers,
+ *   3. the friendly alias (<subdomain>@inbound…) → that site's newest lead
+ *      from the sender's address.
+ */
+async function resolveLead(meta, full) {
+  const recipients = [...(meta.received_for || []), ...(meta.to || []), ...(full?.to || [])];
+  let leadId = leadIdFromRecipients(recipients) || leadIdFromHeaders(full);
+  if (leadId) {
+    const { data } = await supabase.from('site_leads').select('*').eq('id', leadId).maybeSingle();
+    if (data) return data;
+  }
+  // Alias fallback: local part = the site's subdomain.
+  const local = recipients.map((a) => addrEmail(a).split('@')[0]).find(Boolean);
+  const sender = addrEmail(full?.from || meta.from);
+  if (!local || !sender.includes('@')) return null;
+  const { data: site } = await supabase.from('sites').select('id').eq('subdomain', local).maybeSingle();
+  if (!site) return null;
+  const { data: lead } = await supabase
+    .from('site_leads').select('*')
+    .eq('site_id', site.id).ilike('email', sender)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return lead || null;
 }
 
 async function fetchReceivedEmail(emailId) {
@@ -77,26 +122,21 @@ router.post('/', async (req, res) => {
     if (event.type !== 'email.received') return res.json({ ok: true, ignored: event.type });
 
     const meta = event.data || {};
-    const leadId = leadIdFromRecipients([...(meta.received_for || []), ...(meta.to || [])]);
-    if (!leadId) {
-      console.warn('[resend-inbound] no lead plus-address in', meta.received_for, meta.to);
-      return res.json({ ok: true, unmatched: true });
-    }
-
-    const { data: lead } = await supabase.from('site_leads').select('*').eq('id', leadId).maybeSingle();
+    // Full parsed content first (the webhook itself is metadata-only) — the
+    // threading headers needed for lead resolution live on the fetched email.
+    const full = await fetchReceivedEmail(meta.email_id);
+    const lead = await resolveLead(meta, full);
     if (!lead) {
-      console.warn('[resend-inbound] lead not found:', leadId);
+      console.warn('[resend-inbound] no lead matched', meta.received_for, meta.to, full?.from);
       return res.json({ ok: true, unmatched: true });
     }
+    const leadId = lead.id;
 
     // Dedupe: Resend retries webhooks; the email_id is the idempotency key.
     const replies = Array.isArray(lead.metadata?.replies) ? lead.metadata.replies : [];
     if (replies.some((r) => r.resend_email_id === meta.email_id)) {
       return res.json({ ok: true, duplicate: true });
     }
-
-    // Full parsed content (the webhook itself is metadata-only).
-    const full = await fetchReceivedEmail(meta.email_id);
     // One trust level: inbound HTML goes through the same ingest allowlist as
     // our own outbound; fall back to escaped plain text.
     const html = sanitizeEmailHtml(full.html)
