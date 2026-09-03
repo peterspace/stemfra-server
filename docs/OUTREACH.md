@@ -7,6 +7,12 @@ design is findable in one place. Companion docs: [LEADGEN.md](LEADGEN.md)
 (server trigger/flow) and [stemfra-ops/docs/LEADGEN.md](../../stemfra-ops/docs/LEADGEN.md)
 (CRM review queue). Indexed in the [docs hub](../../docs/README.md).
 
+> **⚠ Deliverability rules (2026-09-03): read
+> [EMAIL_DELIVERABILITY.md](EMAIL_DELIVERABILITY.md) before changing any
+> template or send path.** Live A/B-tested: cold touch 1 = ONE link
+> destination, link-free footer, no List-Unsubscribe header, opt-out =
+> reply "stop"; branded/multi-link emails only as in-thread replies.
+
 ---
 
 ## 1. The Template Manager — the single source of truth for email copy

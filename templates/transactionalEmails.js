@@ -786,6 +786,12 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
       + para('Click "Claim" if you need this website.');
   const paragraphs = [];
   const note = 'We only earn 5% on the bookings it brings you.';
+  // Deliverability (2026-09-03 A/B rounds, docs/EMAIL_DELIVERABILITY.md): a
+  // COLD touch 1 carries exactly ONE link destination (the claim URL — hero
+  // image + button) and a link-free footer, opt-out = "reply stop"; the same
+  // design with a 6-link footer + unsubscribe link landed in Promotions.
+  // Touch 2+ rides the touch-1 thread (claimSend threading), so it keeps the
+  // full footer links + the unsubscribe link.
   const html = renderEmail({
     brand: { stemfra: true },
     headerStyle: 'light',
@@ -800,11 +806,15 @@ function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel 
     note,
     cta: { label: 'Claim my website', url: claimUrl },
     cta2: first ? undefined : { label: 'See it live', url: demoUrl || claimUrl },
-    reason: `You are receiving this because ${senderName} at Stemfra reached out to ${businessName}. Not for you? Unsubscribe below and we will not email again.`,
-    unsubscribeUrl,
-    footerLinks: [{ label: 'stemfra.com', url: 'https://stemfra.com' }, { label: 'Privacy', url: 'https://stemfra.com/privacy/' }, { label: 'Terms', url: 'https://stemfra.com/terms/' }],
+    reason: first
+      ? `You are receiving this because ${senderName} at Stemfra reached out to ${businessName}. Not for you? Reply "stop" and we will not email again.`
+      : `You are receiving this because ${senderName} at Stemfra reached out to ${businessName}. Not for you? Unsubscribe below and we will not email again.`,
+    unsubscribeUrl: first ? undefined : unsubscribeUrl,
+    plainFooter: first,
+    footerLinks: first ? undefined : [{ label: 'stemfra.com', url: 'https://stemfra.com' }, { label: 'Privacy', url: 'https://stemfra.com/privacy/' }, { label: 'Terms', url: 'https://stemfra.com/terms/' }],
   });
-  const text = [heading, '', `Hi ${firstName || 'there'}, we built a website for your business, ${businessName}. It is already set up for you, so you never miss a client.`, '', ...features.map((f) => `- ${f}`), '', 'Click "Claim" if you need this website.', '', `Claim my website: ${claimUrl}`, note, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '', `Unsubscribe: ${unsubscribeUrl}`].join('\n');
+  const text = [heading, '', `Hi ${firstName || 'there'}, we built a website for your business, ${businessName}. It is already set up for you, so you never miss a client.`, '', ...features.map((f) => `- ${f}`), '', 'Click "Claim" if you need this website.', '', `Claim my website: ${claimUrl}`, note, ...(first ? [] : [`See it live: ${demoUrl || claimUrl}`]), '',
+    first ? 'Not for you? Reply "stop" and we will not email again.' : `Unsubscribe: ${unsubscribeUrl}`].join('\n');
   return { subject, html, text };
 }
 
