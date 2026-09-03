@@ -758,8 +758,13 @@ function staffOrphanPaymentAlert({ amountLabel, paymentIntentId, siteId }) {
 function prospectClaimEmail({ touch = 1, firstName, businessName, verticalLabel = 'business', heroImageUrl, claimUrl, demoUrl, unsubscribeUrl, senderName = 'Mark', bonusLine }) {
   const first = touch === 1;
   const who = firstName || businessName;
+  // Touch-1 subject rotates between two proven-Primary lines (Peter,
+  // 2026-09-03 — both cleared the deliverability A/B): deterministic per
+  // business so a re-render/re-send of the same lead keeps its subject,
+  // and the cohort splits ~50/50 (identical subjects at volume read bulk).
+  const quickQuestion = [...String(businessName || '')].reduce((h, c) => h + c.charCodeAt(0), 0) % 2 === 0;
   const subject = first
-    ? `${businessName}, this website is for you`
+    ? (quickQuestion ? `Quick question about ${businessName}` : `${businessName}, this website is for you`)
     : `Did you forget your website, ${who}?`;
   // v3 (Peter, 2026-08-19): logo on white → hero image (clean edge) → headline
   // ("Built for you" / "Still yours, Marcus") → one line → "Take a look!" → CTA.
