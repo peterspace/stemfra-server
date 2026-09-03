@@ -37,7 +37,14 @@ checklist + the marketing-funnel discussion live THERE. Read it after this block
 
 _Previous active arc = **P13 commission model** (`docs/COMMISSION_MODEL.md`), shipped; theme-polish arc below closed 2026-08-17._
 
-### 📥 PENDING — Inbox parity upgrades (queued 2026-08-29, Peter)
+### 📥 Inbox parity upgrades (queued 2026-08-29, Peter) — ✅ COMPLETE 2026-09-03 (pending Peter's CRM live pass)
+_All checklist items now shipped: thread anatomy + sanitized HTML + suggest/refine +
+composer + threading landed 2026-08-31; the final slices landed 2026-09-03 (commits
+server 3b6cabc + platform f197db5 + stemfra-ops a31798c, LOCAL): CMS composer
+attachments (25MB, both transports, live-verified e2e) + owner signature
+(Settings → Notifications → Reply sending), CRM /inbox Archived tab +
+restore/delete + ReplyBox attachments (build-clean; live pass needs Peter's
+Google login). Original checklist below for reference._
 The Helen lead-gen CRM's inbox (repo `stemfra/client-helen-leadgen`, see its
 `SESSION_HANDOFF.md`) is now the REFERENCE inbox across all builds. Upgrade the
 CMS enquiries inbox and the CRM Gmail inbox to that standard when their arcs
