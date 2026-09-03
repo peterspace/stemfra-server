@@ -37,7 +37,28 @@ checklist + the marketing-funnel discussion live THERE. Read it after this block
 
 _Previous active arc = **P13 commission model** (`docs/COMMISSION_MODEL.md`), shipped; theme-polish arc below closed 2026-08-17._
 
-### 🔐 QUEUED — CRM role-based privilege hardening (Peter, 2026-09-03)
+### 🔐 CRM role-based privilege hardening — STAGES 1+2 ✅ DONE 2026-09-03; stages 3-4 queued
+**DONE (server commits incl. the migration record `docs/migrations/crm_role_rls_hardening_v1.sql`):**
+the policy audit found ~25 CRM tables readable/WRITABLE by ANY authenticated user (every
+tenant owner/member shares the auth project) via `qual true` / `auth.uid() IS NOT NULL`
+policies — a live exposure, closed the same day. Now: staff-wide tables gate on
+`is_stemfra_staff()`; income/expenses/invoices on `has_crm_role('super_admin','admin',
+'manager','finance')`; pricing config/quotes/proposals on super_admin/admin; profiles
+select = self-or-staff, updates super_admin (+ a trigger blocking role/is_active
+self-escalation — verified: dev/admin self-promote → 400). CMS owner flows preserved
+(contacts self-read + companies owner-read policies; both owner writes were already
+server-mediated). **`sales_manager` role live end-to-end** (profiles CHECK + ops
+lib/roles.js areas: sales + tenant sites/bookings/payments + mockups, no finance/pricing;
+server PLATFORM_OPS includes it). Two-sided verification passed (tenant blocked from
+CRM+finance, own contact/companies intact; staff working).
+**Stage 3 (queued):** Team page → Google-Workspace-grade user management (per-user
+panel: role picker w/ privilege descriptions, reset password, rename,
+activate/deactivate, per-row actions — ref Peter's Workspace shots 2026-09-03).
+**Stage 4 (queued):** Amo-CRM-style per-rep performance — lead/deal ownership
+attribution (assigned_to), monthly targets/KPIs table, a sales-manager dashboard
+scoped to their own sales + their tenants.
+
+### 🔐 SUPERSEDED by the block above — original queue note (Peter, 2026-09-03)
 Stemfra will soon onboard **Sales managers**, who must have RESTRICTED CRM access.
 Today every active staff role shares full CRM-data access via the blanket
 `is_stemfra_staff()` RLS policies; the functional roles (sales/finance/support/member)

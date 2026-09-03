@@ -12,7 +12,7 @@ const supabase = require('../config/supabase');
 
 // Role sets for the platform-admin endpoints (keep in sync with the CRM nav).
 const PLATFORM_ADMIN = ['super_admin', 'admin', 'manager'];        // templates, billing
-const PLATFORM_OPS = ['super_admin', 'admin', 'manager', 'support']; // sites, bookings, payments (support handles client sites)
+const PLATFORM_OPS = ['super_admin', 'admin', 'manager', 'support', 'sales_manager']; // sites, bookings, payments (support + sales managers handle client sites)
 
 async function resolveStaff(req) {
   const auth = req.headers.authorization || '';
