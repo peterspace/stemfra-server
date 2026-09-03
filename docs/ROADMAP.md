@@ -54,9 +54,21 @@ CRM+finance, own contact/companies intact; staff working).
 **Stage 3 (queued):** Team page → Google-Workspace-grade user management (per-user
 panel: role picker w/ privilege descriptions, reset password, rename,
 activate/deactivate, per-row actions — ref Peter's Workspace shots 2026-09-03).
-**Stage 4 (queued):** Amo-CRM-style per-rep performance — lead/deal ownership
-attribution (assigned_to), monthly targets/KPIs table, a sales-manager dashboard
-scoped to their own sales + their tenants.
+**Stage 3 ✅ DONE 2026-09-03 (ops 0861d5e):** Team page "Roles and privileges" panel
+(Workspace-style: per-role rows w/ icon + description + "Grants: …" + Assigned state;
+roleGrants/AREA_LABELS in lib/roles.js). NOTE: Workspace's "Reset password" has no
+equivalent — staff auth is Google-managed by design.
+**Stage 4 (queued) — Amo-CRM parity for sales management (Peter's field experience,
+2026-09-03):** (a) **Call coaching workspace** — the recordings + call logs EXIST
+(Twilio module: recordings via signed URLs, calls/activity rows) but there is no
+browsable Calls page: filter by rep/direction/date/lead, inline playback, shareable
+deep links so a supervisor can review a rep's calls and share good ones as training
+(the workflow Peter used at a multi-national SaaS). (b) **Per-rep attribution** —
+leads/deals get assigned_to (responsible user); a sales-manager dashboard scoped to
+their own sales + their tenants. (c) **Targets/KPIs** — monthly targets table +
+progress on that dashboard. (d) **Country filter on leads** + (later, if
+multi-national) multiple pipelines per country/segment — today leads carry city/state
+(US-centric) and one stage flow.
 
 ### 🔐 SUPERSEDED by the block above — original queue note (Peter, 2026-09-03)
 Stemfra will soon onboard **Sales managers**, who must have RESTRICTED CRM access.
