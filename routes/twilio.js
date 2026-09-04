@@ -201,6 +201,76 @@ router.post('/sms/send', async (req, res) => {
   }
 });
 
+// ─── POST /api/twilio/claim-sms — the "Send Claim" touch (2026-09-04) ────────
+// A rep clicks Send Claim in the lead drawer WHILE ON THE CALL, after the
+// owner agrees to be texted — the click itself records the verbal consent
+// (leads.sms_consent_at). Cold SMS to scraped numbers is prohibited (TCPA +
+// Twilio Messaging Policy — see docs/EMAIL_ENRICHMENT.md sibling notes);
+// this endpoint is the consent-gated path.
+router.post('/claim-sms', async (req, res) => {
+  const user = await validateUserSession(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (!twilioClient || !twilioFrom) return res.status(503).json({ error: 'Twilio not configured' });
+
+  const { lead_id } = req.body || {};
+  if (!lead_id) return res.status(400).json({ error: 'lead_id is required' });
+
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('id, first_name, contact_name, company_name, phone, phone_country, claim_token, do_not_call')
+    .eq('id', lead_id).maybeSingle();
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!lead.phone) return res.status(400).json({ error: 'Lead has no phone number' });
+  if (lead.do_not_call) return res.status(400).json({ error: 'Lead is marked do-not-call — no SMS' });
+  if (!lead.claim_token) return res.status(400).json({ error: 'Lead has no claim token' });
+
+  let parsed;
+  try {
+    parsed = parsePhoneNumber(lead.phone, lead.phone_country || 'US');
+    if (!parsed || !parsed.isValid()) throw new Error('invalid');
+  } catch {
+    return res.status(400).json({ error: `Lead phone "${lead.phone}" is not a valid number` });
+  }
+  const toE164 = parsed.format('E.164');
+
+  // Greeting: use a REAL first name only (scraped leads carry "Owner"/blank).
+  const rawFirst = String(lead.first_name || '').trim();
+  const generic = ['owner', 'manager', 'team', 'hi', 'hello'];
+  const first = rawFirst && !generic.includes(rawFirst.toLowerCase()) && !rawFirst.includes('—') ? rawFirst : '';
+  const link = `${process.env.MARKETING_URL || 'https://stemfra.com'}/claim/${lead.claim_token}`;
+  // Peter's copy (2026-09-04). The link sits before a newline, not a period,
+  // so SMS clients never swallow trailing punctuation into the URL.
+  const body = `Hi${first ? ` ${first}` : ''}, Great speaking with you. Here is your website: ${link}\nEnjoy! Reply STOP to opt out.`;
+
+  try {
+    const message = await twilioClient.messages.create({
+      to: toE164, from: twilioFrom, body,
+      statusCallback: `${publicBaseUrl}/api/twilio/sms-status`,
+    });
+
+    const nowIso = new Date().toISOString();
+    await supabase.from('leads').update({ sms_consent_at: nowIso, last_activity_at: nowIso }).eq('id', lead.id);
+    await supabase.from('sms_messages').insert([{
+      twilio_sid: message.sid, direction: 'outbound', from_number: twilioFrom, to_number: toE164,
+      body, status: message.status || 'queued', num_segments: parseInt(message.numSegments || '1', 10),
+      lead_id: lead.id, sent_by: user.id, sent_at: nowIso,
+    }]).then(() => {}, (e) => console.error('[twilio] claim sms insert error:', e));
+    await logActivity({
+      action: 'lead_claim_sms_sent', entityType: 'lead', entityId: lead.id,
+      actorId: user.id, actorName: user.email || null,
+      details: { to: toE164, twilio_sid: message.sid, consent: 'verbal on call, recorded by Send Claim click' },
+    });
+    await supabase.from('marketing_events').insert({ lead_id: lead.id, event: 'claim_sms_sent', metadata: { twilio_sid: message.sid } }).then(() => {}, () => {});
+
+    res.json({ success: true, sid: message.sid, to: toE164 });
+  } catch (err) {
+    console.error('[twilio] claim SMS error:', err);
+    // 21610 = recipient has replied STOP to our number.
+    const stopped = err && String(err.code) === '21610';
+    res.status(500).json({ error: stopped ? 'This number has opted out (STOP) — cannot text it.' : (err.message || 'Failed to send') });
+  }
+});
+
 // ─── POST /api/twilio/sms-status — Twilio webhook: delivery status updates ──
 router.post('/sms-status', async (req, res) => {
   if (!validateTwilioSignature(req)) {
