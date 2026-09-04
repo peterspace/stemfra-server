@@ -374,7 +374,8 @@ router.post('/voice', async (req, res) => {
   }
 
   // Decide whether this call is recorded.
-  // settings.record_calls is the user's persisted preference (default false);
+  // settings.record_calls is the user's persisted preference (default TRUE
+  // since 2026-09-04 — recording is on unless the rep disables it);
   // recordOverride === 'true' means "off for this call only".
   let recordCalls = false;
   if (userId) {

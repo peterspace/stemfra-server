@@ -43,7 +43,7 @@ router.get('/', async (req, res) => {
     // Default row on first read.
     const { data: created, error: insertErr } = await supabase
       .from('user_settings')
-      .insert([{ user_id: user.id, record_calls: false }])
+      .insert([{ user_id: user.id, record_calls: true }])
       .select()
       .single();
     if (insertErr) throw insertErr;
