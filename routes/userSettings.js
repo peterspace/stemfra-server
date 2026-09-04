@@ -14,7 +14,11 @@ const supabase = require('../config/supabase');
 
 const router = express.Router();
 
-const ALLOWED_FIELDS = ['record_calls', 'record_inbound_calls', 'signature_html', 'saved_lead_views'];
+// OS-shell prefs (docs/migrations/user_settings_os_shell_v1.sql) added 2026-09-05.
+const ALLOWED_FIELDS = [
+  'record_calls', 'record_inbound_calls', 'signature_html', 'saved_lead_views',
+  'shell', 'wallpaper', 'sidebar_docked', 'dock_pins', 'app_usage', 'workspace_session', 'desktop_layout',
+];
 
 async function validateUserSession(req) {
   const authHeader = req.headers.authorization;
