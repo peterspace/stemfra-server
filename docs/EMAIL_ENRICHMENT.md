@@ -65,6 +65,29 @@ version of recipe 1). Pilot steps:
    also build recipes 1+2 as a standing post-scrape enrichment stage in the
    n8n pipeline.
 
+## Outscraper pilot RESULTS (2026-09-04, ~134 of the 500 free records)
+
+All 67 email-less leads submitted (place-id or name+address queries,
+`/google-maps-search` + `enrichment: ["domains_service"]`, X-API-KEY auth):
+
+- **67/67 queries matched the right place** (their matcher is good).
+- **7/67 got a Facebook page** (10%); **1/67 got an email** — Proper Cuts
+  Barbershop (propercutsbarbershop@gmail.com), written to the lead.
+- Cross-check: the Apify FB extractor run on the same 7 pages found the SAME
+  single email — the other pages publish none. Outscraper's reading is fine;
+  the data simply is not there.
+- Their FB matching also MISSES pages a manual search finds (it found no
+  page for D'Esther, which we had manually verified) — manual/SERP matching
+  still adds a little on top.
+
+**Honest conclusion:** no-website micro-businesses mostly publish NO email
+anywhere. Realistic automated email yield ≈ **1-5% per pass** (the earlier
+~18% manual figure was small-sample luck). Email enrichment is a cheap
+bonus trickle to run per scrape cohort — not a pipeline. **Phone/SMS (which
+we capture at 100%) is the structural channel for this segment**, with the
+claim email reserved for the minority that surface an email. Apollo was
+evaluated and skipped (domain/LinkedIn-keyed B2B data; no coverage here).
+
 ## Registry angle (parked, cheap when wanted)
 
 State barber-license files give OWNER NAMES (not emails): Texas TDLR
