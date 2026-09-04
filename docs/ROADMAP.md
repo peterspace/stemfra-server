@@ -37,6 +37,29 @@ checklist + the marketing-funnel discussion live THERE. Read it after this block
 
 _Previous active arc = **P13 commission model** (`docs/COMMISSION_MODEL.md`), shipped; theme-polish arc below closed 2026-08-17._
 
+### 📞 Cold-call + call-rails arc — ✅ DONE 2026-09-05 (real-client onboarding)
+The channel that makes cold outreach work, plus the CRM surfaces reps use on a call.
+- **Deliverability locked** (`docs/EMAIL_DELIVERABILITY.md`, A/B-proven incl. a never-contacted
+  mailbox): what sends us to Gmail Promotions is **link count + the List-Unsubscribe header**, NOT
+  the branded design/subject/pixel. Cold touch 1 = ONE link + link-free footer + no bulk header +
+  reply-"stop" opt-out; branded/multi-link touches only as in-thread "Re:" replies (`lib/claimSend.js`
+  threads them; `lib/gmailOutreach.js` `sendAsRep({threadId,inReplyTo})`+`getReplyRefs`). Touch-1
+  subject rotates "Quick question about {biz}" / "{biz}, this website is for you".
+- **No-website email enrichment** (`docs/EMAIL_ENRICHMENT.md`, pilot done): the GBP registration
+  email is unobtainable; Maps "email extractor" actors are website-crawlers (useless here). Working
+  path = Facebook-page match + `apify~facebook-page-contact-information` (phone/address-verified);
+  Outscraper is the turnkey version (first 500 records free — pilot: 1/67 emails; realistic 1-5% per
+  pass). **SMS is the structural channel; email is a bonus trickle.** Apify token = the STEMFRA ADMIN
+  account (`.env APIFY_TOKEN`); `OUTSCRAPER_API_KEY` set. Apollo evaluated + skipped (no local coverage).
+- **Voice usable end-to-end** (ops): in-browser dialer + manual keypad + DTMF (voicemail menus),
+  recording ON by default, Send-Claim consent-gated SMS during a call, themed audio playback in the
+  Call Log / activity feed / drawer Activity panel + Conversation Activity tab. Mark's coexistence
+  knowledge sharpened (`lib/conciergeContext.js`: Mindbody/Wodify link-out works today, embed depends
+  on their settings, no two-way sync). Full CRM detail: `stemfra-ops/CLAUDE.md` "Lead Pipeline + Voice arc".
+- **CRM parity** (ops `docs/CRM_IA_PROPOSAL.md`): advanced filters + saved/team views, per-stage
+  rotting + follow-up-state cards, forecast value, entity-shaped sidebar (Leads·Deals·Contacts·
+  Companies·Activities·Sales Dashboard) + Convert-to-Deal.
+
 ### 🔐 CRM role-based privilege hardening — STAGES 1+2 ✅ DONE 2026-09-03; stages 3-4 queued
 **DONE (server commits incl. the migration record `docs/migrations/crm_role_rls_hardening_v1.sql`):**
 the policy audit found ~25 CRM tables readable/WRITABLE by ANY authenticated user (every
