@@ -11,3 +11,8 @@ alter table public.user_settings
   add column if not exists desktop_layout jsonb;                         -- widget grid (Phase 5)
 alter table public.user_settings
   add constraint user_settings_shell_check check (shell in ('classic','os'));
+
+-- 2026-09-05 (Peter, review round 5): the sidebar is HIDDEN by default; the
+-- burger in the menu bar shows it. Applied live the same day.
+alter table public.user_settings alter column sidebar_docked set default false;
+update public.user_settings set sidebar_docked = false;
